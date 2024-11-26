@@ -40,9 +40,13 @@ if response.status_code == 200:
     # QR kodunu ekranın yüksekliğine göre yeniden boyutlandır
     qr_resized = pygame.transform.scale(qr_surface, (int(screen_height * qr_surface.get_width() / qr_surface.get_height()), screen_height))
 
+    # QR kodunun ekranın ortasına yerleştirilmesi için sol kenar boşluğunu hesapla
+    qr_width = qr_resized.get_width()
+    left_margin = (screen_width - qr_width) // 2  # Ekranın ortasında olacak şekilde konumlandır
+
     # Ekranın tamamını kaplayan beyaz bir arka plan
     screen.fill((255, 255, 255))  # Arka planı beyaz yap
-    screen.blit(qr_resized, (0, 0))  # QR kodunu ekrana yerleştir
+    screen.blit(qr_resized, (left_margin, 0))  # QR kodunu ekranın ortasında yerleştir
 
     # Ekranı güncelle
     pygame.display.flip()

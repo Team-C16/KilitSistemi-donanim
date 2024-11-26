@@ -6,7 +6,7 @@ from PIL import Image
 import io
 
 # API'den QR kodu verisini al
-url = "https://172.18.0.43/getQRCodeToken"
+url = "http://127.0.0.1:8001/getQRCodeToken"
 headers = {"Content-Type": "application/json"}
 data = '{"room_id": 1}'
 response = requests.post(url, headers=headers, data=data, verify=False)
@@ -24,8 +24,10 @@ if response.status_code == 200:
     # Pygame başlat
     pygame.init()
 
-    # Ekran boyutlarını al
+    # Ekran çözünürlüğünü otomatik olarak al
     screen_width, screen_height = pygame.display.Info().current_w, pygame.display.Info().current_h
+
+    # Tam ekran modunda ekran aç
     screen = pygame.display.set_mode((screen_width, screen_height), pygame.FULLSCREEN)
 
     # QR kodunu PIL image'dan Pygame yüzeyine dönüştür
@@ -35,12 +37,12 @@ if response.status_code == 200:
     img_byte_arr.seek(0)
     qr_surface = pygame.image.load(img_byte_arr)  # Pygame yüzeyine yükle
 
-    # Arka plan rengini beyaz yap
-    screen.fill((255, 255, 255))
+    # QR kodunu ekranın yüksekliğine göre yeniden boyutlandır
+    qr_resized = pygame.transform.scale(qr_surface, (int(screen_height * qr_surface.get_width() / qr_surface.get_height()), screen_height))
 
-    # QR kodunu ekranda ortalayarak göster
-    qr_rect = qr_surface.get_rect(center=(screen_width // 2, screen_height // 2))
-    screen.blit(qr_surface, qr_rect)
+    # Ekranın tamamını kaplayan beyaz bir arka plan
+    screen.fill((255, 255, 255))  # Arka planı beyaz yap
+    screen.blit(qr_resized, (0, 0))  # QR kodunu ekrana yerleştir
 
     # Ekranı güncelle
     pygame.display.flip()

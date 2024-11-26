@@ -1,52 +1,53 @@
 import requests
 import qrcode
 import pygame
-from io import BytesIO
-from PIL import Image
+from pygame.locals import QUIT
 
-# API'den QR kod token'ını al
+# API'den QR kodu verisini al
 url = "https://172.18.0.43/getQRCodeToken"
 headers = {"Content-Type": "application/json"}
 data = '{"room_id": 1}'
-response = requests.post(url, headers=headers, data=data,verify=False)
+response = requests.post(url, headers=headers, data=data, verify=False)
 
+# Eğer API başarılı bir yanıt dönerse
 if response.status_code == 200:
-    # Gelen JSON'dan QR token'ı al
-    qr_token = response.text  # Burada gelen string'i alıyoruz
+    qr_data = response.text  # API'den gelen QR kodu verisi
 
-    # QR kodunu oluştur
-    qr = qrcode.make(qr_token)
+    # QR kodu üret
+    qr = qrcode.QRCode(version=1, box_size=10, border=5)
+    qr.add_data(qr_data)
+    qr.make(fit=True)
+    img = qr.make_image(fill='black', back_color='white')
 
-    # QR kodunu geçici bir byte array'e dönüştür
-    qr_byte_arr = BytesIO()
-    qr.save(qr_byte_arr)
-    qr_byte_arr.seek(0)
-
-    # Pygame başlatma
+    # Pygame başlat
     pygame.init()
-    screen = pygame.display.set_mode((480, 320))  # Ekran çözünürlüğüne göre ayarlayın
-    pygame.display.set_caption("QR Code Display")
 
-    # Ekranı beyaz ile doldur
+    # Ekran boyutlarını al
+    screen_width, screen_height = pygame.display.Info().current_w, pygame.display.Info().current_h
+    screen = pygame.display.set_mode((screen_width, screen_height), pygame.FULLSCREEN)
+
+    # QR kodunu Pygame yüzeyine aktar
+    qr_surface = pygame.image.fromstring(img.tobytes(), img.size, img.mode)
+
+    # Arka plan rengini beyaz yap
     screen.fill((255, 255, 255))
 
-    # QR kodunu pygame ekranına yükle
-    qr_image = pygame.image.load(qr_byte_arr)
+    # QR kodunu ekranda ortalayarak göster
+    qr_rect = qr_surface.get_rect(center=(screen_width // 2, screen_height // 2))
+    screen.blit(qr_surface, qr_rect)
 
-    # QR kodunu ekranın ortasına yerleştir
-    qr_rect = qr_image.get_rect(center=(240, 160))  # Ekranın ortasına yerleştir
-    screen.blit(qr_image, qr_rect)
+    # Ekranı güncelle
+    pygame.display.flip()
 
-    # Ekranda göster
-    pygame.display.update()
-
-    # Ekranın açık kalmasını sağlamak için bir döngü
+    # Ekranı kapatmak için kullanıcıdan bir çıkış bekle
     running = True
     while running:
         for event in pygame.event.get():
-            if event.type == pygame.QUIT:
+            if event.type == QUIT:
                 running = False
 
+    # Pygame'i sonlandır
     pygame.quit()
+
 else:
     print(f"API isteği başarısız oldu. Hata kodu: {response.status_code}")

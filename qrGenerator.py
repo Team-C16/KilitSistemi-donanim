@@ -2,6 +2,8 @@ import requests
 import qrcode
 import pygame
 from pygame.locals import QUIT
+from PIL import Image
+import io
 
 # API'den QR kodu verisini al
 url = "https://172.18.0.43/getQRCodeToken"
@@ -26,8 +28,12 @@ if response.status_code == 200:
     screen_width, screen_height = pygame.display.Info().current_w, pygame.display.Info().current_h
     screen = pygame.display.set_mode((screen_width, screen_height), pygame.FULLSCREEN)
 
-    # QR kodunu Pygame yüzeyine aktar
-    qr_surface = pygame.image.fromstring(img.tobytes(), img.size, img.mode)
+    # QR kodunu PIL image'dan Pygame yüzeyine dönüştür
+    img = img.convert("RGB")  # RGB formatına dönüştür
+    img_byte_arr = io.BytesIO()
+    img.save(img_byte_arr, format='PNG')  # QR kodunu byte formatında kaydet
+    img_byte_arr.seek(0)
+    qr_surface = pygame.image.load(img_byte_arr)  # Pygame yüzeyine yükle
 
     # Arka plan rengini beyaz yap
     screen.fill((255, 255, 255))

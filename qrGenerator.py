@@ -8,7 +8,7 @@ from PIL import Image
 url = "https://172.18.0.43/getQRCodeToken"
 headers = {"Content-Type": "application/json"}
 data = '{"room_id": 1}'
-response = requests.post(url, headers=headers, data=data)
+response = requests.post(url, headers=headers, data=data,verify=False)
 
 if response.status_code == 200:
     # Gelen JSON'dan QR token'ı al

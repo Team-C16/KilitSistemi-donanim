@@ -13,7 +13,9 @@ def fetch_qr_token():
     try:
         response = requests.post(url, headers=headers, data=data, verify=False)
         if response.status_code == 200:
-            return response.text
+            # Parse the JSON response and get the token
+            response_data = response.json()
+            return response_data.get("token")  # Get the 'token' field from the response
         else:
             print(f"API isteği başarısız oldu. Hata kodu: {response.status_code}")
     except requests.RequestException as e:
@@ -56,9 +58,9 @@ while running:
         if event.type == QUIT:
             running = False
 
-    # Check if it's time to fetch a new QR token (every 60 seconds)
+   
     current_time = pygame.time.get_ticks()
-    if current_time - last_update_time > 60000 or qr_surface is None:  # 60000 ms = 60 seconds
+    if current_time - last_update_time > 57000 or qr_surface is None:  # 57000 ms = 57 seconds beacuse we dont want to show expired token in screen so its 57
         last_update_time = current_time
         qr_token = fetch_qr_token()
         if qr_token:

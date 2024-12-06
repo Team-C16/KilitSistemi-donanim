@@ -86,7 +86,7 @@ def generate_qr_code_surface(qr_data, screen_height):
 
 # Initialize Pygame
 pygame.init()
-
+pygame.mouse.set_visible(0)
 # Set up the display
 screen_width, screen_height = pygame.display.Info().current_w, pygame.display.Info().current_h
 screen = pygame.display.set_mode((screen_width, screen_height), pygame.FULLSCREEN)

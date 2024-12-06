@@ -6,7 +6,12 @@ from PIL import Image
 import io
 import jwt
 import time
-jwtsecret = "ROOMS_JWT_SECRET"#DONT FORGET TO CHANGE SECRET
+month_names = [
+    "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", 
+    "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"
+]
+
+jwtsecret = "JWT_SECRET"#DONT FORGET TO CHANGE SECRET
 
 
 # Function to fetch room name from the API
@@ -21,11 +26,11 @@ def fetch_room_name():
         algorithm="HS256"
     )
 
-    url = "http://127.0.0.1:8001/kilitSistemi/getQRCodeToken"
+    url = "https://pve.izu.edu.tr/kilitSistemi/getQRCodeToken"
     headers = {"Content-Type": "application/json"}
     data = f'{{"room_id": 1, "token": "{encoded_jwt}", "room_name": 1}}'
     try:
-        response = requests.post(url, headers=headers, data=data, verify=False)
+        response = requests.post(url, headers=headers, data=data)
         if response.status_code == 200:
             # Parse the JSON response and get the room_name
             response_data = response.json()
@@ -45,11 +50,11 @@ def fetch_qr_token():
         jwtsecret,
         algorithm="HS256"
     )
-    url = "http://127.0.0.1:8001/kilitSistemi/getQRCodeToken"
+    url = "https://pve.izu.edu.tr/kilitSistemi/getQRCodeToken"
     headers = {"Content-Type": "application/json"}
     data = f'{{"room_id": 1, "token": "{encoded_jwt}"}}'
     try:
-        response = requests.post(url, headers=headers, data=data, verify=False)
+        response = requests.post(url, headers=headers, data=data)
         if response.status_code == 200:
             # Parse the JSON response and get the token
             response_data = response.json()
@@ -88,6 +93,9 @@ screen = pygame.display.set_mode((screen_width, screen_height), pygame.FULLSCREE
 
 fetch_room_name()
 
+# Font tanımlama (EKLENDİ)
+font = pygame.font.SysFont("Arial", 20)
+
 # Main loop
 running = True
 last_update_time = 0
@@ -98,7 +106,6 @@ while running:
         if event.type == QUIT:
             running = False
 
-   
     current_time = pygame.time.get_ticks()
     if current_time - last_update_time > 57000 or qr_surface is None:  # 57000 ms = 57 seconds beacuse we dont want to show expired token in screen so its 57
         last_update_time = current_time
@@ -112,6 +119,20 @@ while running:
         qr_width = qr_surface.get_width()
         left_margin = (screen_width - qr_width) // 2
         screen.blit(qr_surface, (left_margin, 0))
+        current_time = time.localtime()
+        # Extract hour, day, and month
+        current_hour = current_time.tm_hour
+        current_day = current_time.tm_mday
+        current_month = current_time.tm_mon
+        current_minute = current_time.tm_min
+        current_month_name = month_names[current_month - 1]
+        time_text = font.render(f"{current_hour:02}.{current_minute:02}  {current_day:02} {current_month_name}", True, (0,0,0))
+        screen.blit(time_text, (10, screen_height -30))
+
+        # Room name ekrana yazdırma
+        if room_name:
+            room_text = font.render(f"Oda Adı: {room_name}", True, (0, 0, 0))  # Siyah renk
+            screen.blit(room_text, (10, screen_height - 170))  # Sol altta gösterir
         pygame.display.flip()
 
 pygame.quit()

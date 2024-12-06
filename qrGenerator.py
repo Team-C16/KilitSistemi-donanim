@@ -4,12 +4,16 @@ import pygame
 from pygame.locals import QUIT
 from PIL import Image
 import io
+import jwt
+jwtsecret = "ROOMS_JWT_SECRET"#DONT FORGET TO CHANGE SECRET
+
 
 # Function to fetch the QR code token from the API
 def fetch_qr_token():
-    url = "http://127.0.0.1:8001/getQRCodeToken"
+    encoded_jwt = jwt.encode({}, jwtsecret, algorithm="HS256")
+    url = "http://127.0.0.1:8001/kilitSistemi/getQRCodeToken"
     headers = {"Content-Type": "application/json"}
-    data = '{"room_id": 1}'
+    data = f'{{"room_id": 1, "token": "{encoded_jwt}"}}'
     try:
         response = requests.post(url, headers=headers, data=data, verify=False)
         if response.status_code == 200:
@@ -37,7 +41,7 @@ def generate_qr_code_surface(qr_data, screen_height):
 
     qr_resized = pygame.transform.scale(
         qr_surface,
-        (int(screen_height * qr_surface.get_width() / qr_surface.get_height()), screen_height)
+        (int(screen_width * qr_surface.get_width() / qr_surface.get_height()), screen_width)
     )
     return qr_resized
 

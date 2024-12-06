@@ -5,12 +5,46 @@ from pygame.locals import QUIT
 from PIL import Image
 import io
 import jwt
+import time
 jwtsecret = "ROOMS_JWT_SECRET"#DONT FORGET TO CHANGE SECRET
+
+
+# Function to fetch room name from the API
+def fetch_room_name():
+    global room_name
+    # JWT oluşturma (30 saniye içinde geçersiz olacak şekilde ayarlanır)
+    encoded_jwt = jwt.encode(
+        {
+            "exp": time.time() + 30  # 30 saniye içinde geçersiz olacak
+        },
+        jwtsecret,
+        algorithm="HS256"
+    )
+
+    url = "http://127.0.0.1:8001/kilitSistemi/getQRCodeToken"
+    headers = {"Content-Type": "application/json"}
+    data = f'{{"room_id": 1, "token": "{encoded_jwt}", "room_name": 1}}'
+    try:
+        response = requests.post(url, headers=headers, data=data, verify=False)
+        if response.status_code == 200:
+            # Parse the JSON response and get the room_name
+            response_data = response.json()
+            room_name = response_data.get("room_name")  # Oda adını bir kez al ve sakla
+        else:
+            print(f"API isteği başarısız oldu. Hata kodu: {response.status_code}")
+    except requests.RequestException as e:
+        print(f"API bağlantı hatası: {e}")
 
 
 # Function to fetch the QR code token from the API
 def fetch_qr_token():
-    encoded_jwt = jwt.encode({}, jwtsecret, algorithm="HS256")
+    encoded_jwt = jwt.encode(
+        {
+            "exp": time.time() + 30  # 30 saniye içinde geçersiz olacak
+        },
+        jwtsecret,
+        algorithm="HS256"
+    )
     url = "http://127.0.0.1:8001/kilitSistemi/getQRCodeToken"
     headers = {"Content-Type": "application/json"}
     data = f'{{"room_id": 1, "token": "{encoded_jwt}"}}'
@@ -51,6 +85,8 @@ pygame.init()
 # Set up the display
 screen_width, screen_height = pygame.display.Info().current_w, pygame.display.Info().current_h
 screen = pygame.display.set_mode((screen_width, screen_height), pygame.FULLSCREEN)
+
+fetch_room_name()
 
 # Main loop
 running = True

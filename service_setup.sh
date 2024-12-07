@@ -1,7 +1,7 @@
 apt update -y
 apt install python3 -y
 apt install pip -y
-pip install requests qrcode[pil] pygame io jwt time --break-system-packages
+pip install requests qrcode qrcode[pil] pygame jwt time --break-system-packages
 
 
 DIRECTORY="/BAP100-proje-donanim"
@@ -55,7 +55,7 @@ Type=simple
 User=$USER_NAME
 Environment=DISPLAY=:0
 Environment=XDG_RUNTIME_DIR=/run/user/$(id -u $USER_NAME)
-ExecStartPre=/bin/sleep 10
+ExecStartPre=/bin/sleep 5
 ExecStart=/usr/bin/python3 $PYTHON_SCRIPT
 Restart=always
 

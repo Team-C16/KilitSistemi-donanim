@@ -11,7 +11,7 @@ month_names = [
     "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"
 ]
 
-jwtsecret = "JWT_SECRET"#DONT FORGET TO CHANGE SECRET
+jwtsecret = "{zRUm1BL(0S_ylR*/2RwmV]v*Yf!CD|_2O+9R9M7.XM~T#{f|k"#DONT FORGET TO CHANGE SECRET
 
 
 # Function to fetch room name from the API
@@ -101,7 +101,10 @@ running = True
 last_update_time = 0
 qr_surface = None
 
+clock = pygame.time.Clock()
+
 while running:
+    clock.tick(1)
     for event in pygame.event.get():
         if event.type == QUIT:
             running = False

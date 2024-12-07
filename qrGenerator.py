@@ -11,7 +11,7 @@ month_names = [
     "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"
 ]
 
-jwtsecret = "{zRUm1BL(0S_ylR*/2RwmV]v*Yf!CD|_2O+9R9M7.XM~T#{f|k"#DONT FORGET TO CHANGE SECRET
+jwtsecret = "JWT_SECRET"#DONT FORGET TO CHANGE SECRET
 
 
 # Function to fetch room name from the API

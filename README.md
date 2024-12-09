@@ -1,3 +1,6 @@
+
+!!! Setting up display is recommended to be made using ssh because, connecting monitor or any other hdmi display will mess up with the config of Raspberry Pi !!!
+
 For LCD drivers run these
 
 git clone https://github.com/goodtft/LCD-show.git

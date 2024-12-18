@@ -20,11 +20,12 @@ def fetch_room_name():
     # JWT oluşturma (30 saniye içinde geçersiz olacak şekilde ayarlanır)
     encoded_jwt = jwt.encode(
         {
-            "exp": time.time() + 30  # 30 saniye içinde geçersiz olacak
+           "exp": time.time() + 30
         },
         jwtsecret,
         algorithm="HS256"
     )
+    print(encoded_jwt)
 
     url = "https://pve.izu.edu.tr/kilitSistemi/getQRCodeToken"
     headers = {"Content-Type": "application/json"}
@@ -34,6 +35,7 @@ def fetch_room_name():
         if response.status_code == 200:
             # Parse the JSON response and get the room_name
             response_data = response.json()
+            print(response_data)
             room_name = response_data.get("room_name")  # Oda adını bir kez al ve sakla
         else:
             print(f"API isteği başarısız oldu. Hata kodu: {response.status_code}")
@@ -45,7 +47,7 @@ def fetch_room_name():
 def fetch_qr_token():
     encoded_jwt = jwt.encode(
         {
-            "exp": time.time() + 30  # 30 saniye içinde geçersiz olacak
+            "exp": time.time() + 300  # 30 saniye içinde geçersiz olacak
         },
         jwtsecret,
         algorithm="HS256"

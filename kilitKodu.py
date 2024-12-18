@@ -9,8 +9,8 @@ led = LED(12)  # GPIO Pin 12
 # Flask uygulaması oluşturma
 app = Flask(__name__)
 
-# Secret key (Bunu kendi secret key'inizle değiştirin)
-SECRET_KEY = "{zRUm1BL(0S_ylR*/2RwmV]v*Yf!CD|_2O+9R9M7.XM~T#{f|k"
+# Secret key 
+SECRET_KEY = "JWT_SECRET"
 
 # JWT doğrulama fonksiyonu
 def verify_jwt(token):

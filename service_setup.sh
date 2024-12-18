@@ -17,34 +17,48 @@ echo "\n ---------------------------------------------------- \n \n \n Please En
 read -p "" roomid
 
 
-file="$DIRECTORY/qrGenerator.py"
+qrfile="$DIRECTORY/qrGenerator.py"
 
 escaped_jwtsecret=$(echo "$jwtsecret" | sed 's/[&/\]/\\&/g')
 
 # 'JWT_SECRET' yazan yeri kullanıcı şifresi ile değiştirip, geçici dosyaya yaz
-sed "s/\"JWT_SECRET\"/\"$escaped_jwtsecret\"/g" "$file" > tempfile
+sed "s/\"JWT_SECRET\"/\"$escaped_jwtsecret\"/g" "$qrfile" > tempfile
 
 # Orijinal dosyayı geçici dosyayla değiştir
-mv tempfile "$file"
+mv tempfile "$qrfile"
 
 # room_id değerini değiştirmek için sed kullan
-sed -i "s/room_id\": [0-9]\+/room_id\": $roomid/g" "$file"
+sed -i "s/room_id\": [0-9]\+/room_id\": $roomid/g" "$qrfile"
 
-# Servis adı
-SERVICE_NAME="qr_generator"
 
-# Python script yolu
-PYTHON_SCRIPT="$DIRECTORY/qrGenerator.py"
+lockfile="$DIRECTORY/kilitKodu.py"
+
+sed "s/\"JWT_SECRET\"/\"$escaped_jwtsecret\"/g" "$lockfile" > tempfile
+
+# Orijinal dosyayı geçici dosyayla değiştir
+mv tempfile "$lockfile"
+
+#QR Servis adı
+QR_SERVICE_NAME="qrGenerator"
+
+#QR Python script yolu
+QR_PYTHON_SCRIPT="$DIRECTORY/qrGenerator.py"
+
+#Kilit Servis adı
+LOCK_SERVICE_NAME="lock"
+
+#Kilit Python script yolu
+LOCK_PYTHON_SCRIPT="$DIRECTORY/kilitKodu.py"
 
 # Kullanıcı adı (genellikle 'pi')
 USER_NAME="pi"
 
 # Servis dosyasını oluştur
-SERVICE_FILE="/etc/systemd/system/$SERVICE_NAME.service"
+QR_SERVICE_FILE="/etc/systemd/system/$QR_SERVICE_NAME.service"
 
-echo "Servis dosyası oluşturuluyor: $SERVICE_FILE"
+echo "Servis dosyası oluşturuluyor: $QR_SERVICE_FILE"
 
-sudo bash -c "cat > $SERVICE_FILE" <<EOL
+sudo bash -c "cat > $QR_SERVICE_FILE" <<EOL
 [Unit]
 Description=QR Generator Service
 After=graphical.target
@@ -56,7 +70,7 @@ User=$USER_NAME
 Environment=DISPLAY=:0
 Environment=XDG_RUNTIME_DIR=/run/user/$(id -u $USER_NAME)
 ExecStartPre=/bin/sleep 5
-ExecStart=/usr/bin/python3 $PYTHON_SCRIPT
+ExecStart=/usr/bin/python3 $QR_PYTHON_SCRIPT
 Restart=always
 
 [Install]
@@ -64,13 +78,47 @@ WantedBy=graphical.target
 EOL
 
 # Servisi etkinleştir ve başlat
-echo "Servis etkinleştiriliyor ve başlatılıyor..."
+echo "QR Servis etkinleştiriliyor ve başlatılıyor..."
 sudo systemctl daemon-reload
-sudo systemctl enable $SERVICE_NAME.service
-sudo systemctl start $SERVICE_NAME.service
+sudo systemctl enable $QR_SERVICE_NAME.service
+sudo systemctl start $QR_SERVICE_NAME.service
+
+# Servis dosyasını oluştur
+LOCK_SERVICE_FILE="/etc/systemd/system/$LOCK_SERVICE_NAME.service"
+
+echo "Servis dosyası oluşturuluyor: $LOCK_SERVICE_FILE"
+
+sudo bash -c "cat > $LOCK_SERVICE_FILE" <<EOL
+[Unit]
+Description=Lock Service
+After=graphical.target
+
+
+[Service]
+Type=simple
+User=$USER_NAME
+Environment=DISPLAY=:0
+Environment=XDG_RUNTIME_DIR=/run/user/$(id -u $USER_NAME)
+ExecStartPre=/bin/sleep 5
+ExecStart=/usr/bin/python3 $LOCK_PYTHON_SCRIPT
+Restart=always
+
+[Install]
+WantedBy=graphical.target
+EOL
+
+
+
+# Servisi etkinleştir ve başlat
+echo "LOCK Servis etkinleştiriliyor ve başlatılıyor..."
+sudo systemctl daemon-reload
+sudo systemctl enable $LOCK_SERVICE_NAME.service
+sudo systemctl start $LOCK_SERVICE_NAME.service
+
 
 # Servis durumu kontrol
-sudo systemctl status $SERVICE_NAME.service
+sudo systemctl status $LOCK_SERVICE_NAME.service
+sudo systemctl status $QR_SERVICE_NAME.service
 
 else
 git clone https://github.com/Kerem-Yavuz/BAP100-proje-donanim /BAP100-proje-donanim

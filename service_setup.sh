@@ -70,7 +70,7 @@ User=$USER_NAME
 Environment=DISPLAY=:0
 Environment=XDG_RUNTIME_DIR=/run/user/$(id -u $USER_NAME)
 ExecStartPre=/bin/sleep 5
-ExecStart=/usr/bin/python3 $QR_PYTHON_SCRIPT
+ExecStart=sudo /usr/bin/python3 $QR_PYTHON_SCRIPT
 Restart=always
 
 [Install]
@@ -100,7 +100,7 @@ User=$USER_NAME
 Environment=DISPLAY=:0
 Environment=XDG_RUNTIME_DIR=/run/user/$(id -u $USER_NAME)
 ExecStartPre=/bin/sleep 5
-ExecStart=/usr/bin/python3 $LOCK_PYTHON_SCRIPT
+ExecStart=sudo /usr/bin/python3 $LOCK_PYTHON_SCRIPT
 Restart=always
 
 [Install]

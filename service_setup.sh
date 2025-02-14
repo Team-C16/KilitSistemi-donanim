@@ -4,7 +4,7 @@ apt install pip -y
 pip install requests qrcode qrcode[pil] pygame jwt time --break-system-packages
 
 
-DIRECTORY="/BAP100-proje-donanim"
+DIRECTORY="/BAP100-donanim"
 
 if [ -d "$DIRECTORY" ]; then
 stty -echo
@@ -61,20 +61,19 @@ echo "Servis dosyası oluşturuluyor: $QR_SERVICE_FILE"
 sudo bash -c "cat > $QR_SERVICE_FILE" <<EOL
 [Unit]
 Description=QR Generator Service
-After=graphical.target
-
+After=default.target
+Requires=display-manager.service
 
 [Service]
 Type=simple
 User=$USER_NAME
 Environment=DISPLAY=:0
 Environment=XDG_RUNTIME_DIR=/run/user/$(id -u $USER_NAME)
-ExecStartPre=/bin/sleep 5
-ExecStart=sudo /usr/bin/python3 $QR_PYTHON_SCRIPT
+ExecStart=/bin/bash -c "while ! xrandr; do sleep 1; done; /usr/bin/python3 $QR_PYTHON_SCRIPT"
 Restart=always
 
 [Install]
-WantedBy=graphical.target
+WantedBy=default.target
 EOL
 
 # Servisi etkinleştir ve başlat
@@ -121,6 +120,6 @@ sudo systemctl status $LOCK_SERVICE_NAME.service
 sudo systemctl status $QR_SERVICE_NAME.service
 
 else
-git clone https://github.com/Kerem-Yavuz/BAP100-proje-donanim /BAP100-proje-donanim
+git clone https://github.com/KilitSistemi/BAP100-donanim /BAP100-donanim
 exec "$0"
 fi

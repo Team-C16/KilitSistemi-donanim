@@ -16,6 +16,9 @@ echo "$jwtsecret"
 echo "\n ---------------------------------------------------- \n \n \n Please Enter Rooom ID"
 read -p "" roomid
 
+echo "\n ---------------------------------------------------- \n \n \n Please Enter Nodejs for raspberrys IP"
+read -p "" nodeip
+
 
 qrfile="$DIRECTORY/qrGenerator.py"
 
@@ -27,9 +30,11 @@ sed "s/\"JWT_SECRET\"/\"$escaped_jwtsecret\"/g" "$qrfile" > tempfile
 # Orijinal dosyayı geçici dosyayla değiştir
 mv tempfile "$qrfile"
 
-# room_id değerini değiştirmek için sed kullan
+# room_id değerini değiştirmek için sed kullanıyoruz
 sed -i "s/room_id\": [0-9]\+/room_id\": $roomid/g" "$qrfile"
 
+#ip yi girmek için sed kullanıyoruz
+sed -i "s/^raspberryNodeip = '.*'/raspberryNodeip = '$nodeip'/" "$qrfile"
 
 lockfile="$DIRECTORY/kilitKodu.py"
 

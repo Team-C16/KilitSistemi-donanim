@@ -13,6 +13,7 @@ month_names = [
 
 jwtsecret = "JWT_SECRET"#DONT FORGET TO CHANGE SECRET
 
+raspberryNodeip = '192.168.1.33'
 
 # Function to fetch room name from the API
 def fetch_room_name():
@@ -27,7 +28,8 @@ def fetch_room_name():
     )
     print(encoded_jwt)
 
-    url = "https://pve.izu.edu.tr/kilitSistemi/getQRCodeToken"
+    url = f"http://{raspberryNodeip}:8002/getQRCodeToken"
+    print(url)
     headers = {"Content-Type": "application/json"}
     data = f'{{"room_id": 1, "token": "{encoded_jwt}", "room_name": 1}}'
     try:
@@ -52,7 +54,7 @@ def fetch_qr_token():
         jwtsecret,
         algorithm="HS256"
     )
-    url = "https://pve.izu.edu.tr/kilitSistemi/getQRCodeToken"
+    url = f"http://{raspberryNodeip}:8002/getQRCodeToken"
     headers = {"Content-Type": "application/json"}
     data = f'{{"room_id": 1, "token": "{encoded_jwt}"}}'
     try:
@@ -96,7 +98,7 @@ def save_ip():
         jwtsecret,
         algorithm="HS256"
     )
-    url = "https://pve.izu.edu.tr/kilitSistemi/saveIPForRaspberry"
+    url = f"http://{raspberryNodeip}:8002/saveIPForRaspberry"
     headers = {"Content-Type": "application/json"}
     data = f'{{"room_id": 1, "jwtToken": "{encoded_jwt}"}}'
     try:

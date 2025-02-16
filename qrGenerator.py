@@ -47,7 +47,7 @@ def fetch_room_name():
 def fetch_qr_token():
     encoded_jwt = jwt.encode(
         {
-            "exp": time.time() + 300  # 30 saniye içinde geçersiz olacak
+            "exp": time.time() + 30  # 30 saniye içinde geçersiz olacak
         },
         jwtsecret,
         algorithm="HS256"
@@ -86,13 +86,37 @@ def generate_qr_code_surface(qr_data, screen_height):
     )
     return qr_resized
 
+
+def save_ip():
+    print("Save ip called")
+    encoded_jwt = jwt.encode(
+        {
+            "exp": time.time() + 30  # 30 saniye içinde geçersiz olacak
+        },
+        jwtsecret,
+        algorithm="HS256"
+    )
+    url = "https://pve.izu.edu.tr/kilitSistemi/saveIPForRaspberry"
+    headers = {"Content-Type": "application/json"}
+    data = f'{{"room_id": 1, "jwtToken": "{encoded_jwt}"}}'
+    try:
+        response = requests.post(url, headers=headers, data=data)
+        if response.status_code == 200:
+            return response
+        else:
+            print(f"API isteği başarısız oldu. IP Hata kodu: {response.status_code}")
+    except requests.RequestException as e:
+        print(f"API bağlantı hatası: {e}")
+    return None
+
 # Initialize Pygame
 pygame.init()
 pygame.mouse.set_visible(0)
 # Set up the display
 screen_width, screen_height = pygame.display.Info().current_w, pygame.display.Info().current_h
 screen = pygame.display.set_mode((screen_width, screen_height), pygame.FULLSCREEN)
-
+text = save_ip()
+print(text)
 fetch_room_name()
 
 # Font tanımlama (EKLENDİ)

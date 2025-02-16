@@ -91,19 +91,20 @@ sudo bash -c "cat > $LOCK_SERVICE_FILE" <<EOL
 [Unit]
 Description=Lock Service
 After=graphical.target
+Requires=display-manager.service
 
 
 [Service]
 Type=simple
 User=$USER_NAME
 Environment=DISPLAY=:0
-Environment=XDG_RUNTIME_DIR=/run/user/$(id -u $USER_NAME)
-ExecStartPre=/bin/sleep 5
-ExecStart=sudo /usr/bin/python3 $LOCK_PYTHON_SCRIPT
+Environment=XAUTHORITY=/home/$USER_NAME/.Xauthority
+ExecStartPre=/usr/bin/xhost +SI:localuser:$USER_NAME
+ExecStart=/bin/bash -c "while ! xrandr; do sleep 1; done; sudo python $LOCK_PYTHON_SCRIPT"
 Restart=always
 
 [Install]
-WantedBy=graphical.target
+WantedBy=multi-user.target
 EOL
 
 

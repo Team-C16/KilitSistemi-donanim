@@ -6,6 +6,7 @@ from PIL import Image
 import io
 import jwt
 import time
+import socket
 month_names = [
     "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", 
     "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"
@@ -13,7 +14,7 @@ month_names = [
 
 jwtsecret = "JWT_SECRET"#DONT FORGET TO CHANGE SECRET
 
-raspberryNodeip = '192.168.1.33'
+raspberryNodeip = '172.18.6.111:32001/kilitSistemi'
 
 # Function to fetch room name from the API
 def fetch_room_name():
@@ -28,7 +29,7 @@ def fetch_room_name():
     )
     print(encoded_jwt)
 
-    url = f"http://{raspberryNodeip}:8002/getQRCodeToken"
+    url = f"http://{raspberryNodeip}/getQRCodeToken"
     print(url)
     headers = {"Content-Type": "application/json"}
     data = f'{{"room_id": 1, "token": "{encoded_jwt}", "room_name": 1}}'
@@ -54,7 +55,7 @@ def fetch_qr_token():
         jwtsecret,
         algorithm="HS256"
     )
-    url = f"http://{raspberryNodeip}:8002/getQRCodeToken"
+    url = f"http://{raspberryNodeip}/getQRCodeToken"
     headers = {"Content-Type": "application/json"}
     data = f'{{"room_id": 1, "token": "{encoded_jwt}"}}'
     try:
@@ -98,9 +99,13 @@ def save_ip():
         jwtsecret,
         algorithm="HS256"
     )
-    url = f"http://{raspberryNodeip}:8002/saveIPForRaspberry"
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.connect(("8.8.8.8", 80))
+    local_ip = s.getsockname()[0]
+    print(local_ip)
+    url = f"http://{raspberryNodeip}/saveIPForRaspberry"
     headers = {"Content-Type": "application/json"}
-    data = f'{{"room_id": 1, "jwtToken": "{encoded_jwt}"}}'
+    data = f'{{"room_id": 1, "jwtToken": "{encoded_jwt}", "ip": "{local_ip}"}}'
     try:
         response = requests.post(url, headers=headers, data=data)
         if response.status_code == 200:

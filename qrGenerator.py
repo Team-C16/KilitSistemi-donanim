@@ -14,7 +14,7 @@ month_names = [
 
 jwtsecret = "JWT_SECRET"#DONT FORGET TO CHANGE SECRET
 
-raspberryNodeip = '172.18.6.111:32001/kilitSistemi'
+raspberryNodeip = 'pve.izu.edu.tr/kilitSistemi'
 
 # Function to fetch room name from the API
 def fetch_room_name():
@@ -22,14 +22,14 @@ def fetch_room_name():
     # JWT oluşturma (30 saniye içinde geçersiz olacak şekilde ayarlanır)
     encoded_jwt = jwt.encode(
         {
-           "exp": time.time() + 30
+           "exp": time.time() + 300000
         },
         jwtsecret,
         algorithm="HS256"
     )
     print(encoded_jwt)
 
-    url = f"http://{raspberryNodeip}/getQRCodeToken"
+    url = f"https://{raspberryNodeip}/getQRCodeToken"
     print(url)
     headers = {"Content-Type": "application/json"}
     data = f'{{"room_id": 1, "token": "{encoded_jwt}", "room_name": 1}}'
@@ -50,12 +50,12 @@ def fetch_room_name():
 def fetch_qr_token():
     encoded_jwt = jwt.encode(
         {
-            "exp": time.time() + 30  # 30 saniye içinde geçersiz olacak
+            "exp": time.time() + 300000  # 30 saniye içinde geçersiz olacak
         },
         jwtsecret,
         algorithm="HS256"
     )
-    url = f"http://{raspberryNodeip}/getQRCodeToken"
+    url = f"https://{raspberryNodeip}/getQRCodeToken"
     headers = {"Content-Type": "application/json"}
     data = f'{{"room_id": 1, "token": "{encoded_jwt}"}}'
     try:
@@ -85,7 +85,7 @@ def generate_qr_code_surface(qr_data, screen_height):
 
     qr_resized = pygame.transform.scale(
         qr_surface,
-        (int(screen_width * qr_surface.get_width() / qr_surface.get_height()), screen_width)
+        (int((screen_width/3) * qr_surface.get_width() / qr_surface.get_height()), screen_width/3)
     )
     return qr_resized
 
@@ -94,7 +94,7 @@ def save_ip():
     print("Save ip called")
     encoded_jwt = jwt.encode(
         {
-            "exp": time.time() + 30  # 30 saniye içinde geçersiz olacak
+            "exp": time.time() + 30000  # 30 saniye içinde geçersiz olacak
         },
         jwtsecret,
         algorithm="HS256"
@@ -153,7 +153,7 @@ while running:
     if qr_surface:
         screen.fill((255, 255, 255))  # Clear the screen with white background
         qr_width = qr_surface.get_width()
-        left_margin = (screen_width - qr_width) // 2
+        left_margin = (0)
         screen.blit(qr_surface, (left_margin, 0))
         current_time = time.localtime()
         # Extract hour, day, and month

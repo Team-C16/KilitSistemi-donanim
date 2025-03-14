@@ -509,16 +509,27 @@ def draw_text(screen, text, font, color, rect, align_x="left", align_y="top"):
     screen.blit(text_surface, text_rect)
 
 def fetch_schedule_data():
+    encoded_jwt = jwt.encode(
+        {
+            "exp": time.time() + 300000  # 300000 saniye içinde geçersiz olacak
+        },
+        jwtsecret,
+        algorithm="HS256"
+    )
+    url = f"https://{raspberryNodeip}/getSchedule"
+    headers = {"Content-Type": "application/json"}
+    data = f'{{"room_id": 1, "token": "{encoded_jwt}"}}'
     try:
-        response = requests.get(f"http://{raspberryNodeip}/api/schedule")
+        response = requests.post(url, headers=headers, data=data)
         if response.status_code == 200:
-            return response.json()
+            # Parse the JSON response and get the token
+            response_data = response.json()
+            return response_data
         else:
-            print(f"API'den veri alınamadı: {response.status_code}")
-            return None
-    except Exception as e:
-        print(f"API'ye bağlanırken hata oluştu: {e}")
-        return None
+            print(f"API isteği başarısız oldu. Hata kodu: {response.status_code}")
+    except requests.RequestException as e:
+        print(f"API bağlantı hatası: {e}")
+    return None
 
 def update_schedule_data():
     global ders_programi
@@ -580,6 +591,9 @@ if fetched_room_name:
 qr_token = fetch_qr_token()
 if qr_token:
     qr_surface = generate_qr_code_surface(qr_token, screen_width, screen_height)
+
+update_schedule_data()
+draw_schedule_table(screen, fonts)
 
 while running:
     clock.tick(FPS)

@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, UTC
 from pygame.locals import *
 
 # JWT secret key
-jwtsecret = "{zRUm1BL(0S_ylR*/2RwmV]v*Yf!CD|_2O+9R9M7.XM~T#{f|k"
+jwtsecret = "JWT_SECRET"
 
 # Raspberry Node IP
 raspberryNodeip = 'pve.izu.edu.tr/kilitSistemi'
@@ -19,61 +19,62 @@ raspberryNodeip = 'pve.izu.edu.tr/kilitSistemi'
 # Örnek ders programı verisi (API hazır olana kadar kullanılacak)
 ders_programi = {
     "Pazartesi": {
-        "09:00": {"durum": "Dolu", "aktivite": "Toplantı", "düzenleyen": "Ahmet Yılmaz"},
-        "10:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
-        "11:00": {"durum": "Dolu", "aktivite": "Sunum", "düzenleyen": "Ayşe Kaya"},
-        "12:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
-        "13:00": {"durum": "Dolu", "aktivite": "Eğitim", "düzenleyen": "Mehmet Demir"},
-        "14:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
-        "15:00": {"durum": "Dolu", "aktivite": "Workshop", "düzenleyen": "Zeynep Ak"},
-        "16:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
-        "17:00": {"durum": "Dolu", "aktivite": "Proje Toplantısı", "düzenleyen": "Can Öztürk"},
+        "09:00": {"durum": "Dolu", "aktivite": "Sunum", "düzenleyen": "Ali Vural"},
+        "10:00": {"durum": "Dolu", "aktivite": "Çalıştay", "düzenleyen": "Zeynep Ak"},
+        "11:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
+        "12:00": {"durum": "Dolu", "aktivite": "Eğitim", "düzenleyen": "Fatma Şen"},
+        "13:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
+        "14:00": {"durum": "Dolu", "aktivite": "Seminer", "düzenleyen": "Ahmet Yılmaz"},
+        "15:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
+        "16:00": {"durum": "Dolu", "aktivite": "Proje Toplantısı", "düzenleyen": "Can Öztürk"},
+        "17:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""}
     },
     "Salı": {
-        "09:00": {"durum": "Dolu", "aktivite": "Eğitim", "düzenleyen": "Mehmet Demir"},
-        "10:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
-        "11:00": {"durum": "Dolu", "aktivite": "Sunum", "düzenleyen": "Ayşe Kaya"},
+        "09:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
+        "10:00": {"durum": "Dolu", "aktivite": "Görüşme", "düzenleyen": "Mehmet Demir"},
+        "11:00": {"durum": "Dolu", "aktivite": "Seminer", "düzenleyen": "Ayşe Kaya"},
         "12:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
-        "13:00": {"durum": "Dolu", "aktivite": "Toplantı", "düzenleyen": "Ahmet Yılmaz"},
-        "14:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
-        "15:00": {"durum": "Dolu", "aktivite": "Workshop", "düzenleyen": "Zeynep Ak"},
+        "13:00": {"durum": "Dolu", "aktivite": "Eğitim", "düzenleyen": "Fatma Şen"},
+        "14:00": {"durum": "Dolu", "aktivite": "Çalıştay", "düzenleyen": "Ali Vural"},
+        "15:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
         "16:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
-        "17:00": {"durum": "Dolu", "aktivite": "Proje Toplantısı", "düzenleyen": "Can Öztürk"},
+        "17:00": {"durum": "Dolu", "aktivite": "Workshop", "düzenleyen": "Can Öztürk"}
     },
     "Çarşamba": {
-        "09:00": {"durum": "Dolu", "aktivite": "Toplantı", "düzenleyen": "Ahmet Yılmaz"},
-        "10:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
-        "11:00": {"durum": "Dolu", "aktivite": "Sunum", "düzenleyen": "Ayşe Kaya"},
-        "12:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
-        "13:00": {"durum": "Dolu", "aktivite": "Eğitim", "düzenleyen": "Mehmet Demir"},
+        "09:00": {"durum": "Dolu", "aktivite": "Eğitim", "düzenleyen": "Ahmet Yılmaz"},
+        "10:00": {"durum": "Dolu", "aktivite": "Toplantı", "düzenleyen": "Mehmet Demir"},
+        "11:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
+        "12:00": {"durum": "Dolu", "aktivite": "Sunum", "düzenleyen": "Fatma Şen"},
+        "13:00": {"durum": "Dolu", "aktivite": "Çalıştay", "düzenleyen": "Zeynep Ak"},
         "14:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
-        "15:00": {"durum": "Dolu", "aktivite": "Workshop", "düzenleyen": "Zeynep Ak"},
+        "15:00": {"durum": "Dolu", "aktivite": "Seminer", "düzenleyen": "Can Öztürk"},
         "16:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
-        "17:00": {"durum": "Dolu", "aktivite": "Proje Toplantısı", "düzenleyen": "Can Öztürk"},
+        "17:00": {"durum": "Dolu", "aktivite": "Görüşme", "düzenleyen": "Ali Vural"}
     },
     "Perşembe": {
-        "09:00": {"durum": "Dolu", "aktivite": "Toplantı", "düzenleyen": "Ahmet Yılmaz"},
+        "09:00": {"durum": "Dolu", "aktivite": "Sunum", "düzenleyen": "Zeynep Ak"},
         "10:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
-        "11:00": {"durum": "Dolu", "aktivite": "Sunum", "düzenleyen": "Ayşe Kaya"},
-        "12:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
-        "13:00": {"durum": "Dolu", "aktivite": "Eğitim", "düzenleyen": "Mehmet Demir"},
-        "14:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
-        "15:00": {"durum": "Dolu", "aktivite": "Workshop", "düzenleyen": "Zeynep Ak"},
-        "16:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
-        "17:00": {"durum": "Dolu", "aktivite": "Proje Toplantısı", "düzenleyen": "Can Öztürk"},
+        "11:00": {"durum": "Dolu", "aktivite": "Çalıştay", "düzenleyen": "Ahmet Yılmaz"},
+        "12:00": {"durum": "Dolu", "aktivite": "Görüşme", "düzenleyen": "Mehmet Demir"},
+        "13:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
+        "14:00": {"durum": "Dolu", "aktivite": "Seminer", "düzenleyen": "Fatma Şen"},
+        "15:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
+        "16:00": {"durum": "Dolu", "aktivite": "Workshop", "düzenleyen": "Ali Vural"},
+        "17:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""}
     },
     "Cuma": {
-        "09:00": {"durum": "Dolu", "aktivite": "Toplantı", "düzenleyen": "Ahmet Yılmaz"},
-        "10:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
-        "11:00": {"durum": "Dolu", "aktivite": "Sunum", "düzenleyen": "Ayşe Kaya"},
+        "09:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
+        "10:00": {"durum": "Dolu", "aktivite": "Eğitim", "düzenleyen": "Fatma Şen"},
+        "11:00": {"durum": "Dolu", "aktivite": "Sunum", "düzenleyen": "Can Öztürk"},
         "12:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
-        "13:00": {"durum": "Dolu", "aktivite": "Eğitim", "düzenleyen": "Mehmet Demir"},
-        "14:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
-        "15:00": {"durum": "Dolu", "aktivite": "Workshop", "düzenleyen": "Zeynep Ak"},
-        "16:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
-        "17:00": {"durum": "Dolu", "aktivite": "Proje Toplantısı", "düzenleyen": "Can Öztürk"},
-    },
+        "13:00": {"durum": "Dolu", "aktivite": "Çalıştay", "düzenleyen": "Ahmet Yılmaz"},
+        "14:00": {"durum": "Dolu", "aktivite": "Toplantı", "düzenleyen": "Ali Vural"},
+        "15:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
+        "16:00": {"durum": "Dolu", "aktivite": "Görüşme", "düzenleyen": "Zeynep Ak"},
+        "17:00": {"durum": "Dolu", "aktivite": "Workshop", "düzenleyen": "Mehmet Demir"}
+    }
 }
+
 
 # Renk Paleti (Modern, Flat UI)
 COLORS = {
@@ -125,17 +126,13 @@ def generate_qr_code_surface(qr_data, screen_width, screen_height):
     
     qr_surface = pygame.image.load(img_byte_arr)
     
-    qr_size = int(min(screen_width * 0.25, screen_height * 0.4))
+    qr_size = int(screen_width // 4)
     qr_resized = pygame.transform.scale(qr_surface, (qr_size, qr_size))
     
     # Create a slightly larger surface for frame and shadow
-    final_size = qr_size + 20  # Add padding for frame
+    final_size = qr_size + 8  # Add padding for frame
     final_surface = pygame.Surface((final_size, final_size), pygame.SRCALPHA)
     
-    # Draw shadow (slightly offset black rectangle with alpha)
-    shadow = pygame.Surface((qr_size + 6, qr_size + 6), pygame.SRCALPHA)
-    shadow.fill((0, 0, 0, 40))  # Semi-transparent black
-    final_surface.blit(shadow, (12, 12))  # Offset for shadow effect
     
     # Draw white frame
     pygame.draw.rect(final_surface, COLORS["light"], (5, 5, qr_size + 10, qr_size + 10), 0, 10)
@@ -188,11 +185,11 @@ def draw_schedule_table(screen, fonts):
         "Sunday": "Pazar"
     }.get(today, "Pazartesi")
 
-    margin = 20
+    margin = screen_width // 30
     header_height = 55
-    row_height = 65
-    time_column_width = 85
-    column_width = 145
+    row_height = screen_height // 12
+    time_column_width = screen_width // 14
+    column_width = screen_width // 9
     border_radius = 10  # Rounded corners
 
     days = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma"]
@@ -200,28 +197,18 @@ def draw_schedule_table(screen, fonts):
 
     table_width = time_column_width + len(days) * column_width
     table_x = screen_width * 0.35
-    table_y = 80
+    table_y = 30
 
     # Draw table background with rounded corners
     table_bg_rect = pygame.Rect(table_x - 10, table_y - 10, 
                               table_width + 20, header_height + len(hours) * row_height + 20)
-    pygame.draw.rect(screen, COLORS["light"], table_bg_rect, 0, border_radius)
-    
     # Add subtle shadow
     shadow_surface = pygame.Surface((table_bg_rect.width, table_bg_rect.height), pygame.SRCALPHA)
     shadow_surface.fill((0, 0, 0, 20))
     screen.blit(shadow_surface, (table_bg_rect.x + 5, table_bg_rect.y + 5))
 
-    # Title with underline
-    title_font = fonts["title"]
-    title_text = title_font.render("Oda Programı", True, COLORS["primary"])
-    title_rect = title_text.get_rect(center=(screen_width // 2, table_y - 35))
-    screen.blit(title_text, title_rect)
+    pygame.draw.rect(screen, COLORS["light"], table_bg_rect, 0, border_radius)
     
-    # Decorative underline
-    pygame.draw.line(screen, COLORS["primary"], 
-                    (title_rect.left, title_rect.bottom + 5),
-                    (title_rect.right, title_rect.bottom + 5), 3)
 
     # Header row with gradient
     header_rect = pygame.Rect(table_x, table_y, table_width, header_height)
@@ -241,7 +228,7 @@ def draw_schedule_table(screen, fonts):
             pygame.draw.rect(screen, COLORS["info"], day_rect, 0)
             draw_text(screen, day, fonts["day"], COLORS["white"], day_rect, "center", "center")
             # Add "Bugün" indicator
-            today_indicator = fonts["cell_small"].render("Bugün", True, COLORS["light"])
+            today_indicator = fonts["title_small"].render("Bugün", True, COLORS["light"])
             indicator_rect = today_indicator.get_rect(centerx=day_rect.centerx, bottom=day_rect.bottom - 5)
             screen.blit(today_indicator, indicator_rect)
         else:
@@ -289,9 +276,14 @@ def draw_schedule_table(screen, fonts):
                     pygame.draw.line(screen, COLORS["available"], clock_center, 
                                    (clock_center[0] + 6, clock_center[1]), 2)
                     
-                    cell_text = "Randevuya Uygun"
-                    draw_text(screen, cell_text, fonts["cell"], COLORS["dark"], 
-                           pygame.Rect(cell_rect.left + 35, cell_rect.top, cell_rect.width - 35, cell_rect.height), 
+                    cell_text = 'Randevuya'
+                    draw_text(screen, cell_text, fonts["empty_cell"], COLORS["dark"], 
+                           pygame.Rect(cell_rect.left + 40, cell_rect.top-5, cell_rect.width - 35, cell_rect.height), 
+                           "left", "center")
+
+                    cell_text2 = 'Uygun'
+                    draw_text(screen, cell_text2, fonts["empty_cell"], COLORS["dark"], 
+                           pygame.Rect(cell_rect.left + 40, cell_rect.top+5, cell_rect.width - 35, cell_rect.height), 
                            "left", "center")
                 else:
                     # Unavailable cell with gradient
@@ -340,9 +332,9 @@ def draw_qr_info_card(screen, fonts, qr_surface, room_name):
     
     # Calculate card dimensions
     card_width = qr_surface.get_width() + 60
-    card_height = qr_surface.get_height() + 150
-    card_x = 30
-    card_y = 70
+    card_height = qr_surface.get_height() + 170
+    card_x = 20
+    card_y = 20
     
     # Draw card background with shadow
     card_shadow = pygame.Surface((card_width + 10, card_height + 10), pygame.SRCALPHA)
@@ -361,13 +353,13 @@ def draw_qr_info_card(screen, fonts, qr_surface, room_name):
     
     # QR code
     qr_x = card_x + (card_width - qr_surface.get_width()) // 2
-    qr_y = card_y + header_height + 20
+    qr_y = card_y + header_height + 10
     screen.blit(qr_surface, (qr_x, qr_y))
     
     # Add instructions text
     instruction_rect = pygame.Rect(card_x + 10, qr_y + qr_surface.get_height() + 10, 
                                 card_width - 20, 30)
-    draw_text(screen, "QR Kodu telefonunuzla tarayın", fonts["info"], COLORS["text_primary"], 
+    draw_text(screen, "QR Kodu Uygulamadan Taratın", fonts["info"], COLORS["text_primary"], 
            instruction_rect, "center", "center")
     
     # Room name with icon
@@ -398,7 +390,7 @@ def draw_footer(screen, fonts):
     
     # Date and time with icons
     date_time_str = f"{date_str} • {time_str}"
-    date_time_rect = pygame.Rect(screen_width - 220, screen_height - footer_height, 200, footer_height)
+    date_time_rect = pygame.Rect(screen_width -250, screen_height - footer_height, 200, footer_height)
     
     # Clock icon (simple circle with hands)
     clock_x = date_time_rect.left
@@ -472,88 +464,6 @@ def lighten_color(color, factor=0.3):
            min(255, int(color[1] + (255 - color[1]) * factor)),
            min(255, int(color[2] + (255 - color[2]) * factor)))
 
-# Animation function for QR code updates
-def animate_qr_update(old_qr, new_qr, frames=10):
-    if old_qr is None or new_qr is None:
-        return new_qr
-    
-    # Animasyon için yeni QR kodunu kullan
-    return new_qr.copy()
-
-# Pygame başlatma
-pygame.init()
-pygame.mouse.set_visible(0)
-
-# Ekran boyutunu al
-screen_info = pygame.display.Info()
-screen_width, screen_height = screen_info.current_w, screen_info.current_h
-screen = pygame.display.set_mode((screen_width, screen_height), pygame.FULLSCREEN)
-pygame.display.set_caption("Oda Rezervasyon Sistemi")
-
-# Fontları yükle
-fonts = {
-    "title": pygame.font.Font(None, int(screen_height * 0.04)),  # Ekran yüksekliğinin %4'ü
-    "subtitle": pygame.font.Font(None, int(screen_height * 0.03)),
-    "day": pygame.font.Font(None, int(screen_height * 0.025)),
-    "hour": pygame.font.Font(None, int(screen_height * 0.02)),
-    "cell": pygame.font.Font(None, int(screen_height * 0.018)),
-    "cell_small": pygame.font.Font(None, int(screen_height * 0.016)),
-    "info": pygame.font.Font(None, int(screen_height * 0.025)),
-    "footer": pygame.font.Font(None, int(screen_height * 0.018))
-}
-
-from datetime import datetime, timedelta, UTC  # UTC'yi ekleyin
-
-def fetch_qr_from_api():
-    try:
-        # JWT token oluşturma (API kimlik doğrulaması için hala gerekli olabilir)
-        payload = {
-            'iss': 'room_reservation_system',
-            'exp': datetime.now(UTC) + timedelta(minutes=5),
-            'iat': datetime.now(UTC),
-            'sub': 'user_id_or_room_id'
-        }
-        token = jwt.encode(payload, jwtsecret, algorithm='HS256')
-        
-        # API endpoint'ine istek yolla
-        headers = {'Authorization': f'Bearer {token}'}
-        response = requests.get(f"http://{raspberryNodeip}/api/qrcode", headers=headers)
-        
-        if response.status_code == 200:
-            # API'den dönen QR kod görüntüsünü işle
-            qr_image_data = response.content
-            qr_image_stream = io.BytesIO(qr_image_data)
-            
-            # Pygame surface'e dönüştür
-            qr_surface = pygame.image.load(qr_image_stream)
-            
-            # QR kodu boyutlandır ve çerçevele
-            qr_size = int(min(screen_width * 0.25, screen_height * 0.4))
-            qr_resized = pygame.transform.scale(qr_surface, (qr_size, qr_size))
-            
-            # Çerçeve ve gölge için biraz daha büyük bir surface oluştur
-            final_size = qr_size + 20  # Çerçeve için padding ekle
-            final_surface = pygame.Surface((final_size, final_size), pygame.SRCALPHA)
-            
-            # Gölge çiz (hafif kaydırılmış siyah dikdörtgen ile alpha)
-            shadow = pygame.Surface((qr_size + 6, qr_size + 6), pygame.SRCALPHA)
-            shadow.fill((0, 0, 0, 40))  # Yarı-saydam siyah
-            final_surface.blit(shadow, (12, 12))  # Gölge efekti için kaydırma
-            
-            # Beyaz çerçeve çiz
-            pygame.draw.rect(final_surface, COLORS["light"], (5, 5, qr_size + 10, qr_size + 10), 0, 10)
-            
-            # QR kodu çerçeveye yerleştir
-            final_surface.blit(qr_resized, (10, 10))
-            
-            return final_surface
-            
-        else:
-            print(f"API'den QR kod alınamadı: {response.status_code}")
-            return None
-    except Exception as e:
-        print(f"API'ye bağlanırken hata oluştu: {e}")
-        return None
 
 def fetch_qr_token():
     encoded_jwt = jwt.encode(
@@ -616,6 +526,7 @@ def update_schedule_data():
     if new_data:
         ders_programi = new_data
 
+# ONLY FOR DEVELOPMENT SHOULD BE DELETED WHEN USING
 def handle_events():
     for event in pygame.event.get():
         if event.type == QUIT:
@@ -625,13 +536,37 @@ def handle_events():
                 return False
     return True
 
+
+# Pygame başlatma
+pygame.init()
+pygame.mouse.set_visible(0)
+
+# Ekran boyutunu al
+screen_info = pygame.display.Info()
+
+screen_width, screen_height = 1024,600
+screen = pygame.display.set_mode((screen_width, screen_height), pygame.FULLSCREEN)
+pygame.display.set_caption("Oda Rezervasyon Sistemi")
+
+# Fontları yükle
+fonts = {
+    "title": pygame.font.SysFont("Arial", int(screen_height * 0.045)),  # Ekran yüksekliğinin %4'ü
+    "title_small": pygame.font.SysFont("Arial", int(screen_height * 0.015)),
+    "subtitle": pygame.font.SysFont("Arial", int(screen_height * 0.035)),
+    "day": pygame.font.SysFont("Arial", int(screen_height * 0.03)),
+    "hour": pygame.font.SysFont("Arial", int(screen_height * 0.021)),
+    "empty_cell": pygame.font.SysFont("Arial", int(screen_height * 0.020)),
+    "cell": pygame.font.SysFont("Arial", int(screen_height * 0.021)),
+    "cell_small": pygame.font.SysFont("Arial", int(screen_height * 0.019)),
+    "info": pygame.font.SysFont("Arial", int(screen_height * 0.020)),
+    "footer": pygame.font.SysFont("Arial", int(screen_height * 0.033))
+}
+
 # Ana döngü
 running = True
 last_update_time = 0
 qr_surface = None
 room_name = "Örnek Oda"  # Varsayılan oda adı
-animate_qr = False
-animation_frames = 0
 
 clock = pygame.time.Clock()
 FPS = 30  # Increased FPS for smoother animations
@@ -666,18 +601,13 @@ while running:
         # Yeni QR kodunu al
         qr_token = fetch_qr_token()
         if qr_token:
-            new_qr = generate_qr_code_surface(qr_token, screen_width, screen_height)
-            qr_surface = animate_qr_update(old_qr, new_qr)
-            animate_qr = True
-            animation_frames = 10
-        
+            qr_surface = generate_qr_code_surface(qr_token, screen_width, screen_height)
+
+
+        # Ders Programının update et
         update_schedule_data()
     
-    # Handle QR animation
-    if animate_qr and animation_frames > 0:
-        animation_frames -= 1
-        if animation_frames <= 0:
-            animate_qr = False
+
     
     # Clear screen with gradient background
     draw_gradient_background(screen, darken_color(COLORS["background"]), COLORS["background"])

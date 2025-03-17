@@ -14,67 +14,7 @@ from pygame.locals import *
 jwtsecret = "JWT_SECRET"
 
 # Raspberry Node IP
-raspberryNodeip = 'pve.izu.edu.tr/kilitSistemi'
-
-# Örnek ders programı verisi (API hazır olana kadar kullanılacak)
-ders_programi = {
-    "Pazartesi": {
-        "09:00": {"durum": "Dolu", "aktivite": "Sunum", "düzenleyen": "Ali Vural"},
-        "10:00": {"durum": "Dolu", "aktivite": "Çalıştay", "düzenleyen": "Zeynep Ak"},
-        "11:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
-        "12:00": {"durum": "Dolu", "aktivite": "Eğitim", "düzenleyen": "Fatma Şen"},
-        "13:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
-        "14:00": {"durum": "Dolu", "aktivite": "Seminer", "düzenleyen": "Ahmet Yılmaz"},
-        "15:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
-        "16:00": {"durum": "Dolu", "aktivite": "Proje Toplantısı", "düzenleyen": "Can Öztürk"},
-        "17:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""}
-    },
-    "Salı": {
-        "09:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
-        "10:00": {"durum": "Dolu", "aktivite": "Görüşme", "düzenleyen": "Mehmet Demir"},
-        "11:00": {"durum": "Dolu", "aktivite": "Seminer", "düzenleyen": "Ayşe Kaya"},
-        "12:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
-        "13:00": {"durum": "Dolu", "aktivite": "Eğitim", "düzenleyen": "Fatma Şen"},
-        "14:00": {"durum": "Dolu", "aktivite": "Çalıştay", "düzenleyen": "Ali Vural"},
-        "15:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
-        "16:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
-        "17:00": {"durum": "Dolu", "aktivite": "Workshop", "düzenleyen": "Can Öztürk"}
-    },
-    "Çarşamba": {
-        "09:00": {"durum": "Dolu", "aktivite": "Eğitim", "düzenleyen": "Ahmet Yılmaz"},
-        "10:00": {"durum": "Dolu", "aktivite": "Toplantı", "düzenleyen": "Mehmet Demir"},
-        "11:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
-        "12:00": {"durum": "Dolu", "aktivite": "Sunum", "düzenleyen": "Fatma Şen"},
-        "13:00": {"durum": "Dolu", "aktivite": "Çalıştay", "düzenleyen": "Zeynep Ak"},
-        "14:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
-        "15:00": {"durum": "Dolu", "aktivite": "Seminer", "düzenleyen": "Can Öztürk"},
-        "16:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
-        "17:00": {"durum": "Dolu", "aktivite": "Görüşme", "düzenleyen": "Ali Vural"}
-    },
-    "Perşembe": {
-        "09:00": {"durum": "Dolu", "aktivite": "Sunum", "düzenleyen": "Zeynep Ak"},
-        "10:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
-        "11:00": {"durum": "Dolu", "aktivite": "Çalıştay", "düzenleyen": "Ahmet Yılmaz"},
-        "12:00": {"durum": "Dolu", "aktivite": "Görüşme", "düzenleyen": "Mehmet Demir"},
-        "13:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
-        "14:00": {"durum": "Dolu", "aktivite": "Seminer", "düzenleyen": "Fatma Şen"},
-        "15:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
-        "16:00": {"durum": "Dolu", "aktivite": "Workshop", "düzenleyen": "Ali Vural"},
-        "17:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""}
-    },
-    "Cuma": {
-        "09:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
-        "10:00": {"durum": "Dolu", "aktivite": "Eğitim", "düzenleyen": "Fatma Şen"},
-        "11:00": {"durum": "Dolu", "aktivite": "Sunum", "düzenleyen": "Can Öztürk"},
-        "12:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
-        "13:00": {"durum": "Dolu", "aktivite": "Çalıştay", "düzenleyen": "Ahmet Yılmaz"},
-        "14:00": {"durum": "Dolu", "aktivite": "Toplantı", "düzenleyen": "Ali Vural"},
-        "15:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""},
-        "16:00": {"durum": "Dolu", "aktivite": "Görüşme", "düzenleyen": "Zeynep Ak"},
-        "17:00": {"durum": "Dolu", "aktivite": "Workshop", "düzenleyen": "Mehmet Demir"}
-    }
-}
-
+raspberryNodeip = '172.18.6.111:32001/kilitSistemi'
 
 # Renk Paleti (Modern, Flat UI)
 COLORS = {
@@ -95,6 +35,31 @@ COLORS = {
     "border": (214, 219, 233),          # Subtle border color
     "highlight": (241, 196, 15),        # Highlight color
 }
+
+def transform_schedule(api_data):
+    # Helper function to get the day of the week
+    def get_day_of_week(date_str):
+        # Convert string to datetime object
+        date_obj = datetime.fromisoformat(date_str[:-1])  # Remove 'Z' from ISO string
+        # Get the day of the week (0=Monday, 6=Sunday)
+        date_obj = date_obj + timedelta(days=1)
+        days_of_week = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"]
+        return days_of_week[date_obj.weekday()]
+
+    # Initialize the schedule dictionary
+    transformed_data = {day: {f"{hour:02d}:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""} for hour in range(9, 18)} for day in 
+                     ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma"]}
+    # Populate the ders_programi dictionary based on API data
+    for entry in api_data['schedule']:
+        day_of_week = get_day_of_week(entry['day'])
+        hour = entry['hour'][:5]  # Extract just the hour:minute part (e.g., "10:00")
+        transformed_data[str(day_of_week)][hour] = {
+            "durum": "Dolu",
+            "aktivite": entry['title'],
+            "düzenleyen": entry['username']
+        }
+
+    return transformed_data
 
 # Gradient arka plan çizme fonksiyonu
 def draw_gradient_background(screen, color1, color2):
@@ -153,7 +118,7 @@ def fetch_room_name():
         algorithm="HS256"
     )
     print(encoded_jwt)
-    url = f"https://{raspberryNodeip}/getQRCodeToken"
+    url = f"http://{raspberryNodeip}/getQRCodeToken"
     print(url)
     headers = {"Content-Type": "application/json"}
     data = f'{{"room_id": 1, "token": "{encoded_jwt}", "room_name": 1}}'
@@ -473,7 +438,7 @@ def fetch_qr_token():
         jwtsecret,
         algorithm="HS256"
     )
-    url = f"https://{raspberryNodeip}/getQRCodeToken"
+    url = f"http://{raspberryNodeip}/getQRCodeToken"
     headers = {"Content-Type": "application/json"}
     data = f'{{"room_id": 1, "token": "{encoded_jwt}"}}'
     try:
@@ -516,7 +481,7 @@ def fetch_schedule_data():
         jwtsecret,
         algorithm="HS256"
     )
-    url = f"https://{raspberryNodeip}/getSchedule"
+    url = f"http://{raspberryNodeip}/getSchedule"
     headers = {"Content-Type": "application/json"}
     data = f'{{"room_id": 1, "token": "{encoded_jwt}"}}'
     try:
@@ -534,6 +499,7 @@ def fetch_schedule_data():
 def update_schedule_data():
     global ders_programi
     new_data = fetch_schedule_data()
+    new_data = transform_schedule(new_data)
     if new_data:
         ders_programi = new_data
 
@@ -580,7 +546,7 @@ qr_surface = None
 room_name = "Örnek Oda"  # Varsayılan oda adı
 
 clock = pygame.time.Clock()
-FPS = 30  # Increased FPS for smoother animations
+FPS = 1  # Increased FPS for smoother animations
 
 # İlk oda adını al
 fetched_room_name = fetch_room_name()

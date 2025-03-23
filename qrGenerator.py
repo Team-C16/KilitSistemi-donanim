@@ -14,7 +14,7 @@ from pygame.locals import *
 jwtsecret = "JWT_SECRET"
 
 # Raspberry Node IP
-raspberryNodeip = '172.18.6.111:32001/kilitSistemi'
+raspberryNodeip = '172.18.6.111:32002'
 
 # Renk Paleti (Modern, Flat UI)
 COLORS = {
@@ -150,18 +150,18 @@ def draw_schedule_table(screen, fonts):
         "Sunday": "Pazar"
     }.get(today, "Pazartesi")
 
-    margin = screen_width // 30
-    header_height = 55
-    row_height = screen_height // 12
-    time_column_width = screen_width // 14
-    column_width = screen_width // 9
+    margin = screen_width // 100
+    header_height = 60
+    row_height = screen_height // 11
+    time_column_width = screen_width // 20
+    column_width = screen_width // 8
     border_radius = 10  # Rounded corners
 
     days = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma"]
     hours = ["09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00"]
 
     table_width = time_column_width + len(days) * column_width
-    table_x = screen_width * 0.35
+    table_x = screen_width * 0.31
     table_y = 30
 
     # Draw table background with rounded corners
@@ -243,12 +243,12 @@ def draw_schedule_table(screen, fonts):
                     
                     cell_text = 'Randevuya'
                     draw_text(screen, cell_text, fonts["empty_cell"], COLORS["dark"], 
-                           pygame.Rect(cell_rect.left + 40, cell_rect.top-5, cell_rect.width - 35, cell_rect.height), 
+                           pygame.Rect(cell_rect.left + 40, cell_rect.top-11, cell_rect.width - 35, cell_rect.height), 
                            "left", "center")
 
                     cell_text2 = 'Uygun'
                     draw_text(screen, cell_text2, fonts["empty_cell"], COLORS["dark"], 
-                           pygame.Rect(cell_rect.left + 40, cell_rect.top+5, cell_rect.width - 35, cell_rect.height), 
+                           pygame.Rect(cell_rect.left + 40, cell_rect.top+11, cell_rect.width - 35, cell_rect.height), 
                            "left", "center")
                 else:
                     # Unavailable cell with gradient
@@ -343,7 +343,7 @@ def draw_qr_info_card(screen, fonts, qr_surface, room_name):
 
 # Alt bilgi çiz
 def draw_footer(screen, fonts):
-    footer_height = 50
+    footer_height = 70
     footer_rect = pygame.Rect(0, screen_height - footer_height, screen_width, footer_height)
     
     # Gradient background for footer
@@ -355,17 +355,17 @@ def draw_footer(screen, fonts):
     
     # Date and time with icons
     date_time_str = f"{date_str} • {time_str}"
-    date_time_rect = pygame.Rect(screen_width -250, screen_height - footer_height, 200, footer_height)
+    date_time_rect = pygame.Rect(screen_width -380, screen_height - footer_height, 200, footer_height)
     
     # Clock icon (simple circle with hands)
     clock_x = date_time_rect.left
     clock_y = date_time_rect.centery
-    pygame.draw.circle(screen, COLORS["light"], (clock_x, clock_y), 8, 1)
-    pygame.draw.line(screen, COLORS["light"], (clock_x, clock_y), (clock_x, clock_y - 5), 1)
-    pygame.draw.line(screen, COLORS["light"], (clock_x, clock_y), (clock_x + 4, clock_y), 1)
+    pygame.draw.circle(screen, COLORS["light"], (clock_x, clock_y), 15, 2)
+    pygame.draw.line(screen, COLORS["light"], (clock_x, clock_y), (clock_x, clock_y - 5), 2)
+    pygame.draw.line(screen, COLORS["light"], (clock_x, clock_y), (clock_x + 4, clock_y), 2)
     
     draw_text(screen, date_time_str, fonts["footer"], COLORS["light"], 
-           pygame.Rect(clock_x + 15, date_time_rect.top, date_time_rect.width - 15, date_time_rect.height), 
+           pygame.Rect(clock_x + 20, date_time_rect.top, date_time_rect.width - 15, date_time_rect.height), 
            "left", "center")
     
     # App info with logo/icon
@@ -520,8 +520,8 @@ pygame.mouse.set_visible(0)
 
 # Ekran boyutunu al
 screen_info = pygame.display.Info()
-
-screen_width, screen_height = 1024,600
+print(screen_info)
+screen_width, screen_height = screen_info.current_w, screen_info.current_h
 screen = pygame.display.set_mode((screen_width, screen_height), pygame.FULLSCREEN)
 pygame.display.set_caption("Oda Rezervasyon Sistemi")
 
@@ -532,9 +532,9 @@ fonts = {
     "subtitle": pygame.font.SysFont("Arial", int(screen_height * 0.035)),
     "day": pygame.font.SysFont("Arial", int(screen_height * 0.03)),
     "hour": pygame.font.SysFont("Arial", int(screen_height * 0.021)),
-    "empty_cell": pygame.font.SysFont("Arial", int(screen_height * 0.020)),
-    "cell": pygame.font.SysFont("Arial", int(screen_height * 0.021)),
-    "cell_small": pygame.font.SysFont("Arial", int(screen_height * 0.019)),
+    "empty_cell": pygame.font.SysFont("Arial", int(screen_height * 0.025)),
+    "cell": pygame.font.SysFont("Arial", int(screen_height * 0.026)),
+    "cell_small": pygame.font.SysFont("Arial", int(screen_height * 0.024)),
     "info": pygame.font.SysFont("Arial", int(screen_height * 0.020)),
     "footer": pygame.font.SysFont("Arial", int(screen_height * 0.033))
 }
@@ -582,7 +582,6 @@ while running:
         qr_token = fetch_qr_token()
         if qr_token:
             qr_surface = generate_qr_code_surface(qr_token, screen_width, screen_height)
-
 
         # Ders Programının update et
         update_schedule_data()

@@ -39,7 +39,7 @@ def verify_token():
         if decoded:
             # JWT geçerli, sinyal gönder (LED'i aç)
             led.on()
-            command = f'echo "KILIT AÇIK!" | osd_cat -p top -d 10 -c blue -i 10 -o 480 -f "-adobe-helvetica-bold-r-normal--34-240-100-100-p-182-iso8859-10"'
+            command = f'echo "KILIT AÇIK!" | osd_cat -p top -d 10 -c blue -i 10 -o 700 -f "-*-*-*-r-*--60-*-*-*-*-*-*-*"'
             subprocess.run(command, shell=True)
             led.off()
             return jsonify({"message": "JWT is valid, LED is ON!"}), 200

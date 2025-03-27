@@ -47,8 +47,8 @@ def transform_schedule(api_data):
         return days_of_week[date_obj.weekday()]
 
     # Initialize the schedule dictionary
-    transformed_data = {day: {f"{hour:02d}:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""} for hour in range(9, 18)} for day in 
-                     ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma"]}
+    transformed_data = {day: {f"{hour:02d}:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""} for hour in range(9, 19)} for day in 
+                     ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma","Cumartesi","Pazar"]}
     # Populate the ders_programi dictionary based on API data
     for entry in api_data['schedule']:
         day_of_week = get_day_of_week(entry['day'])
@@ -140,7 +140,7 @@ def fetch_room_name():
 # Ders programı tablosu çizme fonksiyonu
 def draw_schedule_table(screen, fonts):
     today = datetime.now().strftime("%A")
-    today_tr = {
+    dict = {
         "Monday": "Pazartesi",
         "Tuesday": "Salı",
         "Wednesday": "Çarşamba",
@@ -148,17 +148,21 @@ def draw_schedule_table(screen, fonts):
         "Friday": "Cuma",
         "Saturday": "Cumartesi",
         "Sunday": "Pazar"
-    }.get(today, "Pazartesi")
-
+    }
+    today_tr = dict.get(today,'Pazartesi')
     margin = screen_width // 100
     header_height = 60
-    row_height = screen_height // 11
+    row_height = screen_height // 12
     time_column_width = screen_width // 20
     column_width = screen_width // 8
     border_radius = 10  # Rounded corners
 
-    days = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma"]
-    hours = ["09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00"]
+    date_obj = datetime.now()
+
+    days_in_english = [date_obj.strftime('%A'), (date_obj+ timedelta(days = 1)).strftime("%A"), (date_obj+ timedelta(days = 2)).strftime("%A"), (date_obj+ timedelta(days = 3)).strftime("%A"),(date_obj+ timedelta(days = 4)).strftime("%A")]
+    days = [dict.get(day, "Pazartesi") for day in days_in_english]
+
+    hours = ["09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00"]
 
     table_width = time_column_width + len(days) * column_width
     table_x = screen_width * 0.31
@@ -215,7 +219,7 @@ def draw_schedule_table(screen, fonts):
         # Highlight current hour
         hour_val = int(hour.split(":")[0])
         if hour_val == current_hour:
-            pygame.draw.rect(screen, COLORS["highlight"], hour_rect, 3)
+            pygame.draw.rect(screen, COLORS["highlight"], hour_rect, 6)
 
         # Schedule cells for each day
         for i, day in enumerate(days):

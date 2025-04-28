@@ -6,6 +6,7 @@ import datetime
 from gpiozero import LED
 from time import sleep
 import subprocess
+import socket
 # GPIO Pin 12'yi LED olarak tanımlıyoruz
 led = LED(12)  # GPIO Pin 12
 
@@ -14,7 +15,7 @@ app = Flask(__name__)
 
 # Secret key 
 SECRET_KEY = "JWT_SECRET"
-
+save_ip()
 # JWT doğrulama fonksiyonu
 def verify_jwt(token):
     try:
@@ -25,6 +26,32 @@ def verify_jwt(token):
         return None  # JWT süresi dolmuş
     except jwt.InvalidTokenError:
         return None  # Geçersiz JWT
+        
+def save_ip():
+    print("Save ip called")
+    encoded_jwt = jwt.encode(
+        {
+            "exp": time.time() + 30  # 30 saniye içinde geçersiz olacak
+        },
+        jwtsecret,
+        algorithm="HS256"
+    )
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.connect(("8.8.8.8", 80))
+    local_ip = s.getsockname()[0]
+    print(local_ip)
+    url = f"http://{raspberryNodeip}/saveIPForRaspberry"
+    headers = {"Content-Type": "application/json"}
+    data = f'{{"room_id": 1, "jwtToken": "{encoded_jwt}", "ip": "{local_ip}"}}'
+    try:
+        response = requests.post(url, headers=headers, data=data)
+        if response.status_code == 200:
+            return response
+        else:
+            print(f"API isteği başarısız oldu. IP Hata kodu: {response.status_code}")
+    except requests.RequestException as e:
+        print(f"API bağlantı hatası: {e}")
+    return None
 
 # POST isteği dinleyen bir route
 @app.route('/verify', methods=['POST'])

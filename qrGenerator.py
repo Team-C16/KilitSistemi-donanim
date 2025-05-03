@@ -16,6 +16,10 @@ jwtsecret = "JWT_SECRET"
 # Raspberry Node IP
 raspberryNodeip = '172.18.6.111:32002'
 
+scroll_indices = {}
+last_scroll_time = 0
+
+
 # Renk Paleti (Modern, Flat UI)
 COLORS = {
     "background": (245, 248, 255),      # Slightly blue-tinted background
@@ -53,11 +57,13 @@ def transform_schedule(api_data):
     for entry in api_data['schedule']:
         day_of_week = get_day_of_week(entry['day'])
         hour = entry['hour'][:5]  # Extract just the hour:minute part (e.g., "10:00")
-        transformed_data[str(day_of_week)][hour] = {
-            "durum": "Dolu",
-            "aktivite": entry['title'],
-            "düzenleyen": entry['username']
-        }
+        cell = transformed_data[day_of_week][hour]
+        if cell["durum"] == "Boş":
+            cell["durum"] = "Dolu"
+            cell["entries"] = [{"aktivite": entry['title'], "düzenleyen": entry['username']}]
+        else:
+            cell["entries"].append({"aktivite": entry['title'], "düzenleyen": entry['username']})
+
 
     return transformed_data
 
@@ -255,11 +261,27 @@ def draw_schedule_table(screen, fonts):
                            pygame.Rect(cell_rect.left + 40, cell_rect.top+11, cell_rect.width - 35, cell_rect.height), 
                            "left", "center")
                 else:
-                    # Unavailable cell with gradient
+                   # Unavailable cell with gradient
                     draw_gradient_rect(screen, COLORS["unavailable"], lighten_color(COLORS["unavailable"]), cell_rect)
 
-                    aktivite = cell_data["aktivite"]
-                    duzenleyen = cell_data["düzenleyen"]
+                    entries = cell_data.get("entries", [{"aktivite": cell_data["aktivite"], "düzenleyen": cell_data["düzenleyen"]}])
+                    cell_key = f"{day}_{hour}"
+
+                    # Initialize scroll index if not exists
+                    if cell_key not in scroll_indices:
+                        scroll_indices[cell_key] = 0
+
+                    # Safely cycle through entries
+                    index = scroll_indices[cell_key] % len(entries)
+                    current_entry = entries[index]
+                    if display_mode == "info":
+                        aktivite = current_entry["aktivite"]
+                        duzenleyen = current_entry["düzenleyen"]
+                    else:
+                        aktivite = hour  # like "10:00"
+                        duzenleyen = day  # like "Cuma"
+
+                    print(f"DRAWING MODE: {display_mode} — {aktivite} / {duzenleyen}")
 
                     # Add separator line
                     pygame.draw.line(screen, COLORS["white"], 
@@ -502,10 +524,31 @@ def fetch_schedule_data():
 
 def update_schedule_data():
     global ders_programi
-    new_data = fetch_schedule_data()
-    new_data = transform_schedule(new_data)
-    if new_data:
-        ders_programi = new_data
+    try:
+        response = requests.get("http://172.18.6.111:32002/getSchedule", timeout=3)
+        response.raise_for_status()
+        new_data = response.json()
+    except Exception as e:
+        print("⚠️ API bağlantı hatası, sahte veri kullanılıyor:", e)
+        new_data = {
+            "schedule": [
+        {
+            "day": "2025-05-02T10:00:00Z",
+            "hour": "10:00",
+            "title": "Math",
+            "username": "Ali"
+        },
+        {
+            "day": "2025-05-02T10:00:00Z",
+            "hour": "12:00",
+            "title": "Science",
+            "username": "Ayşe"
+        }
+    ]
+        }
+
+    ders_programi = transform_schedule(new_data)
+
 
 # ONLY FOR DEVELOPMENT SHOULD BE DELETED WHEN USING
 def handle_events():
@@ -521,6 +564,12 @@ def handle_events():
 # Pygame başlatma
 pygame.init()
 pygame.mouse.set_visible(0)
+display_mode = "info"
+last_display_change = pygame.time.get_ticks()
+count = 1
+last_count_update = pygame.time.get_ticks()
+interval = 30000  # First interval: 30 seconds
+
 
 # Ekran boyutunu al
 screen_info = pygame.display.Info()
@@ -598,7 +647,29 @@ while running:
     # Draw components
     if qr_surface:
         draw_qr_info_card(screen, fonts, qr_surface, room_name)
-    
+    # Update scroll indices for each cell every 30 seconds
+    if pygame.time.get_ticks() - last_scroll_time > 30000:  # 30 seconds
+        last_scroll_time = pygame.time.get_ticks()
+        for key in scroll_indices:
+            day, hour = key.split("_")
+            entries = ders_programi[day][hour].get("entries", [])
+            if entries:
+                scroll_indices[key] = (scroll_indices[key] + 1) % len(entries)
+
+    now = pygame.time.get_ticks()
+
+    print(now - last_count_update)
+    if now - last_count_update >= interval:
+        count += 1
+        last_count_update = now
+        interval = 10000 if interval == 30000 else 30000  # Toggle between 30s and 10s
+
+    # Set display mode based on whether count is even or odd
+    display_mode = "info" if count % 2 == 0 else "time"
+
+
+    print(f"MODE: {display_mode}, TIME: {pygame.time.get_ticks() - last_display_change}")
+    print(f"COUNT: {count}, MODE: {display_mode}, INTERVAL: {interval}")
     draw_schedule_table(screen, fonts)
     
     draw_footer(screen, fonts)

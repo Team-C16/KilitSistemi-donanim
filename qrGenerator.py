@@ -766,7 +766,7 @@ times = 0
 
 while running:
     if times == 0:
-        display_mode = "detail"
+        display_mode = "grid"
         times += 1
         
     clock.tick(FPS)

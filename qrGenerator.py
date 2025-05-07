@@ -9,12 +9,14 @@ import time
 import socket
 from datetime import datetime, timedelta, UTC
 from pygame.locals import *
+import re
+import ast
 
 # JWT secret key
 jwtsecret = "JWT_SECRET"
 
 # Raspberry Node IP
-raspberryNodeip = '172.18.6.111:32002'
+raspberryNodeip = '172.28.6.25:32002'
 
 scroll_indices = {}
 last_scroll_time = 0
@@ -41,31 +43,70 @@ COLORS = {
 }
 
 def transform_schedule(api_data):
-    # Helper function to get the day of the week
-    def get_day_of_week(date_str):
-        # Convert string to datetime object
-        date_obj = datetime.fromisoformat(date_str[:-1])  # Remove 'Z' from ISO string
-        # Get the day of the week (0=Monday, 6=Sunday)
-        date_obj = date_obj + timedelta(days=1)
-        days_of_week = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"]
-        return days_of_week[date_obj.weekday()]
+    dict_tr = {
+        "Monday": "Pazartesi",
+        "Tuesday": "Salı",
+        "Wednesday": "Çarşamba",
+        "Thursday": "Perşembe",
+        "Friday": "Cuma",
+        "Saturday": "Cumartesi",
+        "Sunday": "Pazar"
+    }
 
-    # Initialize the schedule dictionary
-    transformed_data = {day: {f"{hour:02d}:00": {"durum": "Boş", "aktivite": "", "düzenleyen": ""} for hour in range(9, 19)} for day in 
-                     ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma","Cumartesi","Pazar"]}
-    # Populate the ders_programi dictionary based on API data
-    for entry in api_data['schedule']:
-        day_of_week = get_day_of_week(entry['day'])
-        hour = entry['hour'][:5]  # Extract just the hour:minute part (e.g., "10:00")
-        cell = transformed_data[day_of_week][hour]
-        if cell["durum"] == "Boş":
-            cell["durum"] = "Dolu"
-            cell["entries"] = [{"aktivite": entry['title'], "düzenleyen": entry['username']}]
-        else:
-            cell["entries"].append({"aktivite": entry['title'], "düzenleyen": entry['username']})
+    # Define the 5 days and hours you display
+    start_date = datetime.now()
+    days = [(start_date + timedelta(days=i)) for i in range(5)]
+    hours = [f"{h:02}:00" for h in range(9, 19)]  # 09:00 to 18:00
+
+    # Step 1: fill with all "Boş"
+    ders_programi = {}
+    for date_obj in days:
+        weekday_tr = dict_tr[date_obj.strftime("%A")]
+        if weekday_tr not in ders_programi:
+            ders_programi[weekday_tr] = {}
+        for hour in hours:
+            ders_programi[weekday_tr][hour] = {
+                "durum": "Boş",
+                "aktivite": "",
+                "düzenleyen": "",
+                "entries": []
+            }
+
+    # Step 2: overwrite with "Dolu" from API
+    schedule = api_data.get("schedule", [])
+    for entry in schedule:
+        try:
+            date_obj = datetime.strptime(entry["day"], "%Y-%m-%d")
+            weekday_tr = dict_tr[date_obj.strftime("%A")]
+
+            start_str, end_str = entry["time"].split("-")
+            start_hour = int(start_str.split(":")[0])
+            end_hour = int(end_str.split(":")[0])
+
+            for hour in range(start_hour, end_hour):
+                hour_str = f"{hour:02d}:00"
+                ders_programi[weekday_tr][hour_str] = {
+                    "durum": "Dolu",
+                    "aktivite": entry["title"],
+                    "düzenleyen": entry["organizer"],
+                    "entries": [{
+                        "aktivite": entry["title"],
+                        "düzenleyen": entry["organizer"],
+                        "description": entry.get("description", ""),
+                        "users": entry.get("users", []),
+                        "time": entry.get("time"),
+                        "day": entry.get("day")
+                    }]
+                }
+
+            
+        except Exception as e:
+            print("⚠️ Error processing entry:", entry, e)
+
+    return ders_programi
 
 
-    return transformed_data
+
 
 # Gradient arka plan çizme fonksiyonu
 def draw_gradient_background(screen, color1, color2):
@@ -127,7 +168,7 @@ def fetch_room_name():
     url = f"http://{raspberryNodeip}/getQRCodeToken"
     print(url)
     headers = {"Content-Type": "application/json"}
-    data = f'{{"room_id": 1, "token": "{encoded_jwt}", "room_name": 1}}'
+    data = f'{{"room_id": 2, "token": "{encoded_jwt}", "room_name": 1}}'
     try:
         response = requests.post(url, headers=headers, data=data)
         if response.status_code == 200:
@@ -264,7 +305,11 @@ def draw_schedule_table(screen, fonts):
                    # Unavailable cell with gradient
                     draw_gradient_rect(screen, COLORS["unavailable"], lighten_color(COLORS["unavailable"]), cell_rect)
 
-                    entries = cell_data.get("entries", [{"aktivite": cell_data["aktivite"], "düzenleyen": cell_data["düzenleyen"]}])
+                    entries = cell_data.get("entries", [{
+                        "aktivite": cell_data.get("aktivite", "Etkinlik"),
+                        "düzenleyen": cell_data.get("düzenleyen", "Bilinmiyor")
+                    }])
+
                     cell_key = f"{day}_{hour}"
 
                     # Initialize scroll index if not exists
@@ -274,14 +319,9 @@ def draw_schedule_table(screen, fonts):
                     # Safely cycle through entries
                     index = scroll_indices[cell_key] % len(entries)
                     current_entry = entries[index]
-                    if display_mode == "info":
-                        aktivite = current_entry["aktivite"]
-                        duzenleyen = current_entry["düzenleyen"]
-                    else:
-                        aktivite = hour  # like "10:00"
-                        duzenleyen = day  # like "Cuma"
+                    aktivite = hour  # like "10:00"
+                    duzenleyen = day  # like "Cuma"
 
-                    print(f"DRAWING MODE: {display_mode} — {aktivite} / {duzenleyen}")
 
                     # Add separator line
                     pygame.draw.line(screen, COLORS["white"], 
@@ -466,7 +506,7 @@ def fetch_qr_token():
     )
     url = f"http://{raspberryNodeip}/getQRCodeToken"
     headers = {"Content-Type": "application/json"}
-    data = f'{{"room_id": 1, "token": "{encoded_jwt}"}}'
+    data = f'{{"room_id": 2, "token": "{encoded_jwt}"}}'
     try:
         response = requests.post(url, headers=headers, data=data)
         if response.status_code == 200:
@@ -509,7 +549,7 @@ def fetch_schedule_data():
     )
     url = f"http://{raspberryNodeip}/getSchedule"
     headers = {"Content-Type": "application/json"}
-    data = f'{{"room_id": 1, "token": "{encoded_jwt}"}}'
+    data = f'{{"room_id": 2, "token": "{encoded_jwt}"}}'
     try:
         response = requests.post(url, headers=headers, data=data)
         if response.status_code == 200:
@@ -522,31 +562,47 @@ def fetch_schedule_data():
         print(f"API bağlantı hatası: {e}")
     return None
 
-def update_schedule_data():
+def update_details_data():
     global ders_programi
     try:
-        response = requests.get("http://172.18.6.111:32002/getSchedule", timeout=3)
+        response = requests.get("http://{raspberryNodeip}/getSchedule", timeout=3)
         response.raise_for_status()
         new_data = response.json()
     except Exception as e:
         print("⚠️ API bağlantı hatası, sahte veri kullanılıyor:", e)
+        # Get current time info
         new_data = {
             "schedule": [
-        {
-            "day": "2025-05-02T10:00:00Z",
-            "hour": "10:00",
-            "title": "Math",
-            "username": "Ali"
-        },
-        {
-            "day": "2025-05-02T10:00:00Z",
-            "hour": "12:00",
-            "title": "Science",
-            "username": "Ayşe"
-        }
-    ]
+                {
+                    "title": "Toplantı",
+                    "users": ["kerem", "abdulrahman", "enes"],
+                    "time": "14:00-15:00",
+                    "day": "2025-05-07",
+                    "organizer": "kerem",
+                    "description": """The wind carried whispers of forgotten tales across the quiet field.
+                    A single crow circled above, its cry sharp against the fading light.
+                    Below, shadows stretched long, reaching like fingers across the earth.
+                    Somewhere in the distance, a door creaked open with no one near.
+                    The evening held its breath, waiting for something unnamed."""
+                },
+                {
+                    "title": "Sunum",
+                    "users": ["ayşe", "mehmet","marvan"],
+                    "time": "15:00-16:00",
+                    "day": "2025-05-07",
+                    "organizer": "marvan",
+                    "description": """The wind carried whispers of forgotten tales across the quiet field.
+                    A single crow circled above, its cry sharp against the fading light.
+                    Below, shadows stretched long, reaching like fingers across the earth.
+                    Somewhere in the distance, a door creaked open with no one near.
+                    The evening held its breath, waiting for something unnamed."""
+                }
+            ]
         }
 
+    
+    global api_data
+    api_data = new_data
     ders_programi = transform_schedule(new_data)
 
 
@@ -560,16 +616,104 @@ def handle_events():
                 return False
     return True
 
+def is_meeting_happening_now(meeting):
+    try:
+        now = datetime.now()
+        meeting_day = datetime.strptime(meeting["day"], "%Y-%m-%d").date()
+        start_str, end_str = meeting["time"].split("-")
+        start_time = datetime.strptime(start_str.strip(), "%H:%M").time()
+        end_time = datetime.strptime(end_str.strip(), "%H:%M").time()
+
+        start_datetime = datetime.combine(meeting_day, start_time)
+        end_datetime = datetime.combine(meeting_day, end_time)
+
+        return start_datetime <= now <= end_datetime
+
+    except Exception as e:
+        print("Time check failed:", e)
+        return False
+
+
+def wrap_text(text, font, max_width):
+    words = text.split()
+    lines = []
+    current_line = ""
+
+    for word in words:
+        test_line = current_line + word + " "
+        if font.size(test_line)[0] <= max_width:
+            current_line = test_line
+        else:
+            lines.append(current_line.strip())
+            current_line = word + " "
+    if current_line:
+        lines.append(current_line.strip())
+    return lines
+
+
+def draw_meeting_details(screen, fonts, current_meeting, qr_code_img, room_icon, room_text):
+
+    # Draw QR and room info (like in grid view)
+    if qr_code_img:
+        room_name = current_meeting.get("room_name", "Toplantı Odası")
+        draw_qr_info_card(screen, fonts, qr_code_img, room_name)
+
+
+    if current_meeting:
+        title = current_meeting.get("title", "Başlıksız Toplantı")
+        time_str = current_meeting.get("time", "Zaman Yok")
+        participants_list = current_meeting.get("users", [])
+        description = current_meeting.get("description", "")
+        participants = current_meeting.get("users", "Belirtilmemiş")
+
+
+        # Title
+        title_font = fonts['bold_large']
+        screen.blit(title_font.render("Toplantı başlığı: " + title, True, (0, 0, 0)), (screen_width * 0.40, 70))
+        pygame.draw.line(screen, (0, 0, 0), (screen_width * 0.40, 115), (900, 115), 3)
+
+        # Time
+        screen.blit(fonts['regular'].render("Zaman: " + time_str, True, (0, 0, 0)), (screen_width * 0.40, 120))
+
+        # Participants
+        participants_list = current_meeting.get("users", [])
+        participants = ", ".join(participants_list) if participants_list else "Belirtilmemiş"
+        screen.blit(fonts['regular'].render("Katılımcılar: " + participants, True, (0, 0, 0)), (screen_width * 0.40, 150))
+
+
+        # Description
+        wrapped_lines = wrap_text(description, fonts['regular'], 900 - 250)
+        print("📜 Wrapped description lines:", wrapped_lines)
+        y = 180
+        screen.blit(fonts['bold'].render("Toplantı Açıklaması:", True, (0, 0, 0)), (screen_width * 0.40, y))
+        y += 30
+        for line in wrapped_lines:
+            screen.blit(fonts['regular'].render(line, True, (0, 0, 0)), (screen_width * 0.40, y))
+            y += 25
+
+def get_date_from_day_name(tr_day_name):
+    tr_to_eng = {
+        "Pazartesi": "Monday",
+        "Salı": "Tuesday",
+        "Çarşamba": "Wednesday",
+        "Perşembe": "Thursday",
+        "Cuma": "Friday",
+        "Cumartesi": "Saturday",
+        "Pazar": "Sunday"
+    }
+    today = datetime.now()
+    for i in range(5):  # Only check the next 5 days
+        date = today + timedelta(days=i)
+        if date.strftime("%A") == tr_to_eng[tr_day_name]:
+            return date.strftime("%Y-%m-%d")
+    return today.strftime("%Y-%m-%d")  # fallback
+
 
 # Pygame başlatma
 pygame.init()
 pygame.mouse.set_visible(0)
-display_mode = "info"
-last_display_change = pygame.time.get_ticks()
-count = 1
 last_count_update = pygame.time.get_ticks()
-interval = 30000  # First interval: 30 seconds
-
+last_switch_time = pygame.time.get_ticks()
 
 # Ekran boyutunu al
 screen_info = pygame.display.Info()
@@ -589,7 +733,10 @@ fonts = {
     "cell": pygame.font.SysFont("Arial", int(screen_height * 0.026)),
     "cell_small": pygame.font.SysFont("Arial", int(screen_height * 0.024)),
     "info": pygame.font.SysFont("Arial", int(screen_height * 0.020)),
-    "footer": pygame.font.SysFont("Arial", int(screen_height * 0.033))
+    "footer": pygame.font.SysFont("Arial", int(screen_height * 0.033)),
+    "bold": pygame.font.SysFont("Arial", int(screen_height * 0.026), bold=True),
+    "bold_large": pygame.font.SysFont("Arial", int(screen_height * 0.045), bold=True),
+    "regular": pygame.font.SysFont("Arial", int(screen_height * 0.026))
 }
 
 # Ana döngü
@@ -611,10 +758,17 @@ qr_token = fetch_qr_token()
 if qr_token:
     qr_surface = generate_qr_code_surface(qr_token, screen_width, screen_height)
 
-update_schedule_data()
+update_details_data()
 draw_schedule_table(screen, fonts)
 
+room_text = fonts['bold'].render("Toplantı Odası 101", True, (0, 0, 0))
+times = 0
+
 while running:
+    if times == 0:
+        display_mode = "detail"
+        times += 1
+        
     clock.tick(FPS)
     
     running = handle_events()
@@ -637,7 +791,7 @@ while running:
             qr_surface = generate_qr_code_surface(qr_token, screen_width, screen_height)
 
         # Ders Programının update et
-        update_schedule_data()
+        update_details_data()
     
 
     
@@ -647,8 +801,10 @@ while running:
     # Draw components
     if qr_surface:
         draw_qr_info_card(screen, fonts, qr_surface, room_name)
-    # Update scroll indices for each cell every 30 seconds
-    if pygame.time.get_ticks() - last_scroll_time > 30000:  # 30 seconds
+
+    print(f"Display mode: {display_mode}, Time since last switch: {pygame.time.get_ticks() - last_switch_time}")
+    # Update scroll indices every 30 seconds
+    if pygame.time.get_ticks() - last_scroll_time > 30000:
         last_scroll_time = pygame.time.get_ticks()
         for key in scroll_indices:
             day, hour = key.split("_")
@@ -656,24 +812,73 @@ while running:
             if entries:
                 scroll_indices[key] = (scroll_indices[key] + 1) % len(entries)
 
-    now = pygame.time.get_ticks()
 
-    print(now - last_count_update)
-    if now - last_count_update >= interval:
-        count += 1
-        last_count_update = now
-        interval = 10000 if interval == 30000 else 30000  # Toggle between 30s and 10s
-
-    # Set display mode based on whether count is even or odd
-    display_mode = "info" if count % 2 == 0 else "time"
-
-
-    print(f"MODE: {display_mode}, TIME: {pygame.time.get_ticks() - last_display_change}")
-    print(f"COUNT: {count}, MODE: {display_mode}, INTERVAL: {interval}")
-    draw_schedule_table(screen, fonts)
-    
     draw_footer(screen, fonts)
     
+    now = pygame.time.get_ticks()
+
+    if display_mode == "grid" and now - last_switch_time > 30000:
+        for day, hours in ders_programi.items():
+            for hour, entry in hours.items():
+                if entry["durum"] == "Dolu":
+                    meeting = {
+                        "day": get_date_from_day_name(day),
+                        "time": f"{hour}-{int(hour[:2])+1:02d}:00",
+                        "title": entry["aktivite"],
+                        "organizer": entry["düzenleyen"]
+                    }
+                    if is_meeting_happening_now(meeting):
+                        display_mode = "detail"
+                        last_switch_time = now
+                        break
+                    
+    elif display_mode == "detail" and now - last_switch_time > 10000:
+        display_mode = "grid"
+        last_switch_time = now
+    
+    # Extract all actual meeting entries from the nested structure
+    meetings = []
+    for day, hours in ders_programi.items():
+        for hour, entry in hours.items():
+            if entry["durum"] == "Dolu" and entry.get("entries"):
+                first_entry = entry["entries"][0]
+                meeting_info = {
+                    "day": get_date_from_day_name(day),
+                    "time": f"{hour}-{int(hour[:2])+1:02d}:00",
+                    "title": entry["aktivite"],
+                    "organizer": entry["düzenleyen"],
+                    "users": first_entry.get("users", []),
+                    "description": first_entry.get("description", ""),
+                    "room_name": first_entry.get("room_name", "Toplantı Odası")  # Optional
+                }
+                meetings.append(meeting_info)
+
+
+    current_meeting = None
+    for meeting in meetings:
+        print("🔍 Evaluating meeting:", meeting)
+        if is_meeting_happening_now(meeting):
+            current_meeting = meeting
+            print("✅ Selected meeting:", current_meeting)
+            break
+
+
+    if display_mode == "grid":
+        draw_schedule_table(screen, fonts)
+    else:
+        qr_data = current_meeting.get("qr_data") if current_meeting else None
+        qr_code_img = generate_qr_code_surface(qr_data, screen_width, screen_height) if qr_data else None
+        draw_gradient_background(screen, darken_color(COLORS["background"]), COLORS["background"])
+        detail_rect = pygame.Rect(screen_width * 0.35, 20, screen_width * 0.5, 500)
+        draw_gradient_rect(screen, COLORS["light"], darken_color(COLORS["border"]), detail_rect, 30)
+        draw_meeting_details(screen, fonts, current_meeting, qr_code_img, None, None)
+        
+        draw_footer(screen, fonts)
+        draw_qr_info_card(screen, fonts, qr_surface, room_name)
+
+
+
+
     pygame.display.flip()
 
 pygame.quit()

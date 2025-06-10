@@ -11,12 +11,13 @@ from datetime import datetime, timedelta, UTC
 from pygame.locals import *
 import re
 import ast
+import json
 
 # JWT secret key
 jwtsecret = "JWT_SECRET"
 
 # Raspberry Node IP
-raspberryNodeip = '172.28.6.25:32002'
+raspberryNodeip = '192.168.0.25:32001/kilitSistemi'
 
 scroll_indices = {}
 last_scroll_time = 0
@@ -41,7 +42,6 @@ COLORS = {
     "border": (214, 219, 233),          # Subtle border color
     "highlight": (241, 196, 15),        # Highlight color
 }
-
 def transform_schedule(api_data):
     dict_tr = {
         "Monday": "Pazartesi",
@@ -69,6 +69,7 @@ def transform_schedule(api_data):
                 "durum": "Boş",
                 "aktivite": "",
                 "düzenleyen": "",
+                "rendezvous_id": "",
                 "entries": []
             }
 
@@ -76,35 +77,35 @@ def transform_schedule(api_data):
     schedule = api_data.get("schedule", [])
     for entry in schedule:
         try:
-            date_obj = datetime.strptime(entry["day"], "%Y-%m-%d")
-            weekday_tr = dict_tr[date_obj.strftime("%A")]
+            # Parse UTC datetime and add 1 day for local time
+            utc_time = datetime.strptime(entry["day"], "%Y-%m-%dT%H:%M:%S.%fZ")
+            local_time = utc_time + timedelta(days=1)
+            date_str = local_time.strftime("%Y-%m-%d")
+            weekday_tr = dict_tr[local_time.strftime("%A")]
 
-            start_str, end_str = entry["time"].split("-")
-            start_hour = int(start_str.split(":")[0])
-            end_hour = int(end_str.split(":")[0])
+            # Get hour in local time (keeping same hour for simplicity)
+            time_str = entry["hour"].split(":")[0]  # Get "12" from "12:00:00"
+            hour_str = f"{int(time_str):02d}:00"  # Format as "12:00"
 
-            for hour in range(start_hour, end_hour):
-                hour_str = f"{hour:02d}:00"
+            # Update the schedule
+            if weekday_tr in ders_programi and hour_str in ders_programi[weekday_tr]:
                 ders_programi[weekday_tr][hour_str] = {
                     "durum": "Dolu",
                     "aktivite": entry["title"],
-                    "düzenleyen": entry["organizer"],
+                    "düzenleyen": entry["username"],
+                    "rendezvous_id":  entry["rendezvous_id"],
                     "entries": [{
                         "aktivite": entry["title"],
-                        "düzenleyen": entry["organizer"],
-                        "description": entry.get("description", ""),
-                        "users": entry.get("users", []),
-                        "time": entry.get("time"),
-                        "day": entry.get("day")
+                        "users": [entry["username"]],
+                        "time": hour_str,
+                        "day": date_str
                     }]
                 }
-
             
         except Exception as e:
-            print("⚠️ Error processing entry:", entry, e)
+            print("⚠️ Error processing entry:", entry, "Error:", e)
 
     return ders_programi
-
 
 
 
@@ -539,45 +540,109 @@ def draw_text(screen, text, font, color, rect, align_x="left", align_y="top"):
     
     screen.blit(text_surface, text_rect)
 
-def fetch_schedule_data():
-    encoded_jwt = jwt.encode(
+def fetch_details_data(room_id, rendezvous_id): # Added parameters for clarity
+    """
+    Fetches schedule details from the Node.js API endpoint.
+    Handles JWT encoding, network requests, and basic error handling.
+    """
+    if not jwtsecret:
+        print("Error: JWT secret is not defined.")
+        return None
+    if not raspberryNodeip:
+        print("Error: Raspberry Pi Node IP is not defined.")
+        return None
+
+    try:
+        # 1. Encode JWT
+        encoded_jwt = jwt.encode(
+            {
+                "exp": time.time() + 300 # Token invalid after 5 minutes (300 seconds)
+                # You might also add 'iat' (issued at) and 'sub' (subject) claims
+            },
+            jwtsecret,
+            algorithm="HS256"
+        )
+
+        # 2. Construct URL and Payload (using dictionary for data, then json.dumps)
+        url = f"http://{raspberryNodeip}/getScheduleDetails"
+        headers = {"Content-Type": "application/json"}
+        
+        # FIX Problem 5: Use the `room_id` parameter dynamically
+        payload = {
+            "room_id": 2, # Use the passed room_id
+            "token": encoded_jwt,
+            "rendezvous_id": rendezvous_id
+        }
+
+        # 3. Make the Request with Timeout and Error Handling
+        print(f"DEBUG: Requesting {url} with rendezvous_id={rendezvous_id}, room_id={room_id}")
+        response = requests.post(url, headers=headers, data=json.dumps(payload), timeout=10) # FIX Problem 2: Added 10-second timeout
+
+        # Raise an HTTPError for bad responses (4xx or 5xx status codes)
+        response.raise_for_status() 
+
+        # FIX Problem 3: Attempt to parse JSON only after successful status code
+        response_data = response.json()
+        print(f"DEBUG: API response for {rendezvous_id}: {response_data}")
+        return response_data
+
+    # FIX Problem 4: Catch all Request exceptions (network errors, timeouts, etc.)
+    except requests.exceptions.Timeout:
+        print(f"API request timed out for rendezvous_id {rendezvous_id} ({url}).")
+        return None
+    except requests.exceptions.ConnectionError:
+        print(f"API connection error for rendezvous_id {rendezvous_id} ({url}). Is the server running and reachable?")
+        return None
+    except requests.exceptions.HTTPError as e:
+        print(f"API HTTP error for rendezvous_id {rendezvous_id}: {e.response.status_code} - {e.response.text}")
+        return {"error": e.response.text} # Return error info for higher-level handling
+    except json.JSONDecodeError:
+        print(f"API response for rendezvous_id {rendezvous_id} was not valid JSON: {response.text}")
+        return {"error": "Invalid JSON response from API"}
+    except Exception as e:
+        print(f"An unexpected error occurred during API request for rendezvous_id {rendezvous_id}: {e}")
+        return None
+
+
+def update_data():
+    global ders_programi
+    try:
+        encoded_jwt = jwt.encode(
         {
             "exp": time.time() + 300000  # 300000 saniye içinde geçersiz olacak
         },
         jwtsecret,
         algorithm="HS256"
-    )
-    url = f"http://{raspberryNodeip}/getSchedule"
-    headers = {"Content-Type": "application/json"}
-    data = f'{{"room_id": 2, "token": "{encoded_jwt}"}}'
-    try:
-        response = requests.post(url, headers=headers, data=data)
-        if response.status_code == 200:
-            # Parse the JSON response and get the token
-            response_data = response.json()
-            return response_data
-        else:
-            print(f"API isteği başarısız oldu. Hata kodu: {response.status_code}")
-    except requests.RequestException as e:
-        print(f"API bağlantı hatası: {e}")
-    return None
+        )
+        payload = {
+            "room_id": 2,
+            "token": encoded_jwt
+        }
 
-def update_details_data():
-    global ders_programi
-    try:
-        response = requests.get("http://{raspberryNodeip}/getSchedule", timeout=3)
+        response = requests.post(f"http://{raspberryNodeip}/getSchedule", json=payload,
+                               timeout=3)
         response.raise_for_status()
-        new_data = response.json()
+
+        api_response = response.json()
+        if isinstance(api_response, list) and len(api_response) > 0:
+            new_data = api_response[0]  # Take first item if it's a non-empty list
+        elif isinstance(api_response, dict):
+            new_data = api_response  # Use directly if it's a dictionary
+        else:
+            raise ValueError("API returned invalid data format (expected list or dict)")
+
+        print(new_data)
+
     except Exception as e:
         print("⚠️ API bağlantı hatası, sahte veri kullanılıyor:", e)
-        # Get current time info
+        # Fallback data
         new_data = {
             "schedule": [
                 {
                     "title": "Toplantı",
                     "users": ["kerem", "abdulrahman", "enes"],
                     "time": "14:00-15:00",
-                    "day": "2025-05-07",
+                    "day": "2025-06-10",
                     "organizer": "kerem",
                     "description": """The wind carried whispers of forgotten tales across the quiet field.
                     A single crow circled above, its cry sharp against the fading light.
@@ -589,7 +654,7 @@ def update_details_data():
                     "title": "Sunum",
                     "users": ["ayşe", "mehmet","marvan"],
                     "time": "15:00-16:00",
-                    "day": "2025-05-07",
+                    "day": "2025-06-10",
                     "organizer": "marvan",
                     "description": """The wind carried whispers of forgotten tales across the quiet field.
                     A single crow circled above, its cry sharp against the fading light.
@@ -600,7 +665,6 @@ def update_details_data():
             ]
         }
 
-    
     global api_data
     api_data = new_data
     ders_programi = transform_schedule(new_data)
@@ -758,27 +822,33 @@ qr_token = fetch_qr_token()
 if qr_token:
     qr_surface = generate_qr_code_surface(qr_token, screen_width, screen_height)
 
-update_details_data()
+
+
+update_data()
 draw_schedule_table(screen, fonts)
 
 room_text = fonts['bold'].render("Toplantı Odası 101", True, (0, 0, 0))
 times = 0
 
+# ... (initializations of other variables like display_mode, last_switch_time, etc.)
+
+meetings = [] # <-- This should be the ONLY place 'meetings' is initialized to an empty list
+current_meeting = None # Initialize current_meeting here too
+
 while running:
     if times == 0:
-        display_mode = "detail"
+        display_mode = "grid"
         times += 1
         
-    clock.tick(FPS)
+    clock.tick(1)
+
     
-    running = handle_events()
-    
-    current_time = pygame.time.get_ticks()
-    
+    current_time = pygame.time.get_ticks() # This is 'now'
+
     # QR kodu her dakika güncelle
     if current_time - last_update_time > 57000 or qr_surface is None:
         last_update_time = current_time
-        old_qr = qr_surface
+        old_qr = qr_surface # Still unused, can remove
         
         # Oda adını güncelle
         fetched_room_name = fetch_room_name()
@@ -791,92 +861,158 @@ while running:
             qr_surface = generate_qr_code_surface(qr_token, screen_width, screen_height)
 
         # Ders Programının update et
-        update_details_data()
-    
+        update_data() # This should update `ders_programi`
 
-    
-    # Clear screen with gradient background
+    # Clear screen with gradient background (Problem 17/redundancy, but keeping for now)
     draw_gradient_background(screen, darken_color(COLORS["background"]), COLORS["background"])
     
-    # Draw components
+    # Draw components (main room QR card)
     if qr_surface:
         draw_qr_info_card(screen, fonts, qr_surface, room_name)
 
     print(f"Display mode: {display_mode}, Time since last switch: {pygame.time.get_ticks() - last_switch_time}")
+    
     # Update scroll indices every 30 seconds
     if pygame.time.get_ticks() - last_scroll_time > 30000:
         last_scroll_time = pygame.time.get_ticks()
         for key in scroll_indices:
             day, hour = key.split("_")
-            entries = ders_programi[day][hour].get("entries", [])
-            if entries:
-                scroll_indices[key] = (scroll_indices[key] + 1) % len(entries)
+            # FIX Problem 1 & 2: Add safety checks for dictionary keys
+            if day in ders_programi and hour in ders_programi[day]:
+                entries = ders_programi[day][hour].get("entries", [])
+                if entries:
+                    scroll_indices[key] = (scroll_indices[key] + 1) % len(entries)
 
 
-    draw_footer(screen, fonts)
+    draw_footer(screen, fonts) # Problem 3: Duplication (will be fixed later if it's always drawn)
     
-    now = pygame.time.get_ticks()
+    # === CRITICAL FIX for `meetings` list management ===
+    # meetings = [] # <--- REMOVE THIS LINE FROM INSIDE THE LOOP
+    now = pygame.time.get_ticks() # This is 'current_time'
+
+    # Flag to break outer loop once a current meeting is found
+    found_current_meeting_this_cycle = False # FIX Problem 5: Add flag
 
     if display_mode == "grid" and now - last_switch_time > 30000:
+        # Clear meetings *before* repopulating it only when entering this block
+        meetings.clear() # Or meetings = [] if you prefer a new list instance
+        
         for day, hours in ders_programi.items():
             for hour, entry in hours.items():
-                if entry["durum"] == "Dolu":
-                    meeting = {
-                        "day": get_date_from_day_name(day),
-                        "time": f"{hour}-{int(hour[:2])+1:02d}:00",
-                        "title": entry["aktivite"],
-                        "organizer": entry["düzenleyen"]
-                    }
-                    if is_meeting_happening_now(meeting):
-                        display_mode = "detail"
-                        last_switch_time = now
-                        break
-                    
+                if entry["durum"] == "Dolu" and entry.get("rendezvous_id"):
+                    rendezvous_id = entry["rendezvous_id"]
+                    room_id = 2 
+
+                    # Assuming fetch_details_data handles token globally
+                    data = fetch_details_data(room_id,rendezvous_id) # Problem 6: Token still not passed if not global
+                    if data:
+                        # Handle API errors that might be returned in the 'data' dictionary
+                        if isinstance(data, dict) and data.get("error"):
+                            print(f"API error for rendezvous_id {rendezvous_id}: {data['error']}")
+                            continue # Skip to the next entry in ders_programi
+
+                        main_data = None
+                        group_members = []
+                        details = None
+
+                        # First, try to get data assuming it's a dictionary with 'dataResult' and 'groupResult'
+                        if isinstance(data, dict):
+                            main_data = data.get("dataResult")
+                            group_members = data.get("groupResult", [])
+                            
+                            # If 'dataResult' is found and is a non-empty list, use its first element
+                            if main_data and isinstance(main_data, list) and len(main_data) > 0:
+                                details = main_data[0]
+                            # else: if data is a dict but no dataResult, maybe it's just the details directly?
+                            # This case is less clear, but if your API sometimes returns a dict that *is* the detail
+                            # for a single meeting, you might need another check here.
+                            # For now, let's assume if it's a dict, it's either `dataResult` or an error.
+
+                        # Second, if 'data' itself is a list, treat it as the main data
+                        elif isinstance(data, list) and len(data) > 0:
+                            details = data[0]
+                            # In this case, there's no `groupResult` key, so group_members remains an empty list by default.
+                            # This matches your previous logic for this scenario.
+                        
+                        # Now, with 'details' potentially populated from either format, proceed
+                        if details: # Only proceed if details were successfully extracted from either format
+                            users = []
+                            # isGroup check should be on 'details', not 'data'
+                            if details.get("isGroup") in [0, 1] and group_members: # `group_members` comes from the dict case
+                                users = [member["username"] for member in group_members]
+                            else:
+                                users = [details.get("username")] if details.get("username") else []
+
+                            meeting_info = {
+                                "rendezvous_id": rendezvous_id,
+                                "day": get_date_from_day_name(day),
+                                "time": f"{hour}-{int(hour[:2])+1:02d}:00",
+                                "title": details.get("title", entry["aktivite"]),
+                                "organizer": details.get("username", entry["düzenleyen"]),
+                                "users": users,
+                                "description": details.get("message", ""),
+                                "room_name": "Toplantı Odası"
+                            }
+                            meetings.append(meeting_info)
+
+                            if is_meeting_happening_now(meeting_info): 
+                                display_mode = "detail"
+                                last_switch_time = now
+                                current_meeting = meeting_info
+                                found_current_meeting_this_cycle = True
+                                break
+                        else:
+                            print(f"No valid details extracted from API response for rendezvous_id {rendezvous_id}")
+                    else:
+                        print(f"Failed to fetch data for rendezvous_id {rendezvous_id}")
+            
+            # FIX Problem 8 & 11: Break outer loop if flag is set
+            if found_current_meeting_this_cycle:
+                break
+
+
     elif display_mode == "detail" and now - last_switch_time > 10000:
-        display_mode = "grid"
-        last_switch_time = now
-    
-    # Extract all actual meeting entries from the nested structure
-    meetings = []
-    for day, hours in ders_programi.items():
-        for hour, entry in hours.items():
-            if entry["durum"] == "Dolu" and entry.get("entries"):
-                first_entry = entry["entries"][0]
-                meeting_info = {
-                    "day": get_date_from_day_name(day),
-                    "time": f"{hour}-{int(hour[:2])+1:02d}:00",
-                    "title": entry["aktivite"],
-                    "organizer": entry["düzenleyen"],
-                    "users": first_entry.get("users", []),
-                    "description": first_entry.get("description", ""),
-                    "room_name": first_entry.get("room_name", "Toplantı Odası")  # Optional
-                }
-                meetings.append(meeting_info)
+            print(f"[{now}] Meeting ended or detail timeout. Switching back to grid.")
+            display_mode = "grid"
+            current_meeting = None # Clear current meeting data
 
+    # FIX Problem 13 & 14: This block is now redundant because `current_meeting` is set above.
+    # No need to iterate `meetings` again here.
+    # current_meeting = None # REMOVE THIS
+    # for meeting in meetings: # REMOVE THIS BLOCK
+    #     print("🔍 Evaluating meeting:", meeting)
+    #     if is_meeting_happening_now(meeting):
+    #         current_meeting = meeting
+    #         print("✅ Selected meeting:", current_meeting)
+    #         break
 
-    current_meeting = None
-    for meeting in meetings:
-        print("🔍 Evaluating meeting:", meeting)
-        if is_meeting_happening_now(meeting):
-            current_meeting = meeting
-            print("✅ Selected meeting:", current_meeting)
-            break
-
-
+    # Main Drawing Logic
     if display_mode == "grid":
-        draw_schedule_table(screen, fonts)
-    else:
-        qr_data = current_meeting.get("qr_data") if current_meeting else None
-        qr_code_img = generate_qr_code_surface(qr_data, screen_width, screen_height) if qr_data else None
-        draw_gradient_background(screen, darken_color(COLORS["background"]), COLORS["background"])
+        # FIX Problem 15: Pass required arguments to `draw_schedule_table`
+        draw_schedule_table(screen, fonts) 
+    else: # display_mode == "detail"
+        # FIX Problem 16: Use rendezvous_id for QR data
+        qr_data_for_detail = current_meeting.get("rendezvous_id") if current_meeting else None
+        qr_code_img = generate_qr_code_surface(str(qr_data_for_detail), screen_width, screen_height) if qr_data_for_detail else None
+        
+        # Problem 17: Redundant background draw. This line should be REMOVED as it's already at the top.
+        # draw_gradient_background(screen, darken_color(COLORS["background"]), COLORS["background"]) 
+        
         detail_rect = pygame.Rect(screen_width * 0.35, 20, screen_width * 0.5, 500)
         draw_gradient_rect(screen, COLORS["light"], darken_color(COLORS["border"]), detail_rect, 30)
+        
+        # FIX Problem 18: `current_meeting` should now be correctly set or None.
         draw_meeting_details(screen, fonts, current_meeting, qr_code_img, None, None)
         
-        draw_footer(screen, fonts)
+        # Problem 19: Duplication. These lines should be REMOVED if they are always drawn outside this branch.
+        # draw_footer(screen, fonts)
+        # draw_qr_info_card(screen, fonts, qr_surface, room_name)
+
+    # These drawing calls should be outside the if/else for display_mode if they are always present
+    # FIX Problem 3, 19: Move these outside the display_mode conditional
+    draw_footer(screen, fonts) # Only call once at the end
+    if qr_surface: # Only draw if qr_surface exists
         draw_qr_info_card(screen, fonts, qr_surface, room_name)
-
-
 
 
     pygame.display.flip()

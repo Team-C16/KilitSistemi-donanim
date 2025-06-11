@@ -17,6 +17,9 @@ app = Flask(__name__)
 
 # Secret key 
 SECRET_KEY = "JWT_SECRET"
+
+raspberryNodeip = 'http://192.168.0.25:32002'
+
 # JWT doğrulama fonksiyonu
 def verify_jwt(token):
     try:
@@ -41,9 +44,9 @@ def save_ip():
     s.connect(("8.8.8.8", 80))
     local_ip = s.getsockname()[0]
     print(local_ip)
-    url = f"http://172.28.6.24:32002/saveIPForRaspberry"
+    url = f"{raspberryNodeip}/saveIPForRaspberry"
     headers = {"Content-Type": "application/json"}
-    data = f'{{"room_id": 1, "jwtToken": "{encoded_jwt}", "ip": "{local_ip}"}}'
+    data = f'{{"room_id": {room_id}, "jwtToken": "{encoded_jwt}", "ip": "{local_ip}"}}'
     try:
         response = requests.post(url, headers=headers, data=data)
         if response.status_code == 200:

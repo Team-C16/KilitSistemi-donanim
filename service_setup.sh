@@ -4,7 +4,7 @@ apt install pip -y
 pip install requests qrcode qrcode[pil] pygame jwt time --break-system-packages
 
 
-DIRECTORY="/BAP100-donanim"
+DIRECTORY="/KilitSistemi-donanim"
 
 if [ -d "$DIRECTORY" ]; then
 stty -echo
@@ -31,14 +31,18 @@ sed "s/\"JWT_SECRET\"/\"$escaped_jwtsecret\"/g" "$qrfile" > tempfile
 mv tempfile "$qrfile"
 
 # room_id değerini değiştirmek için sed kullanıyoruz
-sed -i "s/room_id\": [0-9]\+/room_id\": $roomid/g" "$qrfile"
+sed -i "s/^room_id = [0-9]\+/room_id = $roomid/" "$qrfile"
 
 #ip yi girmek için sed kullanıyoruz
 sed -i "s/^raspberryNodeip = '.*'/raspberryNodeip = '$nodeip'/" "$qrfile"
 
+
+
 lockfile="$DIRECTORY/kilitKodu.py"
 
 sed "s/\"JWT_SECRET\"/\"$escaped_jwtsecret\"/g" "$lockfile" > tempfile
+
+sed -i "s|^raspberryNodeip = '.*'|raspberryNodeip = '$nodeip'|" "$lockfile"
 
 # Orijinal dosyayı geçici dosyayla değiştir
 mv tempfile "$lockfile"
@@ -126,6 +130,6 @@ sudo systemctl status $LOCK_SERVICE_NAME.service
 sudo systemctl status $QR_SERVICE_NAME.service
 
 else
-git clone https://github.com/KilitSistemi/BAP100-donanim /BAP100-donanim
+git clone https://github.com/Team-C16/KilitSistemi-donanim /KilitSistemi-donanim
 exec "$0"
 fi

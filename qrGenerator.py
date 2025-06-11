@@ -17,7 +17,9 @@ import json
 jwtsecret = "JWT_SECRET"
 
 # Raspberry Node IP
-raspberryNodeip = '192.168.0.25:32001/kilitSistemi'
+raspberryNodeip = 'http://192.168.0.25:32002'
+
+room_id = 1
 
 scroll_indices = {}
 last_scroll_time = 0
@@ -166,10 +168,10 @@ def fetch_room_name():
         algorithm="HS256"
     )
     print(encoded_jwt)
-    url = f"http://{raspberryNodeip}/getQRCodeToken"
+    url = f"{raspberryNodeip}/getQRCodeToken"
     print(url)
     headers = {"Content-Type": "application/json"}
-    data = f'{{"room_id": 2, "token": "{encoded_jwt}", "room_name": 1}}'
+    data = f'{{"room_id": {room_id}, "token": "{encoded_jwt}", "room_name": 1}}'
     try:
         response = requests.post(url, headers=headers, data=data)
         if response.status_code == 200:
@@ -505,9 +507,9 @@ def fetch_qr_token():
         jwtsecret,
         algorithm="HS256"
     )
-    url = f"http://{raspberryNodeip}/getQRCodeToken"
+    url = f"{raspberryNodeip}/getQRCodeToken"
     headers = {"Content-Type": "application/json"}
-    data = f'{{"room_id": 2, "token": "{encoded_jwt}"}}'
+    data = f'{{"room_id": {room_id}, "token": "{encoded_jwt}"}}'
     try:
         response = requests.post(url, headers=headers, data=data)
         if response.status_code == 200:
@@ -540,7 +542,7 @@ def draw_text(screen, text, font, color, rect, align_x="left", align_y="top"):
     
     screen.blit(text_surface, text_rect)
 
-def fetch_details_data(room_id, rendezvous_id): # Added parameters for clarity
+def fetch_details_data(rendezvous_id): # Added parameters for clarity
     """
     Fetches schedule details from the Node.js API endpoint.
     Handles JWT encoding, network requests, and basic error handling.
@@ -564,12 +566,12 @@ def fetch_details_data(room_id, rendezvous_id): # Added parameters for clarity
         )
 
         # 2. Construct URL and Payload (using dictionary for data, then json.dumps)
-        url = f"http://{raspberryNodeip}/getScheduleDetails"
+        url = f"{raspberryNodeip}/getScheduleDetails"
         headers = {"Content-Type": "application/json"}
         
         # FIX Problem 5: Use the `room_id` parameter dynamically
         payload = {
-            "room_id": 2, # Use the passed room_id
+            "room_id": room_id, # Use the passed room_id
             "token": encoded_jwt,
             "rendezvous_id": rendezvous_id
         }
@@ -615,11 +617,11 @@ def update_data():
         algorithm="HS256"
         )
         payload = {
-            "room_id": 2,
+            "room_id": room_id,
             "token": encoded_jwt
         }
 
-        response = requests.post(f"http://{raspberryNodeip}/getSchedule", json=payload,
+        response = requests.post(f"{raspberryNodeip}/getSchedule", json=payload,
                                timeout=3)
         response.raise_for_status()
 
@@ -901,10 +903,9 @@ while running:
             for hour, entry in hours.items():
                 if entry["durum"] == "Dolu" and entry.get("rendezvous_id"):
                     rendezvous_id = entry["rendezvous_id"]
-                    room_id = 2 
 
                     # Assuming fetch_details_data handles token globally
-                    data = fetch_details_data(room_id,rendezvous_id) # Problem 6: Token still not passed if not global
+                    data = fetch_details_data(rendezvous_id) # Problem 6: Token still not passed if not global
                     if data:
                         # Handle API errors that might be returned in the 'data' dictionary
                         if isinstance(data, dict) and data.get("error"):
@@ -951,7 +952,7 @@ while running:
                                 "organizer": details.get("username", entry["düzenleyen"]),
                                 "users": users,
                                 "description": details.get("message", ""),
-                                "room_name": "Toplantı Odası"
+                                "room_name": {room_name}
                             }
                             meetings.append(meeting_info)
 

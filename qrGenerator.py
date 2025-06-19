@@ -17,9 +17,9 @@ import json
 jwtsecret = "JWT_SECRET"
 
 # Raspberry Node IP
-raspberryNodeip = 'http://192.168.0.25:32002'
+raspberryNodeip = 'https://pve.izu.edu.tr/kilitSistemi'
 
-room_id = 1
+room_id = 2
 
 scroll_indices = {}
 last_scroll_time = 0
@@ -43,7 +43,57 @@ COLORS = {
     "unavailable": (231, 76, 60),       # Softer red for unavailable
     "border": (214, 219, 233),          # Subtle border color
     "highlight": (241, 196, 15),        # Highlight color
+    "softBackground": (0,119,204),       # soft blue
+    "StartColour": (209, 96, 61),
+    "grey": (211, 211, 211)
 }
+
+# :root {
+# 	--zone--main-color: #3b1f2b;
+# 	--zone--secondary-color: #642b36;
+# 	--selection--main-color: #F0F0F0;
+# 	--selection--secondary-color: #D6D6D6;
+# 	--selection--hover-color: #3b82f6;
+# 	--text-light: #D6D6D6;
+# 	--surface: #ffffff;
+# 	--surface-2: #F0F0F0;
+# 	--navbar-background: white;
+# 	--close-btn: #ff4d4d;
+# 	--close-btn-hover: #cc0000;
+# 	--text-color: black;
+# 	--card-color: var(--surface-2);	
+# 	--msg--text-color: black;
+# 	--box-shadow: rgba(0, 0, 0, 0.1);
+# 	--dashboard-primary: #3b1f2b;
+# 	--dashboard-secondary: #642b36;
+# 	--dashboard-accent: #8a3b48;
+# 	--dashboard-light: #f5e9ec;
+# 	--dashboard-medium: #e5d0d5;
+# }
+# 
+# body.dark-mode {
+# 	--zone--main-color: #8a3b48;
+# 	--zone--secondary-color: #642b36;
+# 	--selection--main-color: #2d2d2d;
+# 	--selection--secondary-color: #3d3d3d;
+# 	--selection--hover-color: #4dabf7;
+# 	--text-light: #e0e0e0;
+# 	--surface: #1a1a1a;
+# 	--surface-2: #2d2d2d;
+# 	--navbar-background: #1a1a1a;
+# 	--close-btn: #ff4d4d;
+# 	--close-btn-hover: #cc0000;
+# 	--text-color: #ffffff;
+# 	--card-color: var(--surface-2);
+# 	--msg--text-color: #ffffff;
+# 	--box-shadow: rgba(0, 0, 0, 0.2);
+# 	--dashboard-primary: #8a3b48;
+# 	--dashboard-secondary: #642b36;
+# 	--dashboard-accent: #3b1f2b;
+# 	--dashboard-light: #2d2d2d;
+# 	--dashboard-medium: #3d3d3d;
+# }
+
 def transform_schedule(api_data):
     dict_tr = {
         "Monday": "Pazartesi",
@@ -523,7 +573,7 @@ def fetch_qr_token():
     return None
 
 def draw_text(screen, text, font, color, rect, align_x="left", align_y="top"):
-    text_surface = font.render(text, True, color)
+    text_surface = font.render(str(text), True, color)
     text_rect = text_surface.get_rect()
     
     if align_x == "center":
@@ -837,7 +887,7 @@ times = 0
 meetings = [] # <-- This should be the ONLY place 'meetings' is initialized to an empty list
 current_meeting = None # Initialize current_meeting here too
 
-while running:
+while running:    
     if times == 0:
         display_mode = "grid"
         times += 1
@@ -862,10 +912,10 @@ while running:
         if qr_token:
             qr_surface = generate_qr_code_surface(qr_token, screen_width, screen_height)
 
-        # Ders Programının update et
+        # Ders Programını update et
         update_data() # This should update `ders_programi`
 
-    # Clear screen with gradient background (Problem 17/redundancy, but keeping for now)
+    # Clear screen with gradient background
     draw_gradient_background(screen, darken_color(COLORS["background"]), COLORS["background"])
     
     # Draw components (main room QR card)
@@ -875,18 +925,18 @@ while running:
     print(f"Display mode: {display_mode}, Time since last switch: {pygame.time.get_ticks() - last_switch_time}")
     
     # Update scroll indices every 30 seconds
-    if pygame.time.get_ticks() - last_scroll_time > 30000:
+    if pygame.time.get_ticks() - last_scroll_time > 10000:
         last_scroll_time = pygame.time.get_ticks()
         for key in scroll_indices:
             day, hour = key.split("_")
-            # FIX Problem 1 & 2: Add safety checks for dictionary keys
+            # Add safety checks for dictionary keys
             if day in ders_programi and hour in ders_programi[day]:
                 entries = ders_programi[day][hour].get("entries", [])
                 if entries:
                     scroll_indices[key] = (scroll_indices[key] + 1) % len(entries)
 
 
-    draw_footer(screen, fonts) # Problem 3: Duplication (will be fixed later if it's always drawn)
+    draw_footer(screen, fonts) 
     
     # === CRITICAL FIX for `meetings` list management ===
     # meetings = [] # <--- REMOVE THIS LINE FROM INSIDE THE LOOP
@@ -895,7 +945,7 @@ while running:
     # Flag to break outer loop once a current meeting is found
     found_current_meeting_this_cycle = False # FIX Problem 5: Add flag
 
-    if display_mode == "grid" and now - last_switch_time > 30000:
+    if display_mode == "grid" and now - last_switch_time > 1000:
         # Clear meetings *before* repopulating it only when entering this block
         meetings.clear() # Or meetings = [] if you prefer a new list instance
         
@@ -967,50 +1017,37 @@ while running:
                     else:
                         print(f"Failed to fetch data for rendezvous_id {rendezvous_id}")
             
-            # FIX Problem 8 & 11: Break outer loop if flag is set
+            # Break outer loop if flag is set
             if found_current_meeting_this_cycle:
                 break
 
 
-    elif display_mode == "detail" and now - last_switch_time > 10000:
+    elif display_mode == "detail" and now - last_switch_time > 30000:
             print(f"[{now}] Meeting ended or detail timeout. Switching back to grid.")
             display_mode = "grid"
             current_meeting = None # Clear current meeting data
 
-    # FIX Problem 13 & 14: This block is now redundant because `current_meeting` is set above.
-    # No need to iterate `meetings` again here.
-    # current_meeting = None # REMOVE THIS
-    # for meeting in meetings: # REMOVE THIS BLOCK
-    #     print("🔍 Evaluating meeting:", meeting)
-    #     if is_meeting_happening_now(meeting):
-    #         current_meeting = meeting
-    #         print("✅ Selected meeting:", current_meeting)
-    #         break
-
     # Main Drawing Logic
     if display_mode == "grid":
-        # FIX Problem 15: Pass required arguments to `draw_schedule_table`
+        # Pass required arguments to `draw_schedule_table`
         draw_schedule_table(screen, fonts) 
     else: # display_mode == "detail"
-        # FIX Problem 16: Use rendezvous_id for QR data
+        # Use rendezvous_id for QR data
         qr_data_for_detail = current_meeting.get("rendezvous_id") if current_meeting else None
         qr_code_img = generate_qr_code_surface(str(qr_data_for_detail), screen_width, screen_height) if qr_data_for_detail else None
         
-        # Problem 17: Redundant background draw. This line should be REMOVED as it's already at the top.
-        # draw_gradient_background(screen, darken_color(COLORS["background"]), COLORS["background"]) 
+        draw_gradient_background(screen,COLORS["success"], COLORS["info"]) 
         
         detail_rect = pygame.Rect(screen_width * 0.35, 20, screen_width * 0.5, 500)
-        draw_gradient_rect(screen, COLORS["light"], darken_color(COLORS["border"]), detail_rect, 30)
+        draw_gradient_rect(screen, COLORS["light"], COLORS["grey"], detail_rect, 30)
         
-        # FIX Problem 18: `current_meeting` should now be correctly set or None.
         draw_meeting_details(screen, fonts, current_meeting, qr_code_img, None, None)
         
-        # Problem 19: Duplication. These lines should be REMOVED if they are always drawn outside this branch.
         # draw_footer(screen, fonts)
         # draw_qr_info_card(screen, fonts, qr_surface, room_name)
 
     # These drawing calls should be outside the if/else for display_mode if they are always present
-    # FIX Problem 3, 19: Move these outside the display_mode conditional
+    # Move these outside the display_mode conditional
     draw_footer(screen, fonts) # Only call once at the end
     if qr_surface: # Only draw if qr_surface exists
         draw_qr_info_card(screen, fonts, qr_surface, room_name)

@@ -17,7 +17,7 @@ import json
 jwtsecret = "JWT_SECRET"
 
 # Raspberry Node IP
-raspberryNodeip = 'https://pve.izu.edu.tr/kilitSistemi'
+raspberryNodeip = 'http://172.28.6.15:8001/kilitSistemi'
 
 room_id = 2
 
@@ -144,11 +144,11 @@ def transform_schedule(api_data):
                 ders_programi[weekday_tr][hour_str] = {
                     "durum": "Dolu",
                     "aktivite": entry["title"],
-                    "düzenleyen": entry["username"],
+                    "düzenleyen": entry["fullName"],
                     "rendezvous_id":  entry["rendezvous_id"],
                     "entries": [{
                         "aktivite": entry["title"],
-                        "users": [entry["username"]],
+                        "users": [entry["fullName"]],
                         "time": hour_str,
                         "day": date_str
                     }]
@@ -358,24 +358,9 @@ def draw_schedule_table(screen, fonts):
                    # Unavailable cell with gradient
                     draw_gradient_rect(screen, COLORS["unavailable"], lighten_color(COLORS["unavailable"]), cell_rect)
 
-                    entries = cell_data.get("entries", [{
-                        "aktivite": cell_data.get("aktivite", "Etkinlik"),
-                        "düzenleyen": cell_data.get("düzenleyen", "Bilinmiyor")
-                    }])
-
-                    cell_key = f"{day}_{hour}"
-
-                    # Initialize scroll index if not exists
-                    if cell_key not in scroll_indices:
-                        scroll_indices[cell_key] = 0
-
-                    # Safely cycle through entries
-                    index = scroll_indices[cell_key] % len(entries)
-                    current_entry = entries[index]
-                    aktivite = hour  # like "10:00"
-                    duzenleyen = day  # like "Cuma"
-
-
+                    aktivite = ders_programi[day][hour].get("aktivite")
+    
+                    duzenleyen = ders_programi[day][hour].get("düzenleyen")
                     # Add separator line
                     pygame.draw.line(screen, COLORS["white"], 
                                    (cell_rect.left + 10, cell_rect.centery),
@@ -693,8 +678,8 @@ def update_data():
                 {
                     "title": "Toplantı",
                     "users": ["kerem", "abdulrahman", "enes"],
-                    "time": "14:00-15:00",
-                    "day": "2025-06-10",
+                    "time": "15:00",
+                    "day": "2025-06-19T15:00:00.000Z",
                     "organizer": "kerem",
                     "description": """The wind carried whispers of forgotten tales across the quiet field.
                     A single crow circled above, its cry sharp against the fading light.
@@ -705,8 +690,8 @@ def update_data():
                 {
                     "title": "Sunum",
                     "users": ["ayşe", "mehmet","marvan"],
-                    "time": "15:00-16:00",
-                    "day": "2025-06-10",
+                    "time": "16:00",
+                    "day": "2025-06-19T16:00:00.000Z",
                     "organizer": "marvan",
                     "description": """The wind carried whispers of forgotten tales across the quiet field.
                     A single crow circled above, its cry sharp against the fading light.
@@ -943,9 +928,9 @@ while running:
     now = pygame.time.get_ticks() # This is 'current_time'
 
     # Flag to break outer loop once a current meeting is found
-    found_current_meeting_this_cycle = False # FIX Problem 5: Add flag
+    found_current_meeting_this_cycle = False
 
-    if display_mode == "grid" and now - last_switch_time > 1000:
+    if display_mode == "grid" and now - last_switch_time > 30000:
         # Clear meetings *before* repopulating it only when entering this block
         meetings.clear() # Or meetings = [] if you prefer a new list instance
         
@@ -955,7 +940,7 @@ while running:
                     rendezvous_id = entry["rendezvous_id"]
 
                     # Assuming fetch_details_data handles token globally
-                    data = fetch_details_data(rendezvous_id) # Problem 6: Token still not passed if not global
+                    data = fetch_details_data(rendezvous_id)
                     if data:
                         # Handle API errors that might be returned in the 'data' dictionary
                         if isinstance(data, dict) and data.get("error"):
@@ -1022,7 +1007,7 @@ while running:
                 break
 
 
-    elif display_mode == "detail" and now - last_switch_time > 30000:
+    elif display_mode == "detail" and now - last_switch_time > 10000:
             print(f"[{now}] Meeting ended or detail timeout. Switching back to grid.")
             display_mode = "grid"
             current_meeting = None # Clear current meeting data

@@ -15,7 +15,7 @@ String base64UrlEncode(const String& input) {
 }
 
 // JWT oluşturma fonksiyonu
-String createJWT(const String& secret, unsigned long expirationSeconds = 300) {
+String createJWT(const String& secret, unsigned long expirationSeconds = 30) {
   String header = "{\"alg\":\"HS256\",\"typ\":\"JWT\"}";
 
   time_t now = time(nullptr);

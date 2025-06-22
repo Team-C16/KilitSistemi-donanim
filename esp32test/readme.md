@@ -6,6 +6,12 @@ LovyanGFX > 1.2.7
 
 esp32 > 2.0.15
 
+WiFi > 1.2.5
+
+ArduinoJson > 7.4.2
+
+ESP Async WebServer > 3.7.8
+
 ## Board Settings:
 
 ### Board Name: ESP32S3 Dev Module

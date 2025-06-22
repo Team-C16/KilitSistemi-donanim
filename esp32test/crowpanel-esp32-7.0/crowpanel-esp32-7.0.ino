@@ -1,16 +1,5 @@
-#include <lvgl.h>
-#include <LovyanGFX.hpp>
-#include <lgfx/v1/platforms/esp32s3/Panel_RGB.hpp>
-#include <lgfx/v1/platforms/esp32s3/Bus_RGB.hpp>
-#include <WiFi.h>
-#include <HTTPClient.h>
-#include <ArduinoJson.h>
-#include <ESPAsyncWebServer.h>
-#include <base64.h>
-#include <time.h>
-#include "jwt_helper.h"
+#include "libs.h"
 
-#include "lv_lib_qrcode/lv_qrcode.h"
 
 lv_obj_t *qr;
 
@@ -64,30 +53,27 @@ void my_disp_flush(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color
 }
 
 // --- Global ayarlar ---
-const char* ssid = "kerem";
-const char* password = "Kerem332.";
+const char* ssid = "SUPERONLINE_WiFi_99A7";
+const char* password = "UPRX4RHWHXXE";
 const String jwtSecret = "DENEME";
 AsyncWebServer server(80);
 
-lv_obj_t* qrLabel = nullptr;
+lv_obj_t* qrAltYazi = nullptr;
 lv_obj_t* statusLabel = nullptr;
 
-#define BACKLIGHT_PIN 2
-#define PWM_CHANNEL 0
-#define PWM_FREQ 5000      // 5kHz genellikle ekranlar için ideal
-#define PWM_RESOLUTION 8  
+extern const lv_font_t open_sans_18; 
 
+unsigned long unlockTime = 0;
+bool lockOpen = false;
 void setup() {
   Serial.begin(115200);
   pinMode(2, OUTPUT);
   digitalWrite(2, HIGH);
 
-
-
   lcd.begin();
   lcd.setBrightness(255);
-
   lv_init();
+
 
   lv_disp_draw_buf_init(&draw_buf, disp_draw_buf, NULL, sizeof(disp_draw_buf)/sizeof(disp_draw_buf[0]));
   lv_disp_drv_init(&disp_drv);
@@ -96,55 +82,107 @@ void setup() {
   disp_drv.draw_buf = &draw_buf;
   lv_disp_drv_register(&disp_drv);
 
-  qrLabel = lv_label_create(lv_scr_act());
-  lv_obj_align(qrLabel, LV_ALIGN_LEFT_MID, 10, 0);
-  statusLabel = lv_label_create(lv_scr_act());
-  lv_label_set_text(statusLabel, "Durum: Kapalı");
-  lv_obj_align(statusLabel, LV_ALIGN_BOTTOM_MID, 0, -20);
+  lv_obj_t* main_screen = lv_obj_create(NULL); // create a seperate main screen and loading screen
+  lv_obj_remove_style_all(main_screen);
 
-  qr = lv_qrcode_create(lv_scr_act(), 150, lv_color_black(), lv_color_white());  // boyut 150x150
-  lv_obj_align(qr, LV_ALIGN_CENTER, 0, 0); 
+  lv_obj_t* loading_screen = lv_obj_create(NULL);
+  lv_obj_remove_style_all(loading_screen);  // tüm stilleri kaldır (arka plan vs.)
+  lv_scr_load(loading_screen);
 
-  // WiFi bağlan
+  lv_obj_t* spinner = lv_spinner_create(loading_screen, 1000, 60);  // 1s full rotation, 60 arc degrees
+  lv_obj_center(spinner);
+  lv_timer_handler();
+
+  static lv_style_t NormalFontStyle;
+  lv_style_init(&NormalFontStyle);
+  lv_style_set_text_font(&NormalFontStyle, &turkish_24);
+
+lv_timer_handler();// To Update Spinner
+
+  // --- UI: QR ve Tablo ---
+  // QR kodu sola koy
+  qr = lv_qrcode_create(main_screen, 200, lv_color_black(), lv_color_white());
+  lv_obj_align(qr, LV_ALIGN_LEFT_MID, 10, 0);
+  
+lv_timer_handler();// To Update Spinner
+
+  // Room Name
+  qrAltYazi = lv_label_create(main_screen);
+  lv_label_set_text(qrAltYazi, "");
+  lv_obj_align_to(qrAltYazi, qr, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 10);
+  lv_obj_add_style(qrAltYazi, &NormalFontStyle, LV_PART_MAIN);
+  
+lv_timer_handler();// To Update Spinner
+
+  // Table
+  
+
+  
+lv_timer_handler();// To Update Spinner
+
+  statusLabel = lv_label_create(main_screen);
+  lv_label_set_text(statusLabel, "");
+  lv_obj_align_to(statusLabel,qrAltYazi, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 30);
+  lv_obj_add_style(statusLabel, &NormalFontStyle, LV_PART_MAIN);
+  
+lv_timer_handler();// To Update Spinner
+  // --- WiFi ---
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
-    delay(500); Serial.print(".");
+    delay(100); Serial.print(".");
+    lv_timer_handler();  
   }
   Serial.println("\nWiFi bağlı");
 
-  // Web server (kilit açma)
   server.on("/unlock", HTTP_POST, [](AsyncWebServerRequest *request){
+    lv_label_set_text(statusLabel, "Durum: Istek Geldi");
     if (!request->hasParam("token", true)) {
       request->send(400, "text/plain", "Token yok");
       return;
     }
     String token = request->getParam("token", true)->value();
     if (token.indexOf(jwtSecret) != -1) {
-      lv_label_set_text(statusLabel, "Durum: Kilit Açık");
+      lv_label_set_text(statusLabel, "Kilit Açık");
+      unlockTime = millis();   // Açılma zamanı kaydediliyor
+      lockOpen = true; 
       request->send(200, "text/plain", "Doğrulandı");
     } else {
       request->send(401, "text/plain", "Geçersiz token");
     }
   });
   server.begin();
-
+lv_timer_handler(); // To Update Spinner
   configTime(3 * 3600, 0, "pool.ntp.org", "time.nist.gov");
-
+lv_timer_handler();
   struct tm timeinfo;
   Serial.println("Zaman senkronize ediliyor...");
   while (!getLocalTime(&timeinfo)) {
-    delay(100);
+    lv_timer_handler();// To Update Spinner
+    delay(10);
+    lv_timer_handler();  // To Update Spinner
   }
   Serial.println("Zaman senkronize edildi.");
+  lv_timer_handler();// To Update Spinner
+  lv_obj_clean(loading_screen);// To Delete Spinner
+  lv_scr_load(main_screen); // load main screen before deleting loading
+  lv_obj_del(loading_screen);
+
+  create_schedule_table(main_screen, qr);
 }
 
 void loop() {
   static unsigned long lastJwt = 0;
+  if (lockOpen) {
+    if (millis() - unlockTime > 10000) {  // 10 saniye geçti
+      lv_label_set_text(statusLabel, "");
+      lockOpen = false;
+    }
+  }
 
   if ((millis() - lastJwt > 60000 || lastJwt == 0) && WiFi.status() == WL_CONNECTED) {
     lastJwt = millis();
 
-    String token = createJWT(jwtSecret, 300);
+    String token = createJWT(jwtSecret, 30);
     Serial.println(token);
 
     HTTPClient http;
@@ -173,13 +211,18 @@ void loop() {
       DeserializationError err = deserializeJson(reply, responseBody);
       if (!err) {
         String qrToken = reply["token"].as<String>();
-        lv_label_set_text_fmt(qrLabel, "QR:\n%s", qrToken.c_str());
+        String roomName = reply["room_name"].as<String>();
+
         lv_qrcode_update(qr, qrToken.c_str(), qrToken.length());
+
+        
+        // Alt yazıya oda adı yaz:
+        lv_label_set_text_fmt(qrAltYazi, "Oda Adı: %s", roomName.c_str());
       } else {
-        lv_label_set_text_fmt(qrLabel, "JSON Error");
+        Serial.println("JSON Error");
       }
     } else {
-      lv_label_set_text_fmt(qrLabel, "HTTP Error: %d", code);
+      Serial.println( "HTTP Error: " + code);
     }
   }
 

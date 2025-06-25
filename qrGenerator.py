@@ -975,16 +975,16 @@ while running:
                             users = []
                             # isGroup check should be on 'details', not 'data'
                             if details.get("isGroup") in [0, 1] and group_members: # `group_members` comes from the dict case
-                                users = [member["username"] for member in group_members]
+                                users = [member["fullName"] for member in group_members]
                             else:
-                                users = [details.get("username")] if details.get("username") else []
+                                users = [details.get("fullName")] if details.get("fullName") else []
 
                             meeting_info = {
                                 "rendezvous_id": rendezvous_id,
                                 "day": get_date_from_day_name(day),
                                 "time": f"{hour}-{int(hour[:2])+1:02d}:00",
                                 "title": details.get("title", entry["aktivite"]),
-                                "organizer": details.get("username", entry["düzenleyen"]),
+                                "organizer": details.get("fullName", entry["düzenleyen"]),
                                 "users": users,
                                 "description": details.get("message", ""),
                                 "room_name": {room_name}

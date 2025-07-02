@@ -14,10 +14,10 @@ import ast
 import json
 
 # JWT secret key
-jwtsecret = "JWT_SECRET"
+jwtsecret = "DENEME"
 
 # Raspberry Node IP
-raspberryNodeip = 'http://172.28.6.15:8001/kilitSistemi'
+raspberryNodeip = 'https://pve.izu.edu.tr/kilitSistemi'
 
 room_id = 2
 
@@ -262,7 +262,7 @@ def draw_schedule_table(screen, fonts):
     days_in_english = [date_obj.strftime('%A'), (date_obj+ timedelta(days = 1)).strftime("%A"), (date_obj+ timedelta(days = 2)).strftime("%A"), (date_obj+ timedelta(days = 3)).strftime("%A"),(date_obj+ timedelta(days = 4)).strftime("%A")]
     days = [dict.get(day, "Pazartesi") for day in days_in_english]
 
-    hours = ["09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00"]
+    hours = ["09:00","10:00","11:00","12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00"] # from 09:00 to 18:00 
 
     table_width = time_column_width + len(days) * column_width
     table_x = screen_width * 0.31
@@ -577,69 +577,80 @@ def draw_text(screen, text, font, color, rect, align_x="left", align_y="top"):
     
     screen.blit(text_surface, text_rect)
 
-def fetch_details_data(rendezvous_id): # Added parameters for clarity
-    """
-    Fetches schedule details from the Node.js API endpoint.
-    Handles JWT encoding, network requests, and basic error handling.
-    """
-    if not jwtsecret:
-        print("Error: JWT secret is not defined.")
-        return None
-    if not raspberryNodeip:
-        print("Error: Raspberry Pi Node IP is not defined.")
+def fetch_details_data(rendezvous_id):
+    if not jwtsecret or not raspberryNodeip:
+        print("Missing config")
         return None
 
+    # 💡 Define mock data here
+    mock_data = {
+        "3": {
+            "dataResult": [{
+                "title": "Toplantı",
+                "message": "The golden sunlight filtered softly through the canopy of ancient trees, casting dappled shadows on the forest floor. A gentle breeze stirred the leaves, carrying with it the faint scent of wildflowers and earth. Somewhere in the distance, birds sang their melodious tunes, creating a peaceful symphony that blended perfectly with the rustling of small animals scurrying through the underbrush. It was a quiet moment of harmony, where nature’s calm seemed to embrace everything around it, inviting any passerby to pause and simply breathe.",
+                "hour": "14:00",
+                "fullName": "kerem",
+                "picture": None,
+                "isGroup": 1
+            }],
+            "groupResult": [
+                {"fullName": "kerem yavuz", "picture": None},
+                {"fullName": "Abdulrahman haffar", "picture": None},
+                {"fullName": "Selim Can", "picture": None},
+                {"fullName": "Hasan Ari", "picture": None},
+                {"fullName": "enes halit", "picture": None},
+                {"fullName": "hakan genc", "picture": None}
+            ]
+        },
+        "6": {
+           "dataResult": [{
+                "title": "Toplantı",
+                "message": "The golden sunlight filtered softly through the canopy of ancient trees, casting dappled shadows on the forest floor. A gentle breeze stirred the leaves, carrying with it the faint scent of wildflowers and earth. Somewhere in the distance, birds sang their melodious tunes, creating a peaceful symphony that blended perfectly with the rustling of small animals scurrying through the underbrush. It was a quiet moment of harmony, where nature’s calm seemed to embrace everything around it, inviting any passerby to pause and simply breathe.",
+                "hour": "17:00",
+                "fullName": "kerem",
+                "picture": None,
+                "isGroup": 1
+            }],
+            "groupResult": [
+                {"fullName": "kerem yavuz", "picture": None},
+                {"fullName": "Abdulrahman haffar", "picture": None},
+                {"fullName": "Selim Can", "picture": None},
+                {"fullName": "Hasan Ari", "picture": None},
+                {"fullName": "enes halit", "picture": None},
+                {"fullName": "hakan genc", "picture": None}
+            ]
+        }
+    }
+
     try:
-        # 1. Encode JWT
         encoded_jwt = jwt.encode(
-            {
-                "exp": time.time() + 300 # Token invalid after 5 minutes (300 seconds)
-                # You might also add 'iat' (issued at) and 'sub' (subject) claims
-            },
+            {"exp": time.time() + 300},
             jwtsecret,
             algorithm="HS256"
         )
 
-        # 2. Construct URL and Payload (using dictionary for data, then json.dumps)
         url = f"{raspberryNodeip}/getScheduleDetails"
         headers = {"Content-Type": "application/json"}
-        
-        # FIX Problem 5: Use the `room_id` parameter dynamically
         payload = {
-            "room_id": room_id, # Use the passed room_id
+            "room_id": room_id,
             "token": encoded_jwt,
             "rendezvous_id": rendezvous_id
         }
 
-        # 3. Make the Request with Timeout and Error Handling
         print(f"DEBUG: Requesting {url} with rendezvous_id={rendezvous_id}, room_id={room_id}")
-        response = requests.post(url, headers=headers, data=json.dumps(payload), timeout=10) # FIX Problem 2: Added 10-second timeout
-
-        # Raise an HTTPError for bad responses (4xx or 5xx status codes)
-        response.raise_for_status() 
-
-        # FIX Problem 3: Attempt to parse JSON only after successful status code
+        response = requests.post(url, headers=headers, data=json.dumps(payload), timeout=10)
+        response.raise_for_status()
         response_data = response.json()
         print(f"DEBUG: API response for {rendezvous_id}: {response_data}")
         return response_data
 
-    # FIX Problem 4: Catch all Request exceptions (network errors, timeouts, etc.)
-    except requests.exceptions.Timeout:
-        print(f"API request timed out for rendezvous_id {rendezvous_id} ({url}).")
-        return None
-    except requests.exceptions.ConnectionError:
-        print(f"API connection error for rendezvous_id {rendezvous_id} ({url}). Is the server running and reachable?")
-        return None
-    except requests.exceptions.HTTPError as e:
-        print(f"API HTTP error for rendezvous_id {rendezvous_id}: {e.response.status_code} - {e.response.text}")
-        return {"error": e.response.text} # Return error info for higher-level handling
-    except json.JSONDecodeError:
-        print(f"API response for rendezvous_id {rendezvous_id} was not valid JSON: {response.text}")
-        return {"error": "Invalid JSON response from API"}
     except Exception as e:
-        print(f"An unexpected error occurred during API request for rendezvous_id {rendezvous_id}: {e}")
-        return None
+        print(f"⚠️ API failed for rendezvous_id {rendezvous_id}, using mock if available. Error: {e}")
 
+        # ✅ Return mock data fallback
+        return mock_data.get(str(rendezvous_id), None)
+
+ 
 
 def update_data():
     global ders_programi
@@ -677,10 +688,22 @@ def update_data():
             "schedule": [
                 {
                     "title": "Toplantı",
-                    "users": ["kerem", "abdulrahman", "enes"],
-                    "time": "15:00",
-                    "day": "2025-06-19T15:00:00.000Z",
-                    "organizer": "kerem",
+                    "users": [{  "fullName": "kerem yavuz",
+                                "picture": None},
+                                {"fullName": "Abdulrahman haffar",
+                                "picture": None},
+                                {"fullName": "Selim Can",
+                                "picture": None},
+                                {"fullName": "Hasan Ari",
+                                "picture": None},
+                                {"fullName": "enes halit",
+                                "picture": None},
+                                {"fullName": "hakan genc",
+                                "picture": None}],
+                    "hour": "14:00",
+                    "day": "2025-07-01T14:00:00.000Z",
+                    "fullName": "kerem",
+                    "rendezvous_id": "3",
                     "description": """The wind carried whispers of forgotten tales across the quiet field.
                     A single crow circled above, its cry sharp against the fading light.
                     Below, shadows stretched long, reaching like fingers across the earth.
@@ -689,10 +712,11 @@ def update_data():
                 },
                 {
                     "title": "Sunum",
-                    "users": ["ayşe", "mehmet","marvan"],
-                    "time": "16:00",
-                    "day": "2025-06-19T16:00:00.000Z",
-                    "organizer": "marvan",
+                    "users": ["ayşe", "mehmet","burak","serdar", "cevat"],
+                    "hour": "17:00",
+                    "day": "2025-07-01T17:00:00.000Z",
+                    "fullName": "marvan",
+                    "rendezvous_id": "6",
                     "description": """The wind carried whispers of forgotten tales across the quiet field.
                     A single crow circled above, its cry sharp against the fading light.
                     Below, shadows stretched long, reaching like fingers across the earth.
@@ -741,15 +765,57 @@ def wrap_text(text, font, max_width):
     current_line = ""
 
     for word in words:
-        test_line = current_line + word + " "
+        test_line = current_line + (" " if current_line else "") + word
         if font.size(test_line)[0] <= max_width:
             current_line = test_line
         else:
-            lines.append(current_line.strip())
-            current_line = word + " "
+            # Word too long to fit in the current line
+            if current_line:
+                lines.append(current_line)
+            # Check if word fits alone or needs breaking
+            if font.size(word)[0] <= max_width:
+                current_line = word
+            else:
+                # Break word char-by-char with hyphens
+                i = 0
+                while i < len(word):
+                    part = ""
+                    while i < len(word) and font.size(part + word[i] + "-")[0] <= max_width:
+                        part += word[i]
+                        i += 1
+                    if i < len(word):
+                        lines.append(part + "-")
+                    else:
+                        current_line = part
     if current_line:
-        lines.append(current_line.strip())
+        lines.append(current_line)
+
     return lines
+
+
+def load_image_from_url(url):
+    response = requests.get(url)
+    if response.status_code == 200:
+        image_file = io.BytesIO(response.content)
+        return pygame.image.load(image_file).convert_alpha()
+    else:
+        print("Image couldn't be loaded:", response.status_code)
+        return None
+
+def make_circle_image(img_surface, size=(80, 80), border_color=(0, 0, 255), border_width=3):
+    img_surface = pygame.transform.smoothscale(img_surface, size)
+
+    mask_surface = pygame.Surface(size, pygame.SRCALPHA)
+    pygame.draw.circle(mask_surface, (255, 255, 255, 255), (size[0]//2, size[1]//2), size[0]//2)
+
+    final_surface = pygame.Surface(size, pygame.SRCALPHA)
+    final_surface.blit(img_surface, (0, 0))
+    final_surface.blit(mask_surface, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+
+    # Draw the blue border circle
+    pygame.draw.circle(final_surface, border_color, (size[0]//2, size[1]//2), size[0]//2 - border_width//2, border_width)
+
+    return final_surface
 
 
 def draw_meeting_details(screen, fonts, current_meeting, qr_code_img, room_icon, room_text):
@@ -763,34 +829,139 @@ def draw_meeting_details(screen, fonts, current_meeting, qr_code_img, room_icon,
     if current_meeting:
         title = current_meeting.get("title", "Başlıksız Toplantı")
         time_str = current_meeting.get("time", "Zaman Yok")
-        participants_list = current_meeting.get("users", [])
         description = current_meeting.get("description", "")
         participants = current_meeting.get("users", "Belirtilmemiş")
 
+        title_y = 30
+        #Don't change this variables,this is easier for when you are changing the place of the title
+        line_y = title_y + 42
+        time_y = line_y + 5
+        description_y = time_y + 25
+
+        # evaluating what would the height of description be so it draws the detail container box based on that
+        y = description_y
+        wrapped_lines = wrap_text(description, fonts['regular'], screen_width * 0.45)
+        for line in wrapped_lines:
+            y += 25
+        
+        # Container Box
+        # Keep your existing rectangle position and size
+        detail_rect_1 = pygame.Rect(screen_width * 0.35, 30, screen_width * 0.5, 45)
+        detail_rect_2 = pygame.Rect(screen_width * 0.35, 20, screen_width * 0.5, 20)
+        detail_rect = pygame.Rect(screen_width * 0.35, 20, screen_width * 0.5, y + 50)
+        detail_rect_shadow = pygame.Rect(screen_width * 0.35 + 20, 30, screen_width * 0.5, y + 50)
+
+        # Draw shadow behind
+        pygame.draw.rect(screen, COLORS["grey"], detail_rect_shadow, border_radius=20)
+        pygame.draw.rect(screen, COLORS["grey"], detail_rect_shadow, 2, border_radius=20)
+
+        # Draw gradient rect above shadow
+        draw_gradient_rect(screen, COLORS["light"], COLORS["light"], detail_rect, 30)
+
+        # Draw blue rectangle
+        draw_gradient_rect(screen, COLORS["primary"], darken_color(COLORS["primary"]), detail_rect_1)
 
         # Title
         title_font = fonts['bold_large']
-        screen.blit(title_font.render("Toplantı başlığı: " + title, True, (0, 0, 0)), (screen_width * 0.40, 70))
-        pygame.draw.line(screen, (0, 0, 0), (screen_width * 0.40, 115), (900, 115), 3)
+        title_surface = title_font.render("Toplantı başlığı: " + title, True, (0, 0, 0))
+        title_width = title_surface.get_width()
+        box_x = screen_width * 0.35
+        box_width = screen_width * 0.5
+        title_x = box_x + (box_width - title_width)/2
+
+        screen.blit(title_font.render("Toplantı başlığı: " + title, True, (255, 255, 255)), (title_x, title_y))
 
         # Time
-        screen.blit(fonts['regular'].render("Zaman: " + time_str, True, (0, 0, 0)), (screen_width * 0.40, 120))
-
-        # Participants
-        participants_list = current_meeting.get("users", [])
-        participants = ", ".join(participants_list) if participants_list else "Belirtilmemiş"
-        screen.blit(fonts['regular'].render("Katılımcılar: " + participants, True, (0, 0, 0)), (screen_width * 0.40, 150))
-
+        screen.blit(fonts['regular'].render("Zaman: " + time_str, True, (0, 0, 0)), (box_x + 10, time_y))
 
         # Description
-        wrapped_lines = wrap_text(description, fonts['regular'], 900 - 250)
         print("📜 Wrapped description lines:", wrapped_lines)
-        y = 180
-        screen.blit(fonts['bold'].render("Toplantı Açıklaması:", True, (0, 0, 0)), (screen_width * 0.40, y))
+        y = description_y
+        wrapped_lines = wrap_text(description, fonts['regular'], screen_width * 0.45)
+        screen.blit(fonts['bold'].render("Toplantı Açıklaması:", True, (0, 0, 0)), (box_x + 10, y))
         y += 30
         for line in wrapped_lines:
-            screen.blit(fonts['regular'].render(line, True, (0, 0, 0)), (screen_width * 0.40, y))
+            screen.blit(fonts['regular'].render(line, True, (0, 0, 0)), (screen_width * 0.38, y))
             y += 25
+
+        participants = current_meeting.get("users", [])
+
+        # Base position
+        img_x = screen_width * 0.40 - 30
+        initial_x = img_x
+        if y >= 300:
+            img_y = y + 100
+        else:
+            img_y = y + 150
+        img_spacing = 180  # space between images
+        img_num = 0
+        i = 0
+        rect_x = 0
+        rect_y = 0
+        radius = 20
+
+        for j,person in enumerate(participants):
+            fullName = person.get("fullName", "Anonim").strip()
+
+            # Split by the first space (if any)
+            if " " in fullName:
+                name_part, surname_part = fullName.split(" ", 1)
+            else:
+                name_part = fullName
+                surname_part = ""
+
+            # Calculate center X for the photo
+            center_x = img_x + i * img_spacing + 40  # 40 is half of 80px image width
+
+            # Render name and surname surfaces
+            name_surf = fonts['regular'].render(name_part, True, (0, 0, 0))
+            surname_surf = fonts['regular'].render(surname_part, True, (0, 0, 0)) if surname_part else None
+
+            # Get widths for centering
+            name_w = name_surf.get_width()
+            surname_w = surname_surf.get_width() if surname_surf else 0
+
+            # Draw name centered under the image
+            screen.blit(name_surf, (center_x - name_w // 2, img_y + 85))
+
+            # Draw surname below name if exists, also centered
+            if surname_surf:
+                screen.blit(surname_surf, (center_x - surname_w // 2, img_y + 85 + name_surf.get_height()))
+
+            fullName = person.get("fullName", "Anonim")
+            picture_path = person.get("picture")
+
+            if picture_path and picture_path.strip() and picture_path != "null":
+                full_url = raspberryNodeip + picture_path
+                img_surface = load_image_from_url(full_url)
+            else:
+                img_surface = pygame.image.load("profil.jpg").convert_alpha()
+
+            if img_surface:
+                rect_x = center_x - 75
+                rect_y = img_y - 35
+                img_starting_point = img_y - rect_y
+                blue_rect_height = img_starting_point + 80 * (0.6)
+                circular_img = make_circle_image(img_surface) # making the image circular
+                container_rect = pygame.Rect(rect_x,rect_y,150,180) # drawing the container box for the photo in memory
+                rect = pygame.Rect(rect_x,rect_y,150,blue_rect_height) # drawing the blue box for the photo in memory
+                rect2 = pygame.Rect(rect_x,rect_y + 20,150,blue_rect_height - 20)
+
+                draw_gradient_rect(screen, COLORS["primary"],COLORS["primary"], rect, border_radius= radius) # drawing the blue box on the screen
+                draw_gradient_rect(screen, COLORS["primary"], darken_color(COLORS["primary"]), rect2) # drawing the down side of the blue box
+                pygame.draw.rect(screen,(0,0,0),container_rect, 1, border_radius=radius) # drawing the box on the screen
+                screen.blit(circular_img, (img_x + i * img_spacing, img_y)) # drawing the image
+                img_num += 1
+                i += 1
+
+
+                if img_num % 5 == 0:
+                    img_y += 200
+                    img_x = initial_x
+                    i = 0
+
+
+
 
 def get_date_from_day_name(tr_day_name):
     tr_to_eng = {
@@ -909,7 +1080,7 @@ while running:
 
     print(f"Display mode: {display_mode}, Time since last switch: {pygame.time.get_ticks() - last_switch_time}")
     
-    # Update scroll indices every 30 seconds
+    # Update scroll indices every 10 seconds
     if pygame.time.get_ticks() - last_scroll_time > 10000:
         last_scroll_time = pygame.time.get_ticks()
         for key in scroll_indices:
@@ -923,13 +1094,12 @@ while running:
 
     draw_footer(screen, fonts) 
     
-    # === CRITICAL FIX for `meetings` list management ===
-    # meetings = [] # <--- REMOVE THIS LINE FROM INSIDE THE LOOP
     now = pygame.time.get_ticks() # This is 'current_time'
 
     # Flag to break outer loop once a current meeting is found
     found_current_meeting_this_cycle = False
 
+    #if there is a current meeting switch to the meeting details every 30 seconds
     if display_mode == "grid" and now - last_switch_time > 30000:
         # Clear meetings *before* repopulating it only when entering this block
         meetings.clear() # Or meetings = [] if you prefer a new list instance
@@ -959,25 +1129,23 @@ while running:
                             # If 'dataResult' is found and is a non-empty list, use its first element
                             if main_data and isinstance(main_data, list) and len(main_data) > 0:
                                 details = main_data[0]
-                            # else: if data is a dict but no dataResult, maybe it's just the details directly?
-                            # This case is less clear, but if your API sometimes returns a dict that *is* the detail
-                            # for a single meeting, you might need another check here.
-                            # For now, let's assume if it's a dict, it's either `dataResult` or an error.
 
                         # Second, if 'data' itself is a list, treat it as the main data
                         elif isinstance(data, list) and len(data) > 0:
                             details = data[0]
                             # In this case, there's no `groupResult` key, so group_members remains an empty list by default.
-                            # This matches your previous logic for this scenario.
                         
                         # Now, with 'details' potentially populated from either format, proceed
                         if details: # Only proceed if details were successfully extracted from either format
                             users = []
-                            # isGroup check should be on 'details', not 'data'
-                            if details.get("isGroup") in [0, 1] and group_members: # `group_members` comes from the dict case
-                                users = [member["fullName"] for member in group_members]
-                            else:
-                                users = [details.get("fullName")] if details.get("fullName") else []
+                            # Add organizer as the first user
+                            users = [{"fullName": details.get("fullName", entry["düzenleyen"]), "picture": details.get("picture")}]
+
+                            # If it's a group, append group members
+                            if details.get("isGroup") in [0, 1] and group_members:
+                                users += [{"fullName": member["fullName"], "picture": member.get("picture")} for member in group_members]
+
+
 
                             meeting_info = {
                                 "rendezvous_id": rendezvous_id,
@@ -987,7 +1155,8 @@ while running:
                                 "organizer": details.get("fullName", entry["düzenleyen"]),
                                 "users": users,
                                 "description": details.get("message", ""),
-                                "room_name": {room_name}
+                                "room_name": {room_name},
+                                "img": details.get("picture", "image here")
                             }
                             meetings.append(meeting_info)
 
@@ -1006,7 +1175,7 @@ while running:
             if found_current_meeting_this_cycle:
                 break
 
-
+    # switch back to the schedule after 10 seconds 
     elif display_mode == "detail" and now - last_switch_time > 10000:
             print(f"[{now}] Meeting ended or detail timeout. Switching back to grid.")
             display_mode = "grid"
@@ -1021,18 +1190,13 @@ while running:
         qr_data_for_detail = current_meeting.get("rendezvous_id") if current_meeting else None
         qr_code_img = generate_qr_code_surface(str(qr_data_for_detail), screen_width, screen_height) if qr_data_for_detail else None
         
-        draw_gradient_background(screen,COLORS["success"], COLORS["info"]) 
-        
-        detail_rect = pygame.Rect(screen_width * 0.35, 20, screen_width * 0.5, 500)
-        draw_gradient_rect(screen, COLORS["light"], COLORS["grey"], detail_rect, 30)
+        draw_gradient_background(screen,COLORS["light"], COLORS["light"]) 
         
         draw_meeting_details(screen, fonts, current_meeting, qr_code_img, None, None)
         
         # draw_footer(screen, fonts)
         # draw_qr_info_card(screen, fonts, qr_surface, room_name)
 
-    # These drawing calls should be outside the if/else for display_mode if they are always present
-    # Move these outside the display_mode conditional
     draw_footer(screen, fonts) # Only call once at the end
     if qr_surface: # Only draw if qr_surface exists
         draw_qr_info_card(screen, fonts, qr_surface, room_name)

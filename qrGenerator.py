@@ -14,12 +14,12 @@ import ast
 import json
 
 # JWT secret key
-jwtsecret = "DENEME"
+jwtsecret = "JWT_SECRET"
 
 # Raspberry Node IP
 raspberryNodeip = 'https://pve.izu.edu.tr/kilitSistemi'
 
-room_id = 2
+room_id = 1
 
 scroll_indices = {}
 last_scroll_time = 0
@@ -802,7 +802,7 @@ def load_image_from_url(url):
         print("Image couldn't be loaded:", response.status_code)
         return None
 
-def make_circle_image(img_surface, size=(80, 80), border_color=(0, 0, 255), border_width=3):
+def make_circle_image(img_surface, size=(100, 100), border_color=(0, 0, 255), border_width=3):
     img_surface = pygame.transform.smoothscale(img_surface, size)
 
     mask_surface = pygame.Surface(size, pygame.SRCALPHA)
@@ -889,11 +889,13 @@ def draw_meeting_details(screen, fonts, current_meeting, qr_code_img, room_icon,
         # Base position
         img_x = screen_width * 0.40 - 30
         initial_x = img_x
+
         if y >= 300:
-            img_y = y + 100
+            img_y = y + 100 # detaylar kutusu çok uzunsa fotolar daha az aşşaya incekler  
         else:
             img_y = y + 150
-        img_spacing = 180  # space between images
+
+        img_spacing = 195  # space between images
         img_num = 0
         i = 0
         rect_x = 0
@@ -911,7 +913,7 @@ def draw_meeting_details(screen, fonts, current_meeting, qr_code_img, room_icon,
                 surname_part = ""
 
             # Calculate center X for the photo
-            center_x = img_x + i * img_spacing + 40  # 40 is half of 80px image width
+            center_x = img_x + i * img_spacing + 50  # 50 is half of 100px image width
 
             # Render name and surname surfaces
             name_surf = fonts['regular'].render(name_part, True, (0, 0, 0))
@@ -922,11 +924,11 @@ def draw_meeting_details(screen, fonts, current_meeting, qr_code_img, room_icon,
             surname_w = surname_surf.get_width() if surname_surf else 0
 
             # Draw name centered under the image
-            screen.blit(name_surf, (center_x - name_w // 2, img_y + 85))
+            screen.blit(name_surf, (center_x - name_w // 2, img_y + 100))
 
             # Draw surname below name if exists, also centered
             if surname_surf:
-                screen.blit(surname_surf, (center_x - surname_w // 2, img_y + 85 + name_surf.get_height()))
+                screen.blit(surname_surf, (center_x - surname_w // 2, img_y + 100 + name_surf.get_height()))
 
             fullName = person.get("fullName", "Anonim")
             picture_path = person.get("picture")
@@ -938,18 +940,22 @@ def draw_meeting_details(screen, fonts, current_meeting, qr_code_img, room_icon,
                 img_surface = pygame.image.load("profil.jpg").convert_alpha()
 
             if img_surface:
-                rect_x = center_x - 75
+                r = 50
+                rect_height = 200
+                rect_x = center_x - 2 * r + 10
+                rect_width = 4 * r - 20
                 rect_y = img_y - 35
-                img_starting_point = img_y - rect_y
-                blue_rect_height = img_starting_point + 80 * (0.6)
-                circular_img = make_circle_image(img_surface) # making the image circular
-                container_rect = pygame.Rect(rect_x,rect_y,150,180) # drawing the container box for the photo in memory
-                rect = pygame.Rect(rect_x,rect_y,150,blue_rect_height) # drawing the blue box for the photo in memory
-                rect2 = pygame.Rect(rect_x,rect_y + 20,150,blue_rect_height - 20)
 
-                draw_gradient_rect(screen, COLORS["primary"],COLORS["primary"], rect, border_radius= radius) # drawing the blue box on the screen
+                img_starting_point = img_y - rect_y
+                blue_rect_height = img_starting_point + 100 * (0.6)
+                circular_img = make_circle_image(img_surface) # making the image circular
+                container_rect = pygame.Rect(rect_x, rect_y, rect_width, rect_height) # drawing the container box for the photo in memory
+                rect = pygame.Rect(rect_x, rect_y, rect_width, blue_rect_height) # drawing the blue box for the photo in memory
+                rect2 = pygame.Rect(rect_x, rect_y + 20, rect_width, blue_rect_height - 20) # drawing the downisde of teh blue box
+
+                draw_gradient_rect(screen, COLORS["primary"], COLORS["primary"], rect, border_radius= radius) # drawing the blue box on the screen
                 draw_gradient_rect(screen, COLORS["primary"], darken_color(COLORS["primary"]), rect2) # drawing the down side of the blue box
-                pygame.draw.rect(screen,(0,0,0),container_rect, 1, border_radius=radius) # drawing the box on the screen
+                pygame.draw.rect(screen,(0,0,0), container_rect, 1, border_radius=radius) # drawing the box on the screen
                 screen.blit(circular_img, (img_x + i * img_spacing, img_y)) # drawing the image
                 img_num += 1
                 i += 1

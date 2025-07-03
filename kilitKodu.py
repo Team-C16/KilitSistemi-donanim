@@ -20,6 +20,8 @@ SECRET_KEY = "JWT_SECRET"
 
 raspberryNodeip = 'http://192.168.0.25:32002'
 
+room_id = 1
+
 # JWT doğrulama fonksiyonu
 def verify_jwt(token):
     try:

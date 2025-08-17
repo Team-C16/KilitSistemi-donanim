@@ -21,6 +21,8 @@ raspberryNodeip = 'https://pve.izu.edu.tr/kilitSistemi'
 
 room_id = 1
 
+accessType = 1
+
 scroll_indices = {}
 last_scroll_time = 0
 
@@ -221,7 +223,7 @@ def fetch_room_name():
     url = f"{raspberryNodeip}/getQRCodeToken"
     print(url)
     headers = {"Content-Type": "application/json"}
-    data = f'{{"room_id": {room_id}, "token": "{encoded_jwt}", "room_name": 1}}'
+    data = f'{{"room_id": {room_id}, "token": "{encoded_jwt}", "room_name": 1, "accessType": "{accessType}"}}'
     try:
         response = requests.post(url, headers=headers, data=data)
         if response.status_code == 200:
@@ -544,7 +546,7 @@ def fetch_qr_token():
     )
     url = f"{raspberryNodeip}/getQRCodeToken"
     headers = {"Content-Type": "application/json"}
-    data = f'{{"room_id": {room_id}, "token": "{encoded_jwt}"}}'
+    data = f'{{"room_id": {room_id}, "token": "{encoded_jwt}", "accessType": "{accessType}"}}'
     try:
         response = requests.post(url, headers=headers, data=data)
         if response.status_code == 200:

@@ -1,6 +1,7 @@
 apt update -y
 apt install python3 -y
 apt install pip -y
+apt-get install xosd-bin -y
 pip install requests qrcode qrcode[pil] pygame jwt time --break-system-packages
 
 
@@ -11,7 +12,6 @@ stty -echo
 echo "\n ---------------------------------------------------- \n \n \n Please Enter JWT Secret"
 read -p "" jwtsecret
 stty echo
-echo "$jwtsecret"
 
 echo "\n ---------------------------------------------------- \n \n \n Please Enter Rooom ID"
 read -p "" roomid
@@ -125,9 +125,48 @@ sudo systemctl enable $LOCK_SERVICE_NAME.service
 sudo systemctl start $LOCK_SERVICE_NAME.service
 
 
+
+
+#Parmak izi Servis adı
+FINGERPRINT_SERVICE_NAME="fingerprint"
+
+#Parmak izi Python script yolu
+FINGERPRINT_PYTHON_SCRIPT="$DIRECTORY/fingerprint.py"
+
+FINGERPRINT_SERVICE_FILE="/etc/systemd/system/$FINGERPRINT_SERVICE_NAME.service"
+
+echo "Servis dosyası oluşturuluyor: $FINGERPRINT_SERVICE_FILE"
+
+sudo bash -c "cat > $FINGERPRINT_SERVICE_FILE" <<EOL
+[Unit]
+Description=QR Generator Service
+After=default.target
+Requires=display-manager.service
+
+[Service]
+Type=simple
+User=$USER_NAME
+Environment=DISPLAY=:0
+Environment=XDG_RUNTIME_DIR=/run/user/$(id -u $USER_NAME)
+ExecStart=/bin/bash -c "while ! xrandr; do sleep 1; done; /usr/bin/python3 $FINGERPRINT_PYTHON_SCRIPT"
+Restart=always
+
+[Install]
+WantedBy=default.target
+EOL
+
+# Servisi etkinleştir ve başlat
+echo "FINGER Prınt Servis etkinleştiriliyor ve başlatılıyor..."
+sudo systemctl daemon-reload
+sudo systemctl enable $FINGERPRINT_SERVICE_NAME.service
+sudo systemctl start $FINGERPRINT_SERVICE_NAME.service
+
+
+
 # Servis durumu kontrol
 sudo systemctl status $LOCK_SERVICE_NAME.service
 sudo systemctl status $QR_SERVICE_NAME.service
+sudo systemctl status $FINGERPRINT_SERVICE_NAME.service
 
 else
 git clone https://github.com/Team-C16/KilitSistemi-donanim /KilitSistemi-donanim

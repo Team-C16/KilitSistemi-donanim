@@ -73,7 +73,7 @@ def create_tkinter_app():
 
 def show_notification(message, duration=3, color="blue"):
     """
-    Ekranın sağ altında şeffaf ve çerçevesiz bir bildirim penceresi gösterir.
+    Ekranın sol altında çerçevesiz bir bildirim penceresi gösterir.
     Bu fonksiyonu Flask thread'inden güvenli bir şekilde çağırmak için after() metodu kullanılır.
     """
     def _show():
@@ -86,8 +86,9 @@ def show_notification(message, duration=3, color="blue"):
         
         notification_window.overrideredirect(True)
         notification_window.wm_attributes("-topmost", True)
-        # SİYAH ARKA PLAN YAPILDI
-        notification_window.config(bg='white') 
+
+        notification_window.config(bg='white')
+
         
         label = tk.Label(
             notification_window,
@@ -301,32 +302,65 @@ def menu_kimlik_dogrulama(stop_event=None):
             break
 
 def api_kullanici_ekle(userID, sablon_verisi):
+    encoded_jwt = jwt.encode(
+        {
+            "exp": time.time() + 30
+        },
+        SECRET_KEY,
+        algorithm="HS256"
+    )
     data = {
+        "jwtToken": encoded_jwt,
+        "room_id": room_id,
         "userID": userID,
         "fingerprint": base64.b64encode(sablon_verisi).decode("utf-8")
     }
-    r = requests.post(f"{API_BASE}/registertemplate", json=data)
+    headers = {"Content-Type": "application/json"}
+    r = requests.post(f"{API_BASE}/registerFingerprint",headers=headers, json=data)
     return r.json()
 
 def menu_yeni_kayit(userID):
     toplam_adim = 3
+    timeout_saniye = 30  # Zaman aşımı süresi (saniye)
+    
     for i in range(1, toplam_adim + 1):
         message = f"Adım {i}/{toplam_adim}\nParmağınızı Koyun"
         show_notification(message, duration=0)
         print(f"{i}. okutma için parmağınızı yerleştirin...")
 
+        # 30 saniyelik zaman aşımı sayacı
+        start_time = time.time()
+        parmak_algilandi = False
+        
+        # Parmak algılanana veya zaman aşımı olana kadar bekle
+        while not parmak_algilandi:
+            if time.time() - start_time > timeout_saniye:
+                hide_notification()
+                show_notification("İşlem İptal Edildi:\nZaman aşımı", duration=3, color='red')
+                time.sleep(3)
+                return {"error": "Zaman aşımı"}
+            
+            if parmak_algila():
+                parmak_algilandi = True
+            
+            time.sleep(0.1)
+
+        # Parmak algılandıktan sonra çekilmesini bekle
+        hide_notification()
+        message_cek = "Parmağınızı çekin"
+        show_notification(message_cek, duration=0)
         while parmak_algila():
             time.sleep(0.1)
-        while not parmak_algila():
-            time.sleep(0.1)
-        
+
         hide_notification()
 
         if goruntu_al() != ERR_SUCCESS:
             show_notification("Görüntü alınamadı", duration=2, color='red')
+            time.sleep(2)
             return {"error": "Görüntü alınamadı"}
         if sablon_olustur(i - 1) != ERR_SUCCESS:
             show_notification("Şablon oluşturulamadı", duration=2, color='red')
+            time.sleep(2)
             return {"error": "Şablon oluşturulamadı"}
 
         print(f"{i}. okutma tamamlandı.")
@@ -348,6 +382,18 @@ def menu_yeni_kayit(userID):
     result = api_kullanici_ekle(userID, sablon)
     return {"success": True, "api_response": result}
 
+# JWT doğrulama fonksiyonu
+def verify_jwt(token):
+    try:
+        # JWT'yi doğrula
+        decoded = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        return decoded  # JWT geçerliyse, çözümlenmiş payload'ı döner
+    except jwt.ExpiredSignatureError:
+        print("time err")
+        return None  # JWT süresi dolmuş
+    except jwt.InvalidTokenError:
+        return None  # Geçersiz JWT
+
 # -------------------------
 # Flask Web Server
 # -------------------------
@@ -359,26 +405,36 @@ kimlik_thread = None
 @app.route("/yeni_kayit", methods=["POST"])
 def yeni_kayit():
     global kimlik_thread, stop_kimlik_thread
+    data = request.json
+    token = data.get("jwt")
 
-    data = request.get_json()
-    if not data or "userID" not in data:
-        return jsonify({"error": "userID girilmeli"}), 400
+    if token:
+        # JWT'yi doğrula
+        decoded = verify_jwt(token)
+        if decoded:
+            if not data or "userID" not in data:
+                return jsonify({"error": "userID girilmeli"}), 400
 
-    userID = data["userID"]
+            userID = data["userID"]
 
-    if kimlik_thread and kimlik_thread.is_alive():
-        stop_kimlik_thread.set()
-        kimlik_thread.join(timeout=5)
-        if kimlik_thread.is_alive():
-            print("Uyarı: Kimlik doğrulama thread'i zamanında durdurulamadı.")
+            if kimlik_thread and kimlik_thread.is_alive():
+                stop_kimlik_thread.set()
+                kimlik_thread.join(timeout=5)
+                if kimlik_thread.is_alive():
+                    print("Uyarı: Kimlik doğrulama thread'i zamanında durdurulamadı.")
 
-    kayit_result = menu_yeni_kayit(userID)
+            kayit_result = menu_yeni_kayit(userID)
 
-    stop_kimlik_thread.clear()
-    kimlik_thread = threading.Thread(target=menu_kimlik_dogrulama, args=(stop_kimlik_thread,))
-    kimlik_thread.start()
+            stop_kimlik_thread.clear()
+            kimlik_thread = threading.Thread(target=menu_kimlik_dogrulama, args=(stop_kimlik_thread,))
+            kimlik_thread.start()
 
-    return jsonify(kayit_result)
+            return jsonify(kayit_result), 200
+        else:
+            return jsonify({"message": "Invalid or expired JWT"}), 401
+    else:
+        return jsonify({"message": "No JWT provided"}), 400
+
 
 if __name__ == "__main__":
     flask_thread = threading.Thread(target=lambda: app.run(host="0.0.0.0", port=5000, use_reloader=False))

@@ -1,10 +1,15 @@
 # Use Arduino IDE believe me i used every other thing and only this worked
+Wiki: https://www.elecrow.com/wiki/Get_Started_with_Arduino_IDE.html
+
+## First Setup
+first add additional board manager url to arduino ide URL:  https://espressif.github.io/arduino-esp32/package_esp32_index.json
+
+then install this in the board manager esp32 > 2.0.15
+
 ## Libraries 
 lvgl > 8.3.3
 
 LovyanGFX > 1.2.7
-
-esp32 > 2.0.15
 
 WiFi > 1.2.5
 

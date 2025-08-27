@@ -19,7 +19,7 @@ jwtsecret = "JWT_SECRET"
 # Raspberry Node IP
 raspberryNodeip = 'https://pve.izu.edu.tr/kilitSistemi'
 
-room_id = 1
+room_id = 2
 
 accessType = 1
 

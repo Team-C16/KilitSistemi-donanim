@@ -139,7 +139,7 @@ echo "Servis dosyası oluşturuluyor: $FINGERPRINT_SERVICE_FILE"
 
 sudo bash -c "cat > $FINGERPRINT_SERVICE_FILE" <<EOL
 [Unit]
-Description=QR Generator Service
+Description=Fingerprint Reader Service
 After=default.target
 Requires=display-manager.service
 
@@ -147,8 +147,9 @@ Requires=display-manager.service
 Type=simple
 User=$USER_NAME
 Environment=DISPLAY=:0
-Environment=XDG_RUNTIME_DIR=/run/user/$(id -u $USER_NAME)
-ExecStart=/bin/bash -c "while ! xrandr; do sleep 1; done; /usr/bin/python3 $FINGERPRINT_PYTHON_SCRIPT"
+Environment=XAUTHORITY=/home/$USER_NAME/.Xauthority
+ExecStartPre=/usr/bin/xhost +SI:localuser:$USER_NAME
+ExecStart=/bin/bash -c "while ! xrandr; do sleep 1; done;sudo /usr/bin/python3 $FINGERPRINT_PYTHON_SCRIPT"
 Restart=always
 
 [Install]

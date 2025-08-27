@@ -27,7 +27,7 @@ SECRET_KEY = "JWT_SECRET"
 
 raspberryNodeip = 'https://pve.izu.edu.tr/kilitSistemi'
  
-room_id = 2
+room_id = 1
 
 
 # Tkinter uygulama referansları

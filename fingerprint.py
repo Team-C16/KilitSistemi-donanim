@@ -4,15 +4,13 @@ import threading
 import subprocess
 import serial
 import time
-from gpiozero import LED
 import jwt
 from flask import Flask, request, jsonify
-
+import datetime
 # Tkinter importları
 import tkinter as tk
 from tkinter import font as tkfont
 
-led = LED(12)
 
 # =================================================================================
 # BÖLÜM 1: Sabitler ve Ayarlar
@@ -20,14 +18,14 @@ led = LED(12)
 
 SECRET_KEY = "JWT_SECRET"
 
-room_id = 2
+room_id = 1
 
 API_BASE = "https://pve.izu.edu.tr/kilitSistemi"
 
 kayitMenu = None
 
 # --- Seri Port Ayarları ---
-SERIAL_PORT = '/dev/ttyS0'
+SERIAL_PORT = '/dev/ttyAMA0'
 BAUD_RATE = 115200
 
 # --- Paket Tanımlayıcıları ---
@@ -243,6 +241,28 @@ def api_tum_kullanicilari_al():
         print("API hatası:", r.status_code, r.text)
         return []
 
+def open_door():
+    try:
+        # Token oluşturma (30 saniye geçerli)
+        token = jwt.encode(
+            {"exp": datetime.datetime.utcnow() + datetime.timedelta(seconds=30)},
+            SECRET_KEY,
+            algorithm="HS256"
+        )
+
+        url = f"http://127.0.0.1/verify"
+
+        response = requests.post(
+            url,
+            json={"jwt": token},
+            headers={"Content-Type": "application/json"}
+        )
+
+        return response.json()
+    except Exception as e:
+        print("Error during HTTP request:", e)
+        return {"error": "Failed to communicate with the Arduino server"}
+
 def menu_kimlik_dogrulama(stop_event=None):
     print("\n--- KİMLİK DOĞRULAMA BAŞLADI ---")
     while not stop_event.is_set():
@@ -266,7 +286,7 @@ def menu_kimlik_dogrulama(stop_event=None):
             
             hide_notification()
             
-            show_notification("Kontrol Ediliyor", duration=2)
+            show_notification("Okunuyor...", duration=2)
             kayitli_kullanicilar = api_tum_kullanicilari_al()
             if goruntu_al() != ERR_SUCCESS or sablon_olustur(0) != ERR_SUCCESS:
                 print("HATA: Parmak izi okunamadı.")
@@ -285,10 +305,7 @@ def menu_kimlik_dogrulama(stop_event=None):
                 if sablonlari_eslestir(0, 1):
                     print(f"\n✅ KİMLİK DOĞRULANDI")
                     eslesme_bulundu = True
-                    led.on()
-                    show_notification("Kilit Açık!", duration=10, color='green')
-                    time.sleep(10)
-                    led.off()
+                    open_door()
                     break
 
             if not eslesme_bulundu:
@@ -345,14 +362,8 @@ def menu_yeni_kayit(userID):
             
             time.sleep(0.1)
 
-        # Parmak algılandıktan sonra çekilmesini bekle
         hide_notification()
-        message_cek = "Parmağınızı çekin"
-        show_notification(message_cek, duration=0)
-        while parmak_algila():
-            time.sleep(0.1)
-
-        hide_notification()
+        show_notification("Okunuyor...", duration=0)
 
         if goruntu_al() != ERR_SUCCESS:
             show_notification("Görüntü alınamadı", duration=2, color='red')

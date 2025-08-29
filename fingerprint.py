@@ -242,6 +242,7 @@ def api_tum_kullanicilari_al():
         return []
 
 def open_door():
+    hide_notification()
     try:
         # Token oluşturma (30 saniye geçerli)
         token = jwt.encode(
@@ -295,6 +296,9 @@ def menu_kimlik_dogrulama(stop_event=None):
                 continue
 
             eslesme_bulundu = False
+            hide_notification()
+            show_notification("Kontrol Ediliyor...",duration=2)
+
             for user in kayitli_kullanicilar:
                 sablon_b64 = user.get("fingerprint")
                 if not sablon_b64:

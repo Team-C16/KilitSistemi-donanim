@@ -56,6 +56,8 @@ void my_disp_flush(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color
 const char* ssid = "SUPERONLINE_WiFi_99A7";
 const char* password = "UPRX4RHWHXXE";
 const String jwtSecret = "DENEME";
+const int room_id = 2;
+const String base_url = "https://pve.izu.edu.tr/kilitSistemi/";
 AsyncWebServer server(80);
 
 lv_obj_t* qrAltYazi = nullptr;
@@ -97,14 +99,14 @@ void setup() {
   lv_style_init(&NormalFontStyle);
   lv_style_set_text_font(&NormalFontStyle, &turkish_24);
 
-lv_timer_handler();// To Update Spinner
+  lv_timer_handler();// To Update Spinner
 
   // --- UI: QR ve Tablo ---
   // QR kodu sola koy
   qr = lv_qrcode_create(main_screen, 200, lv_color_black(), lv_color_white());
   lv_obj_align(qr, LV_ALIGN_LEFT_MID, 10, 0);
   
-lv_timer_handler();// To Update Spinner
+  lv_timer_handler();// To Update Spinner
 
   // Room Name
   qrAltYazi = lv_label_create(main_screen);
@@ -112,20 +114,20 @@ lv_timer_handler();// To Update Spinner
   lv_obj_align_to(qrAltYazi, qr, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 10);
   lv_obj_add_style(qrAltYazi, &NormalFontStyle, LV_PART_MAIN);
   
-lv_timer_handler();// To Update Spinner
+  lv_timer_handler();// To Update Spinner
 
   // Table
   
 
   
-lv_timer_handler();// To Update Spinner
+  lv_timer_handler();// To Update Spinner
 
   statusLabel = lv_label_create(main_screen);
   lv_label_set_text(statusLabel, "");
   lv_obj_align_to(statusLabel,qrAltYazi, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 30);
   lv_obj_add_style(statusLabel, &NormalFontStyle, LV_PART_MAIN);
   
-lv_timer_handler();// To Update Spinner
+  lv_timer_handler();// To Update Spinner
   // --- WiFi ---
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
@@ -141,7 +143,7 @@ lv_timer_handler();// To Update Spinner
       return;
     }
     String token = request->getParam("token", true)->value();
-    if (token.indexOf(jwtSecret) != -1) {
+    if (verifyJWT(token,jwtSecret)) {
       lv_label_set_text(statusLabel, "Kilit Açık");
       unlockTime = millis();   // Açılma zamanı kaydediliyor
       lockOpen = true; 
@@ -151,9 +153,13 @@ lv_timer_handler();// To Update Spinner
     }
   });
   server.begin();
-lv_timer_handler(); // To Update Spinner
-  configTime(3 * 3600, 0, "pool.ntp.org", "time.nist.gov");
-lv_timer_handler();
+
+  lv_timer_handler(); // To Update Spinner
+
+  configTime(3 * 3600, 0, "time.ume.tubitak.gov.tr", "0.tr.pool.ntp.org");
+
+
+  lv_timer_handler();
   struct tm timeinfo;
   Serial.println("Zaman senkronize ediliyor...");
   while (!getLocalTime(&timeinfo)) {
@@ -186,11 +192,11 @@ void loop() {
     Serial.println(token);
 
     HTTPClient http;
-    http.begin("https://pve.izu.edu.tr/kilitSistemi/getQRCodeToken");
+    http.begin(base_url + "/getQRCodeToken");
     http.addHeader("Content-Type", "application/json");
 
     DynamicJsonDocument doc(256);
-    doc["room_id"] = 2;
+    doc["room_id"] = room_id;
     doc["token"] = token;
     doc["room_name"] = 1;
 

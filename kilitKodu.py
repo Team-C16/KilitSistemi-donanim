@@ -120,7 +120,7 @@ def save_ip():
     print(local_ip)
     url = f"{raspberryNodeip}/saveIPForRaspberry"
     headers = {"Content-Type": "application/json"}
-    data = f'{{"room_id": {room_id}, "jwtToken": "{encoded_jwt}", "ip": "{local_ip}"}}'
+    data = f'{{"room_id": {room_id}, "token": "{encoded_jwt}", "ip": "{local_ip}"}}'
     try:
         response = requests.post(url, headers=headers, data=data)
         if response.status_code == 200:

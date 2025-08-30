@@ -20,6 +20,8 @@ SECRET_KEY = "JWT_SECRET"
 
 room_id = 1
 
+accessType = 1
+
 API_BASE = "https://pve.izu.edu.tr/kilitSistemi"
 
 kayitMenu = None
@@ -233,7 +235,7 @@ def api_tum_kullanicilari_al():
         algorithm="HS256"
     )
     headers = {"Content-Type": "application/json"}
-    data = f'{{"room_id": {room_id}, "jwtToken": "{encoded_jwt}"}}'
+    data = f'{{"room_id": {room_id}, "token": "{encoded_jwt}"}}'
     r = requests.get(f"{API_BASE}/getAllFingerprints",headers= headers, data=data)
     if r.status_code == 200:
         return r.json()
@@ -256,6 +258,26 @@ def open_door():
         response = requests.post(
             url,
             json={"jwt": token},
+            headers={"Content-Type": "application/json"}
+        )
+
+        return response.json()
+    except Exception as e:
+        print("Error during HTTP request:", e)
+        return {"error": "Failed to communicate with the Arduino server"}
+
+def logAccess(userID):
+    try:
+        # Token oluşturma (30 saniye geçerli)
+        token = jwt.encode(
+            {"exp": datetime.datetime.utcnow() + datetime.timedelta(seconds=30)},
+            SECRET_KEY,
+            algorithm="HS256"
+        )
+
+        response = requests.post(
+            f"{API_BASE}/logFingerprintAccess",
+            json={"token": token,"accessType":accessType,"userID":userID,"room_id": room_id},
             headers={"Content-Type": "application/json"}
         )
 
@@ -309,6 +331,7 @@ def menu_kimlik_dogrulama(stop_event=None):
                 if sablonlari_eslestir(0, 1):
                     print(f"\n✅ KİMLİK DOĞRULANDI")
                     eslesme_bulundu = True
+                    logAccess(user.get("userID"))
                     open_door()
                     break
 
@@ -331,7 +354,7 @@ def api_kullanici_ekle(userID, sablon_verisi):
         algorithm="HS256"
     )
     data = {
-        "jwtToken": encoded_jwt,
+        "token": encoded_jwt,
         "room_id": room_id,
         "userID": userID,
         "fingerprint": base64.b64encode(sablon_verisi).decode("utf-8")

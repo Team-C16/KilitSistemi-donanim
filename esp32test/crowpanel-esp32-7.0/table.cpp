@@ -2,6 +2,7 @@
 #include "turkish_24.h"
 #include <time.h>
 #include <string.h>  // strlen için
+#include <ArduinoJson.h>
 
 // Event callback fonksiyonunun bildirimi
 static void table_draw_cb(lv_event_t* e);
@@ -33,7 +34,7 @@ void getNext5DayNames(const char* days[5]) {
     }
 }
 
-void create_schedule_table(lv_obj_t* parent, lv_obj_t* qr) {
+lv_obj_t* create_schedule_table(lv_obj_t* parent, lv_obj_t* qr) {
     lv_coord_t screen_w = 800;
     lv_coord_t screen_h = 480;
 
@@ -114,6 +115,7 @@ void create_schedule_table(lv_obj_t* parent, lv_obj_t* qr) {
     // Çerçeve ve padding
     lv_obj_set_style_border_width(table, 1, LV_PART_MAIN);
     lv_obj_set_style_pad_all(table, 2, LV_PART_MAIN);
+    return table;
 }
 
 // Event callback fonksiyonu
@@ -161,4 +163,102 @@ static void table_draw_cb(lv_event_t* e) {
         dsc->rect_dsc->border_color = lv_color_hex(0xFFFF00); // Sarı
         dsc->rect_dsc->border_width = 5;                      // İstersen kalınlık da arttır
     }
+}
+
+// Bu fonksiyon JSON'daki dolu saatleri tabloya işler
+void mark_schedule_from_json(lv_obj_t* table, const char* jsonStr) {
+    StaticJsonDocument<1024> doc;
+    DeserializationError error = deserializeJson(doc, jsonStr);
+    if (error) {
+        Serial.println("JSON parse hatası!");
+        return;
+    }
+
+    JsonArray schedules = doc["schedule"].as<JsonArray>();
+
+    const int hour_start = 9;
+    const int hour_end   = 18;
+
+    // Şimdiki zaman
+    time_t now = time(NULL);
+    struct tm t;
+    localtime_r(&now, &t);
+
+    // Önce tüm tabloyu BOŞ olarak doldur
+    uint16_t rows = lv_table_get_row_cnt(table);
+    uint16_t cols = lv_table_get_col_cnt(table);
+
+    for (uint16_t r = 1; r < rows; r++) {     // 0. satır header
+        for (uint16_t c = 1; c < cols; c++) { // 0. kolon saatler
+            lv_table_set_cell_value(table, r, c, "");
+        }
+    }
+
+    // JSON'daki doluları işle
+    for (JsonObject sch : schedules) {
+        const char* hourStr = sch["hour"];
+        const char* dayStr  = sch["day"];
+        int confirm = sch["confirm"];
+
+        if (confirm != 1) continue;
+
+        int h = atoi(hourStr);
+        if (h < hour_start || h > hour_end) continue;
+
+        struct tm event_tm = {};
+        strptime(dayStr, "%Y-%m-%dT%H:%M:%S", &event_tm);
+        time_t event_time = mktime(&event_tm);
+
+        double diff_days = difftime(event_time, now) / (60*60*24);
+        int col_offset = (int)diff_days;
+        if (col_offset < 0 || col_offset > 4) continue;
+
+        int row = (h - hour_start) + 1;
+        int col = col_offset + 1;
+
+        lv_table_set_cell_value(table, row, col, "DOLU");
+    }
+}
+lv_obj_t* create_details_screen(lv_obj_t* parent, lv_obj_t* qr, const char* text) {
+    // Ekran boyutları
+    lv_coord_t screen_w = 800;
+    lv_coord_t screen_h = 480;
+
+    // QR kod objesinin pozisyonunu al
+    lv_area_t qr_area;
+    lv_obj_get_coords(qr, &qr_area);
+
+    lv_coord_t container_x = qr_area.x2;
+    lv_coord_t container_w = screen_w - container_x;
+    lv_coord_t container_h = screen_h;
+
+    // Container oluştur
+    lv_obj_t* container = lv_obj_create(parent);
+    lv_obj_set_size(container, container_w, container_h);
+    lv_obj_set_pos(container, container_x, 0);
+    lv_obj_set_scrollbar_mode(container, LV_SCROLLBAR_MODE_OFF);
+
+    // Table ile aynı stil
+    static lv_style_t style_turkish_24;
+    lv_style_init(&style_turkish_24);
+    lv_style_set_text_font(&style_turkish_24, &turkish_24);
+    lv_style_set_pad_top(&style_turkish_24, 9);
+    lv_style_set_pad_bottom(&style_turkish_24, 9);
+    lv_style_set_text_line_space(&style_turkish_24, 4);
+    lv_style_set_pad_left(&style_turkish_24, 0);
+    lv_style_set_pad_right(&style_turkish_24, 0);
+    lv_style_set_text_align(&style_turkish_24, LV_TEXT_ALIGN_CENTER);
+    lv_style_set_border_width(&style_turkish_24, 1);
+    lv_style_set_border_color(&style_turkish_24, lv_color_black());
+    lv_style_set_border_side(&style_turkish_24, LV_BORDER_SIDE_FULL);
+
+    lv_obj_add_style(container, &style_turkish_24, LV_PART_MAIN);
+
+    // Ortada bir label
+    lv_obj_t* label = lv_label_create(container);
+    lv_label_set_text(label, text);
+    lv_obj_add_style(label, &style_turkish_24, LV_PART_MAIN);
+    lv_obj_center(label);
+
+    return container;
 }

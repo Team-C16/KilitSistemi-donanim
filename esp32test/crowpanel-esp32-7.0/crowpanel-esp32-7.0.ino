@@ -53,15 +53,21 @@ void my_disp_flush(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color
 }
 
 // --- Global ayarlar ---
-const char* ssid = "SUPERONLINE_WiFi_99A7";
-const char* password = "UPRX4RHWHXXE";
+const char* ssid = "kerem";
+const char* password = "Kerem332.";
 const String jwtSecret = "DENEME";
 const int room_id = 2;
-const String base_url = "https://pve.izu.edu.tr/kilitSistemi/";
+const String base_url = "https://pve.izu.edu.tr/kilitSistemi";
 AsyncWebServer server(80);
 
 lv_obj_t* qrAltYazi = nullptr;
 lv_obj_t* statusLabel = nullptr;
+lv_obj_t* table = nullptr;
+lv_obj_t* other_table = nullptr;
+bool showingMainTable = true;
+unsigned long lastSwitch = 0;
+const unsigned long mainTableDuration = 45000;  // 45 saniye
+const unsigned long otherTableDuration = 15000; // 15 saniye
 
 extern const lv_font_t open_sans_18; 
 
@@ -173,65 +179,176 @@ void setup() {
   lv_scr_load(main_screen); // load main screen before deleting loading
   lv_obj_del(loading_screen);
 
-  create_schedule_table(main_screen, qr);
+  table = create_schedule_table(main_screen, qr);
 }
+
+void handleTableToggle() {
+    if (!other_table) return; // diğer tablo yoksa çık
+    unsigned long nowMillis = millis();
+    unsigned long duration = showingMainTable ? mainTableDuration : otherTableDuration;
+
+    if (nowMillis - lastSwitch >= duration) {
+        lastSwitch = nowMillis;
+        showingMainTable = !showingMainTable;
+
+        if (showingMainTable) {
+            lv_obj_clear_flag(table, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(other_table, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(table, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_clear_flag(other_table, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+}
+
+String getScheduleDetails(int rendezvous_id)
+{
+  String response;  
+  String token = createJWT(jwtSecret, 30);
+
+  HTTPClient http;
+  http.begin(base_url + "/getScheduleDetails");
+  http.addHeader("Content-Type", "application/json");
+
+  DynamicJsonDocument doc(1024);
+  doc["room_id"] = room_id;
+  doc["rendezvous_id"] = rendezvous_id;   // Burada parametreyi de gönderiyoruz
+  doc["token"] = token;
+
+  String requestBody;
+  serializeJson(doc, requestBody);
+
+  int code = http.POST(requestBody);
+  response = http.getString();
+  http.end();
+
+  Serial.println(response);
+  return response;  // artık normal String döndürüyor
+}
+
+
+
 
 void loop() {
   static unsigned long lastJwt = 0;
-  if (lockOpen) {
-    if (millis() - unlockTime > 10000) {  // 10 saniye geçti
-      lv_label_set_text(statusLabel, "");
-      lockOpen = false;
+
+    // Kilit kontrolü
+    if (lockOpen) {
+        if (millis() - unlockTime > 10000) {  // 10 saniye geçti
+            lv_label_set_text(statusLabel, "");
+            lockOpen = false;
+        }
     }
-  }
 
-  if ((millis() - lastJwt > 60000 || lastJwt == 0) && WiFi.status() == WL_CONNECTED) {
-    lastJwt = millis();
+    // JWT ve API kontrolleri
+    if ((millis() - lastJwt > 60000 || lastJwt == 0) && WiFi.status() == WL_CONNECTED) {
+        lastJwt = millis();
 
-    String token = createJWT(jwtSecret, 30);
-    Serial.println(token);
+        String token = createJWT(jwtSecret, 30);
+        Serial.println(token);
 
-    HTTPClient http;
-    http.begin(base_url + "/getQRCodeToken");
-    http.addHeader("Content-Type", "application/json");
+        // -------- 1. İstek: getQRCodeToken --------
+        {
+            HTTPClient http;
+            http.begin(base_url + "/getQRCodeToken");
+            http.addHeader("Content-Type", "application/json");
 
-    DynamicJsonDocument doc(256);
-    doc["room_id"] = room_id;
-    doc["token"] = token;
-    doc["room_name"] = 1;
+            DynamicJsonDocument doc(1024);
+            doc["room_id"] = room_id;
+            doc["token"] = token;
+            doc["room_name"] = 1;
 
-    String requestBody;
-    serializeJson(doc, requestBody);
+            String requestBody;
+            serializeJson(doc, requestBody);
 
-    int code = http.POST(requestBody);
-    String responseBody = http.getString();
+            int code = http.POST(requestBody);
+            String responseBody = http.getString();
+            Serial.println(responseBody);
+            http.end();
 
-    Serial.print("Status code: ");
-    Serial.println(code);
-    Serial.print("Response body: ");
-    Serial.println(responseBody);
-    http.end();
+            if (code == 200) {
+                DynamicJsonDocument reply(1024);
+                if (!deserializeJson(reply, responseBody)) {
+                    String qrToken = reply["token"].as<String>();
+                    String roomName = reply["room_name"].as<String>();
+ 
+                    Serial.println(responseBody);
+                    lv_qrcode_update(qr, qrToken.c_str(), qrToken.length());
+                    lv_label_set_text_fmt(qrAltYazi, "Oda Adı: %s", roomName.c_str());
+                }
+            }
+        }
 
-    if (code == 200) {
-      DynamicJsonDocument reply(256);
-      DeserializationError err = deserializeJson(reply, responseBody);
-      if (!err) {
-        String qrToken = reply["token"].as<String>();
-        String roomName = reply["room_name"].as<String>();
+        // -------- 2. İstek: getSchedule (Ana Tablo) --------
+        {
+            HTTPClient http;
+            http.begin(base_url + "/getSchedule");
+            http.addHeader("Content-Type", "application/json");
 
-        lv_qrcode_update(qr, qrToken.c_str(), qrToken.length());
+            DynamicJsonDocument doc(1024);
+            doc["room_id"] = room_id;
+            doc["token"] = token;
 
-        
-        // Alt yazıya oda adı yaz:
-        lv_label_set_text_fmt(qrAltYazi, "Oda Adı: %s", roomName.c_str());
-      } else {
-        Serial.println("JSON Error");
-      }
-    } else {
-      Serial.println( "HTTP Error: " + code);
+            String requestBody;
+            serializeJson(doc, requestBody);
+
+            int code = http.POST(requestBody);
+            String responseBody = http.getString();
+            http.end();
+            Serial.println(responseBody);
+            if (code == 200) {
+                DynamicJsonDocument reply(1024);
+                if (!deserializeJson(reply, responseBody)) {
+                    mark_schedule_from_json(table, responseBody.c_str());
+
+                    Serial.println(responseBody);
+                    // Şu anki saati al
+                    time_t now = time(NULL);
+                    struct tm t;
+                    localtime_r(&now, &t);
+                    int currentHour = t.tm_hour;
+
+                    const int hour_start = 9;
+                    int row = currentHour - hour_start + 1;  // +1 header
+                    int col = 1; // bugünün kolonu
+
+                    const char* cellValue = lv_table_get_cell_value(table, row, col);
+
+                    if (cellValue && strcmp(cellValue, "DOLU") == 0) {
+                      // Schedule arrayine bak
+                      JsonArray schedule = reply["schedule"].as<JsonArray>();
+                      int rendezvous_id = -1;
+
+                      for (JsonObject item : schedule) {
+                          // "hour" alanından saat bilgisini çıkar
+                          const char* hourStr = item["hour"]; // örn: "16:00:00"
+                          int hour = atoi(hourStr);           // sadece "16" alır
+
+                          if (hour == currentHour) {
+                              rendezvous_id = item["rendezvous_id"].as<int>();
+                              break;
+                          }
+                      }
+
+                      if (rendezvous_id != -1) {
+                          // Eğer other_table daha önce oluşturulmadıysa veya yeniden güncellenmesi gerekiyorsa
+                          if (!other_table) {
+                              String otherJson = getScheduleDetails(rendezvous_id); 
+                              other_table = create_details_screen(lv_scr_act(), qr, otherJson.c_str());
+                              lv_obj_add_flag(other_table, LV_OBJ_FLAG_HIDDEN);
+                          }
+                      }
+                    } else {
+                        other_table = nullptr;
+                        // Saat dolu değilse sadece ana tablo göster
+                        lv_obj_clear_flag(table, LV_OBJ_FLAG_HIDDEN);
+                        if (other_table) lv_obj_add_flag(other_table, LV_OBJ_FLAG_HIDDEN);
+                    }
+                }
+            }
+        }
     }
-  }
-
-  lv_timer_handler();
-  delay(5);
+    handleTableToggle();
+    lv_timer_handler();
+    delay(5);
 }

@@ -99,24 +99,23 @@ echo "Servis dosyası oluşturuluyor: $LOCK_SERVICE_FILE"
 sudo bash -c "cat > $LOCK_SERVICE_FILE" <<EOL
 [Unit]
 Description=Lock Service
-After=graphical.target
-Requires=display-manager.service
-
+After=multi-user.target
 
 [Service]
 Type=simple
-User=$USER_NAME
+User=root
+ProtectSystem=full
+ProtectHome=read-only
 Environment=DISPLAY=:0
-Environment=XAUTHORITY=/home/$USER_NAME/.Xauthority
-ExecStartPre=/usr/bin/xhost +SI:localuser:$USER_NAME
-ExecStart=/bin/bash -c "while ! xrandr; do sleep 1; done; sudo python $LOCK_PYTHON_SCRIPT"
+Environment=XAUTHORITY=/home/pi/.Xauthority
+ExecStartPre=/home/pi/wait_for_x.sh
+ExecStartPre=/usr/bin/xhost +SI:localuser:root
+ExecStart=/usr/bin/python3 /KilitSistemi-donanim/kilitKodu.py
 Restart=always
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
-EOL
-
-
 
 # Servisi etkinleştir ve başlat
 echo "LOCK Servis etkinleştiriliyor ve başlatılıyor..."

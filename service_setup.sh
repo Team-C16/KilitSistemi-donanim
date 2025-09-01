@@ -2,6 +2,9 @@ apt update -y
 apt install python3 -y
 apt install pip -y
 apt-get install xosd-bin -y
+apt install python3-rpi.gpio -y
+apt install python3-gpiozero -y
+apt install x11-xserver-utils -y
 pip install requests qrcode qrcode[pil] pygame jwt time --break-system-packages
 
 
@@ -123,9 +126,6 @@ sudo systemctl daemon-reload
 sudo systemctl enable $LOCK_SERVICE_NAME.service
 sudo systemctl start $LOCK_SERVICE_NAME.service
 
-
-
-
 #Parmak izi Servis adı
 FINGERPRINT_SERVICE_NAME="fingerprint"
 
@@ -154,6 +154,23 @@ Restart=always
 [Install]
 WantedBy=default.target
 EOL
+
+# wait_for_x.sh script lock.service başlamasını beklemek için
+
+WAIT_X_SCRIPT="$DIRECTORY/wait_for_x.sh"
+
+# Create the script file
+sudo bash -c "cat > $WAIT_X_SCRIPT" <<'EOL'
+#!/bin/bash
+# Wait until X server is running
+while ! pgrep Xorg > /dev/null; do
+    sleep 1
+done
+EOL
+
+# Make it executable
+sudo chmod +x $WAIT_X_SCRIPT
+
 
 # Servisi etkinleştir ve başlat
 echo "FINGER Prınt Servis etkinleştiriliyor ve başlatılıyor..."

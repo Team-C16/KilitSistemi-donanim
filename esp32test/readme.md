@@ -17,6 +17,10 @@ ArduinoJson > 7.4.2
 
 ESP Async WebServer > 3.7.8
 
+base64 > 1.3.0 (by Densaugeo)
+
+PubSubClient> 2.8.0
+
 ## Board Settings:
 
 ### Board Name: ESP32S3 Dev Module

@@ -1,5 +1,6 @@
 #include "libs.h"
-
+#define MQTT_MAX_PACKET_SIZE 16384
+#include <PubSubClient.h>
 
 lv_obj_t *qr;
 
@@ -52,13 +53,23 @@ void my_disp_flush(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color
   lv_disp_flush_ready(disp);
 }
 
+unsigned long unlockTime = 0;
+bool lockOpen = false;
+
 // --- Global ayarlar ---
 const char* ssid = "kerem";
 const char* password = "Kerem332.";
 const String jwtSecret = "DENEME";
 const int room_id = 2;
+const int accessType = 1;
 const String base_url = "https://pve.izu.edu.tr/kilitSistemi";
-AsyncWebServer server(80);
+//AsyncWebServer server(80);
+
+const char* mqtt_server = "192.168.1.130";
+const int mqtt_port = 1883;
+const String mqtt_base_topic = String("v1/") + String(room_id).c_str(); 
+WiFiClient espClient;
+PubSubClient mqttClient(espClient);
 
 lv_obj_t* qrAltYazi = nullptr;
 lv_obj_t* statusLabel = nullptr;
@@ -69,10 +80,339 @@ unsigned long lastSwitch = 0;
 const unsigned long mainTableDuration = 45000;  // 45 saniye
 const unsigned long otherTableDuration = 15000; // 15 saniye
 
-extern const lv_font_t open_sans_18; 
+extern const lv_font_t open_sans_18;
 
-unsigned long unlockTime = 0;
-bool lockOpen = false;
+// Response coordination
+String mqttLastResponse = "";
+String mqttLastCorrelation = "";
+String expectedCorrelation = "";
+unsigned long mqttResponseRecvTime = 0;
+
+void mqttCallback(char* topic, byte* payload, unsigned int length) {
+  // Log message details
+  Serial.println("=== MQTT CALLBACK START ===");
+  Serial.print("Topic: ");
+  Serial.println(topic);
+  Serial.print("Message Length: ");
+  Serial.println(length);
+  Serial.print("Free Heap: ");
+  Serial.println(ESP.getFreeHeap());
+  
+  // Check if we have enough memory
+  if (ESP.getFreeHeap() < (length * 2 + 4096)) {
+    Serial.println("ERROR: Not enough memory for message processing");
+    return;
+  }
+  
+  // Check message size limit
+  if (length > (MQTT_MAX_PACKET_SIZE - 256)) {
+    Serial.print("ERROR: Message too large: ");
+    Serial.print(length);
+    Serial.print(" bytes (max: ");
+    Serial.print(MQTT_MAX_PACKET_SIZE - 256);
+    Serial.println(")");
+    return;
+  }
+  
+  // Create message string with proper memory management
+  String msg;
+  msg.reserve(length + 100); // Reserve memory to prevent fragmentation
+  
+  for (unsigned int i = 0; i < length; i++) {
+    msg += (char)payload[i];
+  }
+  
+  String t = String(topic);
+  
+  // Print first 300 characters of message for debugging
+  Serial.print("Message preview: ");
+  Serial.println(msg.substring(0, min((int)msg.length(), 300)));
+  if (msg.length() > 300) {
+    Serial.println("... (message truncated for display)");
+  }
+  
+  // Process topics
+  String unlockTopic = mqtt_base_topic + "/opendoor";
+  if (t.equals(unlockTopic)) {
+    Serial.println("-> Processing unlock command");
+    processUnlockCommand(msg);
+    return;
+  }
+
+  String qrResponseTopic = mqtt_base_topic + "/qr/response";
+  if (t.equals(qrResponseTopic)) {
+    Serial.println("-> Processing QR response");
+    processQRResponse(msg);
+    return;
+  }
+
+  String scheduleResponseTopic = mqtt_base_topic + "/schedule/response";
+  if (t.equals(scheduleResponseTopic)) {
+    Serial.println("-> Processing schedule response");
+    processScheduleResponse(msg);
+    return;
+  }
+
+  String scheduleDetailsTopic = mqtt_base_topic + "/scheduleDetails/response";
+  if (t.equals(scheduleDetailsTopic)) {
+    Serial.println("-> Processing schedule details response");
+    processScheduleDetailsResponse(msg);
+    return;
+  }
+
+  Serial.println("-> No topic matched");
+  Serial.println("=== MQTT CALLBACK END ===");
+}
+
+// Separate function to handle unlock commands
+void processUnlockCommand(const String& msg) {
+  DynamicJsonDocument doc(1024);
+  DeserializationError error = deserializeJson(doc, msg);
+  
+  if (error) {
+    Serial.print("Unlock JSON error: ");
+    Serial.println(error.c_str());
+    return;
+  }
+  
+  String token = doc["token"] | "";
+  if (verifyJWT(token, jwtSecret)) {
+    lv_label_set_text(statusLabel, "Kilit Açık");
+    unlockTime = millis();
+    lockOpen = true;
+    Serial.println("Door unlocked successfully");
+  } else {
+    lv_label_set_text(statusLabel, "Geçersiz token");
+    Serial.println("Invalid token for unlock");
+  }
+}
+
+// Separate function to handle QR responses
+void processQRResponse(const String& msg) {
+  // Use larger buffer for QR response
+  DynamicJsonDocument reply(2048);
+  DeserializationError error = deserializeJson(reply, msg);
+  
+  if (error) {
+    Serial.print("QR JSON error: ");
+    Serial.println(error.c_str());
+    return;
+  }
+  
+  String qrToken = reply["token"].as<String>();
+  String roomName = reply["room_name"].as<String>();
+  
+  lv_qrcode_update(qr, qrToken.c_str(), qrToken.length());
+  lv_label_set_text_fmt(qrAltYazi, "Oda Adı: %s", roomName.c_str());
+  
+  Serial.println("QR code updated successfully");
+}
+
+// Separate function to handle schedule responses - WITH LARGE BUFFER
+void processScheduleResponse(const String& msg) {
+  Serial.println("*** PROCESSING SCHEDULE RESPONSE ***");
+  
+  // Use much larger buffer for schedule data
+  DynamicJsonDocument reply(12288); // 12KB buffer for large schedule data
+  
+  DeserializationError error = deserializeJson(reply, msg);
+  
+  if (error) {
+    Serial.print("Schedule JSON parsing failed: ");
+    Serial.println(error.c_str());
+    Serial.print("Message length was: ");
+    Serial.println(msg.length());
+    Serial.print("Buffer size was: ");
+    Serial.println(reply.capacity());
+    
+    // Try with an even larger buffer
+    Serial.println("Trying with larger buffer...");
+    DynamicJsonDocument largeReply(20480); // 20KB buffer
+    DeserializationError error2 = deserializeJson(largeReply, msg);
+    
+    if (error2) {
+      Serial.print("Large buffer also failed: ");
+      Serial.println(error2.c_str());
+      return;
+    } else {
+      Serial.println("Large buffer succeeded!");
+      reply = largeReply; // Use the successful parse
+    }
+  }
+  
+  Serial.println("Schedule JSON parsed successfully");
+  Serial.print("Number of schedule items: ");
+  
+  JsonArray schedule = reply["schedule"].as<JsonArray>();
+  Serial.println(schedule.size());
+  
+  // Update the table
+  mark_schedule_from_json(table, msg.c_str());
+
+  // Get current time
+  time_t now = time(NULL);
+  struct tm tmnow;
+  localtime_r(&now, &tmnow);
+  int currentHour = tmnow.tm_hour;
+
+  const int hour_start = 9;
+  int row = currentHour - hour_start + 1;
+  int col = 1;
+  const char* cellValue = lv_table_get_cell_value(table, row, col);
+
+  Serial.print("Current hour: ");
+  Serial.print(currentHour);
+  Serial.print(", Row: ");
+  Serial.print(row);
+  Serial.print(", Cell value: ");
+  Serial.println(cellValue ? cellValue : "NULL");
+
+  // Check if current hour is busy
+  if (cellValue && strcmp(cellValue, "DOLU") == 0) {
+    Serial.println("Current slot is busy, looking for rendezvous details");
+    
+    int rendezvous_id = -1;
+    for (JsonObject item : schedule) {
+      const char* hourStr = item["hour"];
+      if (hourStr) {
+        // Parse hour from "HH:MM:SS" format
+        int hour = String(hourStr).substring(0, 2).toInt();
+        Serial.print("Checking hour: ");
+        Serial.print(hour);
+        Serial.print(" against current: ");
+        Serial.println(currentHour);
+        
+        if (hour == currentHour) {
+          rendezvous_id = item["rendezvous_id"].as<int>();
+          Serial.print("Found matching rendezvous_id: ");
+          Serial.println(rendezvous_id);
+          break;
+        }
+      }
+    }
+    
+    if (rendezvous_id != -1 && !other_table) {
+      Serial.println("Requesting schedule details");
+      DynamicJsonDocument d(1024);
+      d["room_id"] = room_id;
+      d["rendezvous_id"] = rendezvous_id;
+      d["token"] = createJWT(jwtSecret, 30);
+      String rb;
+      serializeJson(d, rb);
+      publishRequest(mqtt_base_topic + "/scheduleDetails", rb);
+    }
+  } else {
+    Serial.println("Current slot is empty");
+    if (other_table) {
+      lv_obj_del(other_table);
+      other_table = nullptr;
+    }
+    lv_obj_clear_flag(table, LV_OBJ_FLAG_HIDDEN);
+  }
+  
+  Serial.println("*** SCHEDULE RESPONSE PROCESSING COMPLETE ***");
+}
+
+// Separate function to handle schedule details responses
+void processScheduleDetailsResponse(const String& msg) {
+  DynamicJsonDocument reply(4096);
+  DeserializationError error = deserializeJson(reply, msg);
+  
+  if (error) {
+    Serial.print("Schedule details JSON error: ");
+    Serial.println(error.c_str());
+    return;
+  }
+  
+  if (other_table) {
+    lv_obj_del(other_table);
+    other_table = nullptr;
+  }
+  
+  other_table = create_details_screen(lv_scr_act(), qr, msg.c_str());
+  lv_obj_add_flag(other_table, LV_OBJ_FLAG_HIDDEN);
+  
+  Serial.println("Schedule details screen created");
+}
+
+// Fix the mqttReconnect function to ensure proper subscription
+bool mqttReconnect() {
+  if (!mqttClient.connected()) {
+    String token = createJWT(jwtSecret, 30);
+    Serial.print("MQTT connecting...");
+    
+    // Use a unique client ID to avoid conflicts
+    String clientId = "crowpanel-" + String(room_id) + "-" + String(random(0xffff), HEX);
+    
+    if (mqttClient.connect(clientId.c_str(), String(room_id).c_str(), token.c_str())) {
+      Serial.println("connected");
+      
+      // Subscribe to topics with QoS 1 for reliability
+      String scheduleResponseTopic = mqtt_base_topic + "/schedule/response";
+      String unlockTopic = mqtt_base_topic + "/opendoor";
+      String qrResponseTopic = mqtt_base_topic + "/qr/response";
+      String scheduleDetailsTopic = mqtt_base_topic + "/scheduleDetails/response";
+      
+      Serial.print("Subscribing to: ");
+      Serial.println(scheduleResponseTopic);
+      bool sub1 = mqttClient.subscribe(scheduleResponseTopic.c_str(), 1);
+      
+      Serial.print("Subscribing to: ");
+      Serial.println(unlockTopic);
+      bool sub2 = mqttClient.subscribe(unlockTopic.c_str(), 1);
+      
+      Serial.print("Subscribing to: ");
+      Serial.println(qrResponseTopic);
+      bool sub3 = mqttClient.subscribe(qrResponseTopic.c_str(), 1);
+      
+      Serial.print("Subscribing to: ");
+      Serial.println(scheduleDetailsTopic);
+      bool sub4 = mqttClient.subscribe(scheduleDetailsTopic.c_str(), 1);
+      
+      Serial.print("Subscription results: ");
+      Serial.print(sub1); Serial.print(" ");
+      Serial.print(sub2); Serial.print(" ");
+      Serial.print(sub3); Serial.print(" ");
+      Serial.println(sub4);
+      
+    } else {
+      Serial.print("failed, rc=");
+      Serial.print(mqttClient.state());
+      Serial.println(" try again in 2s");
+      return false;
+    }
+  }
+  return true;
+}
+
+// Fix the publishRequest function with better error handling
+bool publishRequest(const String &topic, const String &payload) {
+  Serial.print("Publishing to topic: ");
+  Serial.println(topic);
+  Serial.print("Payload: ");
+  Serial.println(payload);
+  
+  unsigned long startConnect = millis();
+  while (!mqttClient.connected() && millis() - startConnect < 5000) { // Increased timeout
+    Serial.println("MQTT not connected, attempting reconnection...");
+    mqttReconnect();
+    delay(100);
+  }
+  
+  if (!mqttClient.connected()) {
+    Serial.println("Failed to connect to MQTT broker");
+    return false;
+  }
+  
+  // Use QoS 1 for reliable delivery
+  bool result = mqttClient.publish(topic.c_str(), payload.c_str(), true); // retained = true
+  Serial.print("Publish result: ");
+  Serial.println(result ? "SUCCESS" : "FAILED");
+  
+  return result;
+}
+
+
 void setup() {
   Serial.begin(115200);
   pinMode(2, OUTPUT);
@@ -136,29 +476,17 @@ void setup() {
   lv_timer_handler();// To Update Spinner
   // --- WiFi ---
   WiFi.begin(ssid, password);
+  WiFi.setSleep(false);
   while (WiFi.status() != WL_CONNECTED) {
     delay(100); Serial.print(".");
     lv_timer_handler();  
   }
   Serial.println("\nWiFi bağlı");
 
-  server.on("/unlock", HTTP_POST, [](AsyncWebServerRequest *request){
-    lv_label_set_text(statusLabel, "Durum: Istek Geldi");
-    if (!request->hasParam("token", true)) {
-      request->send(400, "text/plain", "Token yok");
-      return;
-    }
-    String token = request->getParam("token", true)->value();
-    if (verifyJWT(token,jwtSecret)) {
-      lv_label_set_text(statusLabel, "Kilit Açık");
-      unlockTime = millis();   // Açılma zamanı kaydediliyor
-      lockOpen = true; 
-      request->send(200, "text/plain", "Doğrulandı");
-    } else {
-      request->send(401, "text/plain", "Geçersiz token");
-    }
-  });
-  server.begin();
+  mqttClient.setServer(mqtt_server, mqtt_port);
+  mqttClient.setCallback(mqttCallback);
+  mqttClient.setSocketTimeout(15);
+  mqttReconnect();
 
   lv_timer_handler(); // To Update Spinner
 
@@ -201,153 +529,43 @@ void handleTableToggle() {
     }
 }
 
-String getScheduleDetails(int rendezvous_id)
-{
-  String response;  
-  String token = createJWT(jwtSecret, 30);
-
-  HTTPClient http;
-  http.begin(base_url + "/getScheduleDetails");
-  http.addHeader("Content-Type", "application/json");
-
-  DynamicJsonDocument doc(1024);
-  doc["room_id"] = room_id;
-  doc["rendezvous_id"] = rendezvous_id;   // Burada parametreyi de gönderiyoruz
-  doc["token"] = token;
-
-  String requestBody;
-  serializeJson(doc, requestBody);
-
-  int code = http.POST(requestBody);
-  response = http.getString();
-  http.end();
-
-  Serial.println(response);
-  return response;  // artık normal String döndürüyor
-}
 
 
 
+unsigned long lastJwt = 0;
+unsigned long lastSchedule = 0;
+const unsigned long interval = 60000;   // 60 sn
+const unsigned long offset = 30000;     // 30 sn offset
 
 void loop() {
-  static unsigned long lastJwt = 0;
+    unsigned long now = millis();
 
-    // Kilit kontrolü
-    if (lockOpen) {
-        if (millis() - unlockTime > 10000) {  // 10 saniye geçti
-            lv_label_set_text(statusLabel, "");
-            lockOpen = false;
-        }
+    // QR isteği: her 60 sn
+    if (now - lastJwt > interval || lastJwt == 0) {
+        lastJwt = now;
+
+        DynamicJsonDocument doc(1024);
+        doc["room_name"] = 1;
+        doc["accessType"] = accessType;
+        String requestBody;
+        serializeJson(doc, requestBody);
+
+        publishRequest(mqtt_base_topic + "/qr", requestBody);
+        Serial.println("QR called");
     }
 
-    // JWT ve API kontrolleri
-    if ((millis() - lastJwt > 60000 || lastJwt == 0) && WiFi.status() == WL_CONNECTED) {
-        lastJwt = millis();
+    // Schedule isteği: 30 sn offset ile
+    if (now - lastSchedule > interval) {
+        // offset kontrolü: ilk çağrıda lastSchedule = millis() - offset yap
+        if (lastSchedule == 0) lastSchedule = now - offset;
 
-        String token = createJWT(jwtSecret, 30);
-        Serial.println(token);
+        lastSchedule = now;
 
-        // -------- 1. İstek: getQRCodeToken --------
-        {
-            HTTPClient http;
-            http.begin(base_url + "/getQRCodeToken");
-            http.addHeader("Content-Type", "application/json");
-
-            DynamicJsonDocument doc(1024);
-            doc["room_id"] = room_id;
-            doc["token"] = token;
-            doc["room_name"] = 1;
-
-            String requestBody;
-            serializeJson(doc, requestBody);
-
-            int code = http.POST(requestBody);
-            String responseBody = http.getString();
-            Serial.println(responseBody);
-            http.end();
-
-            if (code == 200) {
-                DynamicJsonDocument reply(1024);
-                if (!deserializeJson(reply, responseBody)) {
-                    String qrToken = reply["token"].as<String>();
-                    String roomName = reply["room_name"].as<String>();
- 
-                    Serial.println(responseBody);
-                    lv_qrcode_update(qr, qrToken.c_str(), qrToken.length());
-                    lv_label_set_text_fmt(qrAltYazi, "Oda Adı: %s", roomName.c_str());
-                }
-            }
-        }
-
-        // -------- 2. İstek: getSchedule (Ana Tablo) --------
-        {
-            HTTPClient http;
-            http.begin(base_url + "/getSchedule");
-            http.addHeader("Content-Type", "application/json");
-
-            DynamicJsonDocument doc(1024);
-            doc["room_id"] = room_id;
-            doc["token"] = token;
-
-            String requestBody;
-            serializeJson(doc, requestBody);
-
-            int code = http.POST(requestBody);
-            String responseBody = http.getString();
-            http.end();
-            Serial.println(responseBody);
-            if (code == 200) {
-                DynamicJsonDocument reply(1024);
-                if (!deserializeJson(reply, responseBody)) {
-                    mark_schedule_from_json(table, responseBody.c_str());
-
-                    Serial.println(responseBody);
-                    // Şu anki saati al
-                    time_t now = time(NULL);
-                    struct tm t;
-                    localtime_r(&now, &t);
-                    int currentHour = t.tm_hour;
-
-                    const int hour_start = 9;
-                    int row = currentHour - hour_start + 1;  // +1 header
-                    int col = 1; // bugünün kolonu
-
-                    const char* cellValue = lv_table_get_cell_value(table, row, col);
-
-                    if (cellValue && strcmp(cellValue, "DOLU") == 0) {
-                      // Schedule arrayine bak
-                      JsonArray schedule = reply["schedule"].as<JsonArray>();
-                      int rendezvous_id = -1;
-
-                      for (JsonObject item : schedule) {
-                          // "hour" alanından saat bilgisini çıkar
-                          const char* hourStr = item["hour"]; // örn: "16:00:00"
-                          int hour = atoi(hourStr);           // sadece "16" alır
-
-                          if (hour == currentHour) {
-                              rendezvous_id = item["rendezvous_id"].as<int>();
-                              break;
-                          }
-                      }
-
-                      if (rendezvous_id != -1) {
-                          // Eğer other_table daha önce oluşturulmadıysa veya yeniden güncellenmesi gerekiyorsa
-                          if (!other_table) {
-                              String otherJson = getScheduleDetails(rendezvous_id); 
-                              other_table = create_details_screen(lv_scr_act(), qr, otherJson.c_str());
-                              lv_obj_add_flag(other_table, LV_OBJ_FLAG_HIDDEN);
-                          }
-                      }
-                    } else {
-                        other_table = nullptr;
-                        // Saat dolu değilse sadece ana tablo göster
-                        lv_obj_clear_flag(table, LV_OBJ_FLAG_HIDDEN);
-                        if (other_table) lv_obj_add_flag(other_table, LV_OBJ_FLAG_HIDDEN);
-                    }
-                }
-            }
-        }
+        publishRequest(mqtt_base_topic + "/schedule", "");
+        Serial.println("Schedule called");
     }
+
+    mqttClient.loop();
     handleTableToggle();
     lv_timer_handler();
     delay(5);

@@ -21,7 +21,7 @@ jwtsecret = "DENEME"
 
 # Raspberry Node IP
 raspberryNodeip = 'https://pve.izu.edu.tr/kilitSistemi'
-mqttbrokerip = "172.28.6.227"
+mqttbrokerip = "192.168.1.130"
 mqttbrokerport = 1883
 room_id = 2
 
@@ -147,21 +147,47 @@ def generate_mqtt_password():
     }
     return jwt.encode(payload, jwtsecret, algorithm="HS256")
 
+def on_disconnect(client, userdata, rc):
+    print(f"[MQTT] Disconnect oldu, rc={rc}")
+    if rc != 0:
+        print("[MQTT] Tekrar bağlanılıyor...")
+        reconnect()
+
+def reconnect():
+    while True:
+        try:
+            token = generate_mqtt_password()
+            client.username_pw_set(f"{room_id}", token)
+            client.reconnect()  # reconnect
+            print(f"[MQTT] Reconnect başarılı, yeni token: {token}")
+            break
+        except Exception as e:
+            print(f"[MQTT] Reconnect başarısız: {e}, 3 sn sonra tekrar denenecek...")
+            time.sleep(3)
+
+def on_connect(client, userdata, flags, rc):
+    if rc == 0:
+        print("[MQTT] Bağlantı başarılı")
+        for topic in topic_handlers.keys():
+            client.subscribe(topic)
+            print(f"[MQTT] Subscribe oldu: {topic}")
+    else:
+        print(f"[MQTT] Bağlantı hatası: rc={rc}")
+
 client = mqtt.Client()
 
 client.username_pw_set(f"{room_id}", generate_mqtt_password())
 
 # Subscriber için callback bağla
 client.on_message = on_mqtt_message
+client.on_connect = on_connect
+client.on_disconnect = on_disconnect
 
 # Broker’a bağlan
 client.connect(f"{mqttbrokerip}", mqttbrokerport, 60)
 
 # Arka planda loop başlat
 client.loop_start()
-
-for topic in topic_handlers.keys():
-    client.subscribe(topic)
 
 # Renk Paleti (Modern, Flat UI)
 COLORS = {

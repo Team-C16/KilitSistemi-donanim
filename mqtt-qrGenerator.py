@@ -22,6 +22,7 @@ jwtsecret = "DENEME"
 # Raspberry Node IP
 raspberryNodeip = 'https://pve.izu.edu.tr/kilitSistemi'
 mqttbrokerip = "172.28.6.227"
+mqttbrokerport = 1883
 room_id = 2
 
 accessType = 1
@@ -154,7 +155,7 @@ client.username_pw_set(f"{room_id}", generate_mqtt_password())
 client.on_message = on_mqtt_message
 
 # Broker’a bağlan
-client.connect(f"{mqttbrokerip}", 1883, 60)
+client.connect(f"{mqttbrokerip}", mqttbrokerport, 60)
 
 # Arka planda loop başlat
 client.loop_start()
@@ -344,34 +345,6 @@ def generate_qr_code_surface(qr_data, screen_width, screen_height):
     
     return final_surface
 
-def fetch_room_name():
-    global room_name
-    # JWT oluşturma (300000 saniye içinde geçersiz olacak şekilde ayarlanır)
-    encoded_jwt = jwt.encode(
-        {
-           "exp": time.time() + 300000
-        },
-        jwtsecret,
-        algorithm="HS256"
-    )
-    print(encoded_jwt)
-    url = f"{raspberryNodeip}/getQRCodeToken"
-    print(url)
-    headers = {"Content-Type": "application/json"}
-    data = f'{{"room_id": {room_id}, "token": "{encoded_jwt}", "room_name": 1, "accessType": "{accessType}"}}'
-    try:
-        response = requests.post(url, headers=headers, data=data)
-        if response.status_code == 200:
-            # Parse the JSON response and get the room_name
-            response_data = response.json()
-            print(response_data)
-            room_name = response_data.get("room_name")  # Oda adını bir kez al ve sakla
-            return room_name
-        else:
-            print(f"API isteği başarısız oldu. Hata kodu: {response.status_code}")
-    except requests.RequestException as e:
-        print(f"API bağlantı hatası: {e}")
-    return None
 
 
 # Ders programı tablosu çizme fonksiyonu
@@ -672,29 +645,6 @@ def lighten_color(color, factor=0.3):
            min(255, int(color[2] + (255 - color[2]) * factor)))
 
 
-def fetch_qr_token():
-    encoded_jwt = jwt.encode(
-        {
-            "exp": time.time() + 300000  # 300000 saniye içinde geçersiz olacak
-        },
-        jwtsecret,
-        algorithm="HS256"
-    )
-    url = f"{raspberryNodeip}/getQRCodeToken"
-    headers = {"Content-Type": "application/json"}
-    data = f'{{"room_id": {room_id}, "token": "{encoded_jwt}", "accessType": "{accessType}"}}'
-    try:
-        response = requests.post(url, headers=headers, data=data)
-        if response.status_code == 200:
-            # Parse the JSON response and get the token
-            response_data = response.json()
-            return response_data.get("token")  # Get the 'token' field from the response
-        else:
-            print(f"API isteği başarısız oldu. Hata kodu: {response.status_code}")
-    except requests.RequestException as e:
-        print(f"API bağlantı hatası: {e}")
-    return None
-
 def draw_text(screen, text, font, color, rect, align_x="left", align_y="top"):
     text_surface = font.render(str(text), True, color)
     text_rect = text_surface.get_rect()
@@ -715,158 +665,7 @@ def draw_text(screen, text, font, color, rect, align_x="left", align_y="top"):
     
     screen.blit(text_surface, text_rect)
 
-def fetch_details_data(rendezvous_id):
-    if not jwtsecret or not raspberryNodeip:
-        print("Missing config")
-        return None
 
-    # 💡 Define mock data here
-    mock_data = {
-        "3": {
-            "dataResult": [{
-                "title": "Toplantı",
-                "message": "The golden sunlight filtered softly through the canopy of ancient trees, casting dappled shadows on the forest floor. A gentle breeze stirred the leaves, carrying with it the faint scent of wildflowers and earth. Somewhere in the distance, birds sang their melodious tunes, creating a peaceful symphony that blended perfectly with the rustling of small animals scurrying through the underbrush. It was a quiet moment of harmony, where nature’s calm seemed to embrace everything around it, inviting any passerby to pause and simply breathe.",
-                "hour": "14:00",
-                "fullName": "kerem",
-                "picture": None,
-                "isGroup": 1
-            }],
-            "groupResult": [
-                {"fullName": "kerem yavuz", "picture": None},
-                {"fullName": "Abdulrahman haffar", "picture": None},
-                {"fullName": "Selim Can", "picture": None},
-                {"fullName": "Hasan Ari", "picture": None},
-                {"fullName": "enes halit", "picture": None},
-                {"fullName": "hakan genc", "picture": None}
-            ]
-        },
-        "6": {
-           "dataResult": [{
-                "title": "Toplantı",
-                "message": "The golden sunlight filtered softly through the canopy of ancient trees, casting dappled shadows on the forest floor. A gentle breeze stirred the leaves, carrying with it the faint scent of wildflowers and earth. Somewhere in the distance, birds sang their melodious tunes, creating a peaceful symphony that blended perfectly with the rustling of small animals scurrying through the underbrush. It was a quiet moment of harmony, where nature’s calm seemed to embrace everything around it, inviting any passerby to pause and simply breathe.",
-                "hour": "17:00",
-                "fullName": "kerem",
-                "picture": None,
-                "isGroup": 1
-            }],
-            "groupResult": [
-                {"fullName": "kerem yavuz", "picture": None},
-                {"fullName": "Abdulrahman haffar", "picture": None},
-                {"fullName": "Selim Can", "picture": None},
-                {"fullName": "Hasan Ari", "picture": None},
-                {"fullName": "enes halit", "picture": None},
-                {"fullName": "hakan genc", "picture": None}
-            ]
-        }
-    }
-
-    try:
-        encoded_jwt = jwt.encode(
-            {"exp": time.time() + 300},
-            jwtsecret,
-            algorithm="HS256"
-        )
-
-        url = f"{raspberryNodeip}/getScheduleDetails"
-        headers = {"Content-Type": "application/json"}
-        payload = {
-            "room_id": room_id,
-            "token": encoded_jwt,
-            "rendezvous_id": rendezvous_id
-        }
-
-        print(f"DEBUG: Requesting {url} with rendezvous_id={rendezvous_id}, room_id={room_id}")
-        response = requests.post(url, headers=headers, data=json.dumps(payload), timeout=10)
-        response.raise_for_status()
-        response_data = response.json()
-        print(f"DEBUG: API response for {rendezvous_id}: {response_data}")
-        return response_data
-
-    except Exception as e:
-        print(f"⚠️ API failed for rendezvous_id {rendezvous_id}, using mock if available. Error: {e}")
-
-        # ✅ Return mock data fallback
-        return mock_data.get(str(rendezvous_id), None)
-
- 
-
-def update_data():
-    global ders_programi
-    try:
-        encoded_jwt = jwt.encode(
-        {
-            "exp": time.time() + 300000  # 300000 saniye içinde geçersiz olacak
-        },
-        jwtsecret,
-        algorithm="HS256"
-        )
-        payload = {
-            "room_id": room_id,
-            "token": encoded_jwt
-        }
-
-        response = requests.post(f"{raspberryNodeip}/getSchedule", json=payload,
-                               timeout=3)
-        response.raise_for_status()
-
-        api_response = response.json()
-        if isinstance(api_response, list) and len(api_response) > 0:
-            new_data = api_response[0]  # Take first item if it's a non-empty list
-        elif isinstance(api_response, dict):
-            new_data = api_response  # Use directly if it's a dictionary
-        else:
-            raise ValueError("API returned invalid data format (expected list or dict)")
-
-        print(new_data)
-
-    except Exception as e:
-        print("⚠️ API bağlantı hatası, sahte veri kullanılıyor:", e)
-        # Fallback data
-        new_data = {
-            "schedule": [
-                {
-                    "title": "Toplantı",
-                    "users": [{  "fullName": "kerem yavuz",
-                                "picture": None},
-                                {"fullName": "Abdulrahman haffar",
-                                "picture": None},
-                                {"fullName": "Selim Can",
-                                "picture": None},
-                                {"fullName": "Hasan Ari",
-                                "picture": None},
-                                {"fullName": "enes halit",
-                                "picture": None},
-                                {"fullName": "hakan genc",
-                                "picture": None}],
-                    "hour": "14:00",
-                    "day": "2025-07-01T14:00:00.000Z",
-                    "fullName": "kerem",
-                    "rendezvous_id": "3",
-                    "description": """The wind carried whispers of forgotten tales across the quiet field.
-                    A single crow circled above, its cry sharp against the fading light.
-                    Below, shadows stretched long, reaching like fingers across the earth.
-                    Somewhere in the distance, a door creaked open with no one near.
-                    The evening held its breath, waiting for something unnamed."""
-                },
-                {
-                    "title": "Sunum",
-                    "users": ["ayşe", "mehmet","burak","serdar", "cevat"],
-                    "hour": "17:00",
-                    "day": "2025-07-01T17:00:00.000Z",
-                    "fullName": "marvan",
-                    "rendezvous_id": "6",
-                    "description": """The wind carried whispers of forgotten tales across the quiet field.
-                    A single crow circled above, its cry sharp against the fading light.
-                    Below, shadows stretched long, reaching like fingers across the earth.
-                    Somewhere in the distance, a door creaked open with no one near.
-                    The evening held its breath, waiting for something unnamed."""
-                }
-            ]
-        }
-
-    global api_data
-    api_data = new_data
-    ders_programi = transform_schedule(new_data)
 
 
 # ONLY FOR DEVELOPMENT SHOULD BE DELETED WHEN USING
@@ -1175,25 +974,11 @@ fonts = {
 running = True
 last_update_time = 0
 qr_surface = None
-room_name = "Örnek Oda"  # Varsayılan oda adı
+room_name = "-"  # Varsayılan oda adı
 
 clock = pygame.time.Clock()
 FPS = 1  # Increased FPS for smoother animations
 
-# İlk oda adını al
-#fetched_room_name = fetch_room_name()
-#if fetched_room_name:
-#    room_name = fetched_room_name
-
-# İlk QR kodunu al
-#qr_token = fetch_qr_token()
-#if qr_token:
-#    qr_surface = generate_qr_code_surface(qr_token, screen_width, screen_height)
-
-
-
-#update_data()
-#draw_schedule_table(screen, fonts)
 
 room_text = fonts['bold'].render("Toplantı Odası 101", True, (0, 0, 0))
 times = 0

@@ -10,7 +10,7 @@
 #include <ESPAsyncWebServer.h>
 #include <base64.h>
 #include <time.h>
-
+#include <PubSubClient.h>
 #include "jwt_helper.h"
 #include "table.h"
 #include "turkish_24.h"

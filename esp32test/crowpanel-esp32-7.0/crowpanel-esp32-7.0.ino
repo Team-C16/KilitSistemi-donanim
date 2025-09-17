@@ -1,6 +1,6 @@
 #include "libs.h"
 #define MQTT_MAX_PACKET_SIZE 16384
-#include <PubSubClient.h>
+
 
 lv_obj_t *qr;
 
@@ -57,15 +57,15 @@ unsigned long unlockTime = 0;
 bool lockOpen = false;
 
 // --- Global ayarlar ---
-const char* ssid = "kerem";
-const char* password = "Kerem332.";
+const char* ssid = "BlokZincirLab";
+const char* password = "Network123!";
 const String jwtSecret = "DENEME";
 const int room_id = 2;
 const int accessType = 1;
 const String base_url = "https://pve.izu.edu.tr/kilitSistemi";
 //AsyncWebServer server(80);
 
-const char* mqtt_server = "192.168.1.130";
+const char* mqtt_server = "172.28.6.227";
 const int mqtt_port = 1883;
 const String mqtt_base_topic = String("v1/") + String(room_id).c_str(); 
 WiFiClient espClient;
@@ -433,6 +433,20 @@ void setup() {
   lv_obj_t* main_screen = lv_obj_create(NULL); // create a seperate main screen and loading screen
   lv_obj_remove_style_all(main_screen);
 
+  static lv_style_t bg_style;
+  lv_style_init(&bg_style);
+  
+  // Gradient tipini dikey yap (yukarıdan aşağıya)
+  lv_style_set_bg_grad_dir(&bg_style, LV_GRAD_DIR_VER);
+  
+  // Gradient renkleri (örnek: üst beyaz -> alt açık gri)
+  lv_style_set_bg_color(&bg_style, lv_color_hex(0xFFFFFF));   // üst
+  lv_style_set_bg_grad_color(&bg_style, lv_color_hex(0xBABABA)); // alt
+  
+  // Bu stili main_screen’e uygula
+  lv_style_set_bg_opa(&bg_style, LV_OPA_COVER);
+  lv_obj_add_style(main_screen, &bg_style, LV_PART_MAIN);
+
   lv_obj_t* loading_screen = lv_obj_create(NULL);
   lv_obj_remove_style_all(loading_screen);  // tüm stilleri kaldır (arka plan vs.)
   lv_scr_load(loading_screen);
@@ -449,15 +463,34 @@ void setup() {
 
   // --- UI: QR ve Tablo ---
   // QR kodu sola koy
-  qr = lv_qrcode_create(main_screen, 200, lv_color_black(), lv_color_white());
-  lv_obj_align(qr, LV_ALIGN_LEFT_MID, 10, 0);
+  lv_obj_t* qr_card = lv_obj_create(main_screen);
+  lv_obj_set_size(qr_card, 220, 220); // Kart boyutu (QR boyutundan biraz büyük)
+  lv_obj_align(qr_card, LV_ALIGN_LEFT_MID, 0, 0);
+
+  lv_obj_set_scrollbar_mode(qr_card, LV_SCROLLBAR_MODE_OFF);
+  lv_obj_set_scroll_dir(qr_card, LV_DIR_NONE);
+  
+  // Kart stil
+  lv_obj_set_style_radius(qr_card, 16, 0); // Köşe yuvarlama
+  lv_obj_set_style_bg_color(qr_card, lv_color_hex(0xFFFFFF), 0); // Beyaz arka plan
+  lv_obj_set_style_shadow_width(qr_card, 20, 0); // Gölge kalınlığı
+  lv_obj_set_style_shadow_spread(qr_card, 2, 0); // Gölge yayılımı
+  lv_obj_set_style_shadow_color(qr_card, lv_color_hex(0x2F4858), 0); // Gölge rengi
+
+  lv_obj_set_style_pad_bottom(qr_card, 40, 0);
+  lv_obj_set_style_pad_top(qr_card, 20, 0);
+  
+  // QR kod objesi kartın içinde
+  qr = lv_qrcode_create(qr_card, 160, lv_color_black(), lv_color_white());
+  lv_obj_center(qr); // Kartın ortasına hizala
+  lv_qrcode_update(qr, "örnek veri", strlen("örnek veri"));
   
   lv_timer_handler();// To Update Spinner
 
   // Room Name
   qrAltYazi = lv_label_create(main_screen);
   lv_label_set_text(qrAltYazi, "");
-  lv_obj_align_to(qrAltYazi, qr, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 10);
+  lv_obj_align_to(qrAltYazi, qr, LV_ALIGN_OUT_BOTTOM_LEFT, -10, 10);
   lv_obj_add_style(qrAltYazi, &NormalFontStyle, LV_PART_MAIN);
   
   lv_timer_handler();// To Update Spinner
@@ -533,17 +566,14 @@ void handleTableToggle() {
 
 
 unsigned long lastJwt = 0;
-unsigned long lastSchedule = 0;
 const unsigned long interval = 60000;   // 60 sn
-const unsigned long offset = 30000;     // 30 sn offset
-
 void loop() {
     unsigned long now = millis();
 
     // QR isteği: her 60 sn
     if (now - lastJwt > interval || lastJwt == 0) {
         lastJwt = now;
-
+        {
         DynamicJsonDocument doc(1024);
         doc["room_name"] = 1;
         doc["accessType"] = accessType;
@@ -551,18 +581,27 @@ void loop() {
         serializeJson(doc, requestBody);
 
         publishRequest(mqtt_base_topic + "/qr", requestBody);
-        Serial.println("QR called");
-    }
+        }
+        {
+        HTTPClient http;
+        http.begin(base_url + "/getSchedule");
+        http.addHeader("Content-Type", "application/json");
 
-    // Schedule isteği: 30 sn offset ile
-    if (now - lastSchedule > interval) {
-        // offset kontrolü: ilk çağrıda lastSchedule = millis() - offset yap
-        if (lastSchedule == 0) lastSchedule = now - offset;
+        DynamicJsonDocument doc2(1024);
+        doc2["room_id"] = room_id;
+        doc2["token"] = createJWT(jwtSecret, 30);
 
-        lastSchedule = now;
+        String requestBody;
+        serializeJson(doc2, requestBody);
 
-        publishRequest(mqtt_base_topic + "/schedule", "");
-        Serial.println("Schedule called");
+        int code = http.POST(requestBody);
+        String responseBody = http.getString();
+        http.end();
+        Serial.println(responseBody);
+        if (code == 200) {
+            processScheduleResponse(responseBody);
+        }
+        }
     }
 
     mqttClient.loop();

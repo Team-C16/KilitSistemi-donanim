@@ -9,8 +9,8 @@ static void table_draw_cb(lv_event_t* e);
 
 void getNext5DayNames(const char* days[5]) {
     static const char* turkish_days[] = {
-        "Pazar", "Pazarte-", "Salı", "Çarşam-",
-        "Perşem-", "Cuma", "Cumart-"
+        "Pazar", "Pazarte-", "Salı", "Çarş-",
+        "Perş-", "Cuma", "Cumat-"
     };
 
     static char buffer[5][12];
@@ -42,26 +42,54 @@ lv_obj_t* create_schedule_table(lv_obj_t* parent, lv_obj_t* qr) {
     lv_area_t qr_area;
     lv_obj_get_coords(qr, &qr_area);
 
-    lv_coord_t table_x = qr_area.x2;
-    lv_coord_t table_w = screen_w - table_x;
-    lv_coord_t table_h = screen_h;
+    lv_coord_t table_x = qr_area.x2 + 20;
+    lv_coord_t table_w = screen_w - table_x - 20;
+    lv_coord_t table_h = screen_h - 20;
 
     // Tablo oluştur
     lv_obj_t* table = lv_table_create(parent);
-    lv_obj_set_size(table, table_w, table_h);
-    lv_obj_set_pos(table, table_x, 0);
+    lv_obj_set_size(table, table_w, table_h); // biraz küçültüp boşluk bırak
+    lv_obj_set_pos(table, table_x, 10);
 
     lv_obj_set_scrollbar_mode(table, LV_SCROLLBAR_MODE_OFF); // Scrollbar'ı kapat
+
+    // === Yeni stiller ===
+    static lv_style_t style_table_main;
+    static lv_style_t style_table_items;
+    static lv_style_t style_table_header;
+
+    lv_style_init(&style_table_main);
+    lv_style_set_border_width(&style_table_main, 2);
+    lv_style_set_border_color(&style_table_main, lv_color_hex(0x2F4858));
+    lv_style_set_radius(&style_table_main, 6);
+    lv_style_set_bg_color(&style_table_main, lv_color_hex(0xFFFFFF));
+    lv_style_set_shadow_width(&style_table_main, 20);       // Gölge kalınlığı
+    lv_style_set_shadow_spread(&style_table_main, 2);       // Gölge yayılımı
+    lv_style_set_shadow_color(&style_table_main, lv_color_hex(0x2F4858)); // Gölge rengi
+
+    lv_style_init(&style_table_header);
+    lv_style_set_bg_color(&style_table_header, lv_color_hex(0x2F4858));
+    lv_style_set_text_color(&style_table_header, lv_color_hex(0xFFFFFF));
+    lv_style_set_border_width(&style_table_header, 2);
+    lv_style_set_border_color(&style_table_header, lv_color_hex(0x33658A));
+
+    lv_style_init(&style_table_items);
+    lv_style_set_border_width(&style_table_items, 1);
+    lv_style_set_border_color(&style_table_items, lv_color_hex(0x33658A));
+    lv_style_set_pad_all(&style_table_items, 6);
+    lv_style_set_text_align(&style_table_items, LV_TEXT_ALIGN_CENTER);
+
+    // Uygula
+    lv_obj_add_style(table, &style_table_main, LV_PART_MAIN);
+    lv_obj_add_style(table, &style_table_items, LV_PART_ITEMS);
 
     // Font stili tanımla ve uygula
     static lv_style_t style_turkish_24;
     lv_style_init(&style_turkish_24);
     lv_style_set_text_font(&style_turkish_24, &turkish_24);
-    lv_style_set_pad_top(&style_turkish_24, 9);
-    lv_style_set_pad_bottom(&style_turkish_24, 9);
+    lv_style_set_pad_top(&style_turkish_24, 8);
+    lv_style_set_pad_bottom(&style_turkish_24, 8);
     lv_style_set_text_line_space(&style_turkish_24, 4);
-    lv_style_set_pad_left(&style_turkish_24, 0);
-    lv_style_set_pad_right(&style_turkish_24, 0);
     lv_style_set_text_align(&style_turkish_24, LV_TEXT_ALIGN_CENTER);
     lv_style_set_border_width(&style_turkish_24, 1);
     lv_style_set_border_color(&style_turkish_24, lv_color_black());
@@ -118,7 +146,6 @@ lv_obj_t* create_schedule_table(lv_obj_t* parent, lv_obj_t* qr) {
     return table;
 }
 
-// Event callback fonksiyonu
 static void table_draw_cb(lv_event_t* e) {
     lv_obj_t* table = lv_event_get_target(e);
     lv_obj_draw_part_dsc_t* dsc = static_cast<lv_obj_draw_part_dsc_t*>(lv_event_get_param(e));
@@ -145,23 +172,28 @@ static void table_draw_cb(lv_event_t* e) {
         int cell_hour = hour_start + row - 1;
 
         if (cell_hour == current_hour) {
-            dsc->rect_dsc->bg_color = lv_color_hex(0xFFFF00); // Sarı arka plan
-            dsc->rect_dsc->border_color = lv_color_hex(0x000000); // Siyah çerçeve
-            dsc->rect_dsc->border_width = 1;
+            // 🔵 Şu anki saati göster
+            //dsc->rect_dsc->bg_color = lv_color_hex(0x8E4162); // vişne/pembe ton
+            dsc->rect_dsc->border_color = lv_color_hex(0x2F4858); 
+            dsc->rect_dsc->border_width = 6;
         } else {
-            dsc->rect_dsc->bg_color = lv_color_white(); // Diğer saat hücreleri beyaz
+            dsc->rect_dsc->bg_color = lv_color_hex(0xFFFFFF); // beyaz
             dsc->rect_dsc->border_width = 1;
         }
     } else if (val && strlen(val) > 0) {
-        dsc->rect_dsc->bg_color = lv_color_hex(0xE74C3C);  // Kırmızı dolu hücre
+        dsc->rect_dsc->bg_color = lv_color_hex(0x8E4162);  // dolu hücre – mavi ton
+        dsc->rect_dsc->border_color = lv_color_hex(0x2F4858);
+        dsc->rect_dsc->border_width = 1;
     } else {
-        dsc->rect_dsc->bg_color = lv_color_hex(0x2ECC71);  // Yeşil boş hücre
+        dsc->rect_dsc->bg_color = lv_color_hex(0x86BBD8);  // boş hücre – açık mavi
+        dsc->rect_dsc->border_color = lv_color_hex(0x2F4858);
+        dsc->rect_dsc->border_width = 1;
     }
 
-    // Sadece row=0 ve col=1 hücresi için border rengini sarı yap
+    // Özel örnek: sadece row=0 col=1 hücresine kalın border
     if (row == 0 && col == 1) {
-        dsc->rect_dsc->border_color = lv_color_hex(0xFFFF00); // Sarı
-        dsc->rect_dsc->border_width = 5;                      // İstersen kalınlık da arttır
+        dsc->rect_dsc->border_color = lv_color_hex(0x8E4162);
+        dsc->rect_dsc->border_width = 3;
     }
 }
 
@@ -219,12 +251,14 @@ void mark_schedule_from_json(lv_obj_t* table, const char* jsonStr) {
         lv_table_set_cell_value(table, row, col, "DOLU");
     }
 }
-lv_obj_t* create_details_screen(lv_obj_t* parent, lv_obj_t* qr, const char* text) {
+
+// --- Detay ekranı ---
+lv_obj_t* create_details_screen(lv_obj_t* parent, lv_obj_t* qr, const char* json_text) {
     // Ekran boyutları
     lv_coord_t screen_w = 800;
     lv_coord_t screen_h = 480;
 
-    // QR kod objesinin pozisyonunu al
+    // QR pozisyonu
     lv_area_t qr_area;
     lv_obj_get_coords(qr, &qr_area);
 
@@ -232,33 +266,92 @@ lv_obj_t* create_details_screen(lv_obj_t* parent, lv_obj_t* qr, const char* text
     lv_coord_t container_w = screen_w - container_x;
     lv_coord_t container_h = screen_h;
 
-    // Container oluştur
+    // Container
     lv_obj_t* container = lv_obj_create(parent);
     lv_obj_set_size(container, container_w, container_h);
     lv_obj_set_pos(container, container_x, 0);
-    lv_obj_set_scrollbar_mode(container, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_set_scrollbar_mode(container, LV_SCROLLBAR_MODE_AUTO);
+    lv_obj_set_flex_flow(container, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_all(container, 16, 0);
+    lv_obj_set_style_pad_gap(container, 12, 0);
 
-    // Table ile aynı stil
-    static lv_style_t style_turkish_24;
-    lv_style_init(&style_turkish_24);
-    lv_style_set_text_font(&style_turkish_24, &turkish_24);
-    lv_style_set_pad_top(&style_turkish_24, 9);
-    lv_style_set_pad_bottom(&style_turkish_24, 9);
-    lv_style_set_text_line_space(&style_turkish_24, 4);
-    lv_style_set_pad_left(&style_turkish_24, 0);
-    lv_style_set_pad_right(&style_turkish_24, 0);
-    lv_style_set_text_align(&style_turkish_24, LV_TEXT_ALIGN_CENTER);
-    lv_style_set_border_width(&style_turkish_24, 1);
-    lv_style_set_border_color(&style_turkish_24, lv_color_black());
-    lv_style_set_border_side(&style_turkish_24, LV_BORDER_SIDE_FULL);
+    // JSON parse
+    DynamicJsonDocument doc(4096);
+    deserializeJson(doc, json_text);
 
-    lv_obj_add_style(container, &style_turkish_24, LV_PART_MAIN);
+    JsonArray dataArr;
+    JsonArray groupArr;
+    bool isGroup = false;
 
-    // Ortada bir label
-    lv_obj_t* label = lv_label_create(container);
-    lv_label_set_text(label, text);
-    lv_obj_add_style(label, &style_turkish_24, LV_PART_MAIN);
-    lv_obj_center(label);
+    if (doc.containsKey("dataResult")) {
+        dataArr = doc["dataResult"].as<JsonArray>();
+        groupArr = doc["groupResult"].as<JsonArray>();
+        isGroup = true;
+    } else {
+        dataArr = doc.as<JsonArray>();
+    }
+
+    JsonObject detail = dataArr[0];
+    const char* title    = detail["title"];
+    const char* message  = detail["message"];
+    const char* dayStr   = detail["day"];
+    const char* hourStr  = detail["hour"];
+    const char* fullName = detail["fullName"];
+
+    // --- Zaman formatlama ---
+    struct tm tm{};
+    strptime(dayStr, "%Y-%m-%dT%H:%M:%S.000Z", &tm);
+
+    char dateBuf[32];
+    strftime(dateBuf, sizeof(dateBuf), "%d %B %Y", &tm);
+
+    // hourStr "17:00:00" -> "17:00"
+    char hourBuf[6];
+    strncpy(hourBuf, hourStr, 5);
+    hourBuf[5] = '\0';
+
+    // === Başlık ===
+    lv_obj_t* lbl_title = lv_label_create(container);
+    lv_label_set_text_fmt(lbl_title, "%s", title);
+    lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_22, 0);
+    lv_obj_set_style_text_align(lbl_title, LV_TEXT_ALIGN_CENTER, 0);
+
+    // === Mesaj ===
+    lv_obj_t* lbl_msg = lv_label_create(container);
+    lv_label_set_text(lbl_msg, message);
+    lv_label_set_long_mode(lbl_msg, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(lbl_msg, container_w - 40);
+    lv_obj_set_style_text_font(lbl_msg, &lv_font_montserrat_18, 0);
+    lv_obj_set_style_text_align(lbl_msg, LV_TEXT_ALIGN_CENTER, 0);
+
+    // === Tarih & Saat ===
+    lv_obj_t* lbl_dt = lv_label_create(container);
+    lv_label_set_text_fmt(lbl_dt, "%s   %s", dateBuf, hourBuf);
+    lv_obj_set_style_text_font(lbl_dt, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(lbl_dt, lv_palette_darken(LV_PALETTE_GREY, 2), 0);
+    lv_obj_set_style_text_align(lbl_dt, LV_TEXT_ALIGN_CENTER, 0);
+
+    // === Katılımcılar ===
+    lv_obj_t* lbl_part = lv_label_create(container);
+    lv_label_set_text(lbl_part, "Katılımcılar:");
+    lv_obj_set_style_text_font(lbl_part, &lv_font_montserrat_18, 0);
+    lv_obj_set_style_text_color(lbl_part, lv_palette_main(LV_PALETTE_BLUE), 0);
+    lv_obj_set_style_text_align(lbl_part, LV_TEXT_ALIGN_CENTER, 0);
+
+    if (isGroup) {
+        for (JsonObject member : groupArr) {
+            const char* memberName = member["fullName"];
+            lv_obj_t* lbl_member = lv_label_create(container);
+            lv_label_set_text_fmt(lbl_member, "- %s", memberName);
+            lv_obj_set_style_text_font(lbl_member, &lv_font_montserrat_16, 0);
+            lv_obj_set_style_text_align(lbl_member, LV_TEXT_ALIGN_CENTER, 0);
+        }
+    } else {
+        lv_obj_t* lbl_member = lv_label_create(container);
+        lv_label_set_text_fmt(lbl_member, "- %s", fullName);
+        lv_obj_set_style_text_font(lbl_member, &lv_font_montserrat_16, 0);
+        lv_obj_set_style_text_align(lbl_member, LV_TEXT_ALIGN_CENTER, 0);
+    }
 
     return container;
 }

@@ -65,7 +65,7 @@ const int accessType = 1;
 const String base_url = "https://pve.izu.edu.tr/kilitSistemi";
 //AsyncWebServer server(80);
 
-const char* mqtt_server = "172.28.6.227";
+const char* mqtt_server = "pve.izu.edu.tr";
 const int mqtt_port = 1883;
 const String mqtt_base_topic = String("v1/") + String(room_id).c_str(); 
 WiFiClient espClient;
@@ -75,6 +75,7 @@ lv_obj_t* qrAltYazi = nullptr;
 lv_obj_t* statusLabel = nullptr;
 lv_obj_t* table = nullptr;
 lv_obj_t* other_table = nullptr;
+lv_obj_t* timeLabel = nullptr; // <-- added: simple time label (HH:MM)
 bool showingMainTable = true;
 unsigned long lastSwitch = 0;
 const unsigned long mainTableDuration = 45000;  // 45 saniye
@@ -475,9 +476,9 @@ void setup() {
   lv_obj_set_style_bg_color(qr_card, lv_color_hex(0xFFFFFF), 0); // Beyaz arka plan
   lv_obj_set_style_shadow_width(qr_card, 20, 0); // Gölge kalınlığı
   lv_obj_set_style_shadow_spread(qr_card, 2, 0); // Gölge yayılımı
-  lv_obj_set_style_shadow_color(qr_card, lv_color_hex(0x2F4858), 0); // Gölge rengi
+  lv_obj_set_style_shadow_color(qr_card, lv_color_hex(0x8E4162), 0); // Gölge rengi
 
-  lv_obj_set_style_pad_bottom(qr_card, 40, 0);
+  lv_obj_set_style_pad_bottom(qr_card, 50, 0);
   lv_obj_set_style_pad_top(qr_card, 20, 0);
   
   // QR kod objesi kartın içinde
@@ -506,6 +507,27 @@ void setup() {
   lv_obj_align_to(statusLabel,qrAltYazi, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 30);
   lv_obj_add_style(statusLabel, &NormalFontStyle, LV_PART_MAIN);
   
+  lv_timer_handler();// To Update Spinner
+
+  // simple time label (bottom-left) - shows HH:MM
+	lv_obj_t* time_card = lv_obj_create(main_screen);
+	lv_obj_set_size(time_card, LV_SIZE_CONTENT, LV_SIZE_CONTENT);  // İçeriğe göre boyut
+	lv_obj_align(time_card, LV_ALIGN_BOTTOM_LEFT, 8, -8);
+
+	// Stil: gölge + padding + radius
+	lv_obj_set_style_radius(time_card, 12, 0);
+	lv_obj_set_style_bg_color(time_card, lv_color_hex(0x8E4162), 0);   // Arka plan rengi
+	lv_obj_set_style_shadow_width(time_card, 20, 0);
+	lv_obj_set_style_shadow_color(time_card, lv_color_hex(0x2F4858), 0); // gölgeyi daha koyu yapabilirsin
+	lv_obj_set_style_pad_all(time_card, 12, 0); // iç boşluk
+
+	// --- Time Label ---
+	timeLabel = lv_label_create(time_card);
+	lv_label_set_text(timeLabel, "--:--");
+	lv_obj_add_style(timeLabel, &NormalFontStyle, LV_PART_MAIN);
+	lv_obj_set_style_text_font(timeLabel, &turkish_24, 0);
+	lv_obj_set_style_text_color(timeLabel, lv_color_hex(0xFFFFFF), 0);
+
   lv_timer_handler();// To Update Spinner
   // --- WiFi ---
   WiFi.begin(ssid, password);
@@ -605,6 +627,22 @@ void loop() {
     }
 
     mqttClient.loop();
+    // update simple time label once per second
+    static unsigned long lastTimeUpdate = 0;
+    if (millis() - lastTimeUpdate >= 1000) {
+        lastTimeUpdate = millis();
+        if (timeLabel) {
+            struct tm timeinfo;
+            if (getLocalTime(&timeinfo)) {
+                char buf[6];
+                strftime(buf, sizeof(buf), "%H:%M", &timeinfo);
+                lv_label_set_text(timeLabel, buf);
+            } else {
+                lv_label_set_text(timeLabel, "--:--");
+            }
+        }
+    }
+
     handleTableToggle();
     lv_timer_handler();
     delay(5);

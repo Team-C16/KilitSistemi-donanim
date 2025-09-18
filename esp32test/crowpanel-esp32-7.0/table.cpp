@@ -4,33 +4,59 @@
 #include <string.h>  // strlen için
 #include <ArduinoJson.h>
 
+
 // Event callback fonksiyonunun bildirimi
 static void table_draw_cb(lv_event_t* e);
 
+
 void getNext5DayNames(const char* days[5]) {
+    // Turkish full weekday names (tm_wday: 0=Sun .. 6=Sat)
     static const char* turkish_days[] = {
-        "Pazar", "Pazarte-", "Salı", "Çarş-",
-        "Perş-", "Cuma", "Cumat-"
+        "Pazar", "Pazart.", "Salı", "Çarş.",
+        "Perş.", "Cuma", "Cumat."
     };
 
-    static char buffer[5][12];
+    static char buffer[5][16];
 
     time_t now = time(NULL);
     struct tm t;
     localtime_r(&now, &t);
 
+    // Normalize to local midnight to avoid DST/partial-day issues
+    t.tm_hour = 0; t.tm_min = 0; t.tm_sec = 0;
+    time_t today_mid = mktime(&t);
+
     for (int i = 0; i < 5; i++) {
-        int wday = t.tm_wday; // 0 = Pazar, 1 = Pazartesi, ...
-        const char* turk_day = turkish_days[wday];
-
-        strncpy(buffer[i], turk_day, sizeof(buffer[i]) - 1);
-        buffer[i][sizeof(buffer[i]) - 1] = '\0';
-
+        time_t day_ts = today_mid + (time_t)i * 86400;
+        struct tm day_tm;
+        localtime_r(&day_ts, &day_tm);
+        // Format: "Pazartesi" or if you want include date: "Pazartesi 21"
+        snprintf(buffer[i], sizeof(buffer[i]), "%s", turkish_days[day_tm.tm_wday]);
         days[i] = buffer[i];
+    }
+}
 
-        // sonraki güne geç
-        t.tm_mday++;
-        mktime(&t);
+// update header cells (row 0, cols 1..5)
+void update_table_headers(lv_obj_t* table) {
+    const char* day_names[5];
+    getNext5DayNames(day_names);
+    for (int c = 0; c < 5; c++) {
+        // header row is 0, columns 1..5
+        lv_table_set_cell_value(table, 0, c + 1, day_names[c]);
+    }
+}
+
+// call periodically to refresh header only when day changes
+void refresh_table_headers_if_date_changed(lv_obj_t* table) {
+    static int last_mday = -1;
+    time_t now = time(NULL);
+    struct tm t;
+    localtime_r(&now, &t);
+    if (t.tm_mday != last_mday) {
+        last_mday = t.tm_mday;
+        update_table_headers(table);
+        Serial.print("Table headers updated for new day: ");
+        Serial.println(last_mday);
     }
 }
 
@@ -43,7 +69,7 @@ lv_obj_t* create_schedule_table(lv_obj_t* parent, lv_obj_t* qr) {
     lv_obj_get_coords(qr, &qr_area);
 
     lv_coord_t table_x = qr_area.x2 + 20;
-    lv_coord_t table_w = screen_w - table_x - 20;
+    lv_coord_t table_w = screen_w - table_x - 10;
     lv_coord_t table_h = screen_h - 20;
 
     // Tablo oluştur
@@ -62,10 +88,10 @@ lv_obj_t* create_schedule_table(lv_obj_t* parent, lv_obj_t* qr) {
     lv_style_set_border_width(&style_table_main, 2);
     lv_style_set_border_color(&style_table_main, lv_color_hex(0x2F4858));
     lv_style_set_radius(&style_table_main, 6);
-    lv_style_set_bg_color(&style_table_main, lv_color_hex(0xFFFFFF));
+    lv_style_set_bg_color(&style_table_main, lv_color_hex(0x8E4162));
     lv_style_set_shadow_width(&style_table_main, 20);       // Gölge kalınlığı
     lv_style_set_shadow_spread(&style_table_main, 2);       // Gölge yayılımı
-    lv_style_set_shadow_color(&style_table_main, lv_color_hex(0x2F4858)); // Gölge rengi
+    lv_style_set_shadow_color(&style_table_main, lv_color_hex(0x8E4162)); // Gölge rengi
 
     lv_style_init(&style_table_header);
     lv_style_set_bg_color(&style_table_header, lv_color_hex(0x2F4858));
@@ -137,7 +163,7 @@ lv_obj_t* create_schedule_table(lv_obj_t* parent, lv_obj_t* qr) {
     // Kolon genişlikleri
     lv_table_set_col_width(table, 0, 90); // saat sütunu genişliği
     for (int c = 1; c < col_count; c++) {
-        lv_table_set_col_width(table, c, (table_w - 90) / (col_count - 1));
+        lv_table_set_col_width(table, c, (table_w - 90) / (col_count - 1) - 1);
     }
 
     // Çerçeve ve padding
@@ -174,7 +200,7 @@ static void table_draw_cb(lv_event_t* e) {
         if (cell_hour == current_hour) {
             // 🔵 Şu anki saati göster
             //dsc->rect_dsc->bg_color = lv_color_hex(0x8E4162); // vişne/pembe ton
-            dsc->rect_dsc->border_color = lv_color_hex(0x2F4858); 
+            dsc->rect_dsc->border_color = lv_color_hex(0x8E4162); 
             dsc->rect_dsc->border_width = 6;
         } else {
             dsc->rect_dsc->bg_color = lv_color_hex(0xFFFFFF); // beyaz
@@ -182,7 +208,7 @@ static void table_draw_cb(lv_event_t* e) {
         }
     } else if (val && strlen(val) > 0) {
         dsc->rect_dsc->bg_color = lv_color_hex(0x8E4162);  // dolu hücre – mavi ton
-        dsc->rect_dsc->border_color = lv_color_hex(0x2F4858);
+        dsc->rect_dsc->border_color = lv_color_hex(0x8E4162);
         dsc->rect_dsc->border_width = 1;
     } else {
         dsc->rect_dsc->bg_color = lv_color_hex(0x86BBD8);  // boş hücre – açık mavi
@@ -266,7 +292,7 @@ lv_obj_t* create_details_screen(lv_obj_t* parent, lv_obj_t* qr, const char* json
     lv_coord_t container_w = screen_w - container_x;
     lv_coord_t container_h = screen_h;
 
-    // Container
+    // Container (scrollable)
     lv_obj_t* container = lv_obj_create(parent);
     lv_obj_set_size(container, container_w, container_h);
     lv_obj_set_pos(container, container_x, 0);
@@ -276,7 +302,7 @@ lv_obj_t* create_details_screen(lv_obj_t* parent, lv_obj_t* qr, const char* json
     lv_obj_set_style_pad_gap(container, 12, 0);
 
     // JSON parse
-    DynamicJsonDocument doc(4096);
+    DynamicJsonDocument doc(8192);
     deserializeJson(doc, json_text);
 
     JsonArray dataArr;

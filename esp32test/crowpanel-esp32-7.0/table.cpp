@@ -1,5 +1,6 @@
 #include "table.h"
 #include "turkish_24.h"
+#include "turkish_better_21.h"
 #include <time.h>
 #include <string.h>  // strlen için
 #include <ArduinoJson.h>
@@ -116,7 +117,7 @@ lv_obj_t* create_schedule_table(lv_obj_t* parent, lv_obj_t* qr) {
     // Font stili tanımla ve uygula
     static lv_style_t style_turkish_24;
     lv_style_init(&style_turkish_24);
-    lv_style_set_text_font(&style_turkish_24, &turkish_24);
+    lv_style_set_text_font(&style_turkish_24, &turkish_better_21);
     lv_style_set_pad_top(&style_turkish_24, 8);
     lv_style_set_pad_bottom(&style_turkish_24, 8);
     lv_style_set_text_line_space(&style_turkish_24, 4);
@@ -357,7 +358,15 @@ lv_obj_t* create_details_screen(lv_obj_t* parent, lv_obj_t* qr, const char* json
     const char* hourStr  = detail["hour"];
     const char* fullName = detail["fullName"];
 
+    String msgStr = String(message);
+    if (msgStr.length() > 250) {
+        msgStr = msgStr.substring(0, 250) + "...";
+    }
 
+    String titleStr = String(title);
+    if (titleStr.length() > 45) {
+        titleStr = titleStr.substring(0, 45) + "...";
+    }
     // hourStr "17:00:00" -> "17:00"
     char hourBuf[6];
     strncpy(hourBuf, hourStr, 5);
@@ -365,7 +374,8 @@ lv_obj_t* create_details_screen(lv_obj_t* parent, lv_obj_t* qr, const char* json
     // === En üst başlık ===
     lv_obj_t* lbl_header = lv_label_create(container);
     lv_label_set_text(lbl_header, "Toplantı Detayları");
-    lv_obj_set_style_text_font(lbl_header, &turkish_24, 0);
+    lv_obj_set_scrollbar_mode(lbl_header, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_set_style_text_font(lbl_header, &turkish_better_21, 0);
     lv_obj_set_style_text_align(lbl_header, LV_TEXT_ALIGN_CENTER, 0);
 
     // === Tek satır info bar ===
@@ -376,27 +386,29 @@ lv_obj_t* create_details_screen(lv_obj_t* parent, lv_obj_t* qr, const char* json
     lv_obj_set_style_shadow_width(info_bar, 20, 0); // Gölge kalınlığı
     lv_obj_set_style_shadow_spread(info_bar, 2, 0); // Gölge yayılımı
     lv_obj_set_style_shadow_color(info_bar, lv_color_hex(0x8E4162), 0); // Gölge rengi
+    lv_obj_set_scrollbar_mode(info_bar, LV_SCROLLBAR_MODE_OFF);
 
     lv_obj_t* lbl_title = lv_label_create(info_bar);
-    lv_label_set_text_fmt(lbl_title, "%s", title);
-    lv_obj_set_style_text_font(lbl_title, &turkish_24, 0); 
-
+    lv_label_set_text_fmt(lbl_title, "%s", titleStr.c_str());
+    lv_obj_set_style_text_font(lbl_title, &turkish_better_21, 0); 
+    
     lv_obj_t* lbl_hour = lv_label_create(info_bar);
     lv_label_set_text(lbl_hour, hourBuf);
-    lv_obj_set_style_text_font(lbl_hour, &turkish_24, 0);
+    lv_obj_set_style_text_font(lbl_hour, &turkish_better_21, 0);
 
     // === Mesaj alanı ===
     lv_obj_t* msg_cont = lv_obj_create(container);
     lv_obj_set_size(msg_cont, container_w - 20, container_h / 2 - 60);
     lv_obj_t* lbl_msg = lv_label_create(msg_cont);
-    lv_label_set_text(lbl_msg, message);
+    lv_label_set_text(lbl_msg, msgStr.c_str());
     lv_label_set_long_mode(lbl_msg, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(lbl_msg, container_w - 40);
     lv_obj_center(lbl_msg);
-    lv_obj_set_style_text_font(lbl_msg, &turkish_24, 0);
+    lv_obj_set_style_text_font(lbl_msg, &turkish_better_21, 0);
     lv_obj_set_style_shadow_width(msg_cont, 20, 0); // Gölge kalınlığı
     lv_obj_set_style_shadow_spread(msg_cont, 2, 0); // Gölge yayılımı
     lv_obj_set_style_shadow_color(msg_cont, lv_color_hex(0x8E4162), 0); // Gölge rengi
+    lv_obj_set_scrollbar_mode(msg_cont, LV_SCROLLBAR_MODE_OFF);
 
     // === Katılımcılar alanı ===
     lv_obj_t* member_cont = lv_obj_create(container);
@@ -407,16 +419,18 @@ lv_obj_t* create_details_screen(lv_obj_t* parent, lv_obj_t* qr, const char* json
     lv_obj_set_style_shadow_width(member_cont, 20, 0); // Gölge kalınlığı
     lv_obj_set_style_shadow_spread(member_cont, 2, 0); // Gölge yayılımı
     lv_obj_set_style_shadow_color(member_cont, lv_color_hex(0x8E4162), 0); // Gölge rengi
+    lv_obj_set_scrollbar_mode(member_cont, LV_SCROLLBAR_MODE_OFF);
     // Katılımcı ekleme
     auto add_member = [&](const char* name) {
         lv_obj_t* card = lv_obj_create(member_cont);
         lv_obj_set_size(card, (container_w - 40) / 4, 100); // max 4 tane yan yana
         lv_obj_set_style_radius(card, 12, 0);
         lv_obj_set_style_bg_color(card, lv_color_hex(0x2F4858), 0);
+        lv_obj_set_scrollbar_mode(card, LV_SCROLLBAR_MODE_OFF);
 
         lv_obj_t* lbl = lv_label_create(card);
         lv_label_set_text(lbl, name);
-        lv_obj_set_style_text_font(lbl, &turkish_24, 0);
+        lv_obj_set_style_text_font(lbl, &turkish_better_21, 0);
         lv_obj_set_style_text_color(lbl, lv_color_hex(0xFFFFFF), 0);
         lv_obj_center(lbl);
     };

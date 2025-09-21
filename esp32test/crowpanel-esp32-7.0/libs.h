@@ -14,5 +14,5 @@
 #include "jwt_helper.h"
 #include "table.h"
 #include "turkish_24.h"
-
+#include "turkish_better_26.h"
 #include "lv_lib_qrcode/lv_qrcode.h"

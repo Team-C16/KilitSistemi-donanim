@@ -21,6 +21,12 @@ base64 > 1.3.0 (by Densaugeo)
 
 PubSubClient> 2.8.0
 
+## Fonts
+
+you can create fonts in font converter for lvgl but you should use the ttf s from this side: https://www.fonttr.com/
+
+do not forget to remove the line     .static_bitmap = 0, 
+
 ## Board Settings:
 
 ### Board Name: ESP32S3 Dev Module

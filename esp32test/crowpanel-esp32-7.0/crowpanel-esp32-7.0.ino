@@ -57,15 +57,15 @@ unsigned long unlockTime = 0;
 bool lockOpen = false;
 
 // --- Global ayarlar ---
-const char* ssid = "BlokZincirLab";
-const char* password = "Network123!";
+const char* ssid = "kerem";
+const char* password = "Kerem332.";
 const String jwtSecret = "DENEME";
 const int room_id = 2;
 const int accessType = 1;
-const String base_url = "https://pve.izu.edu.tr/kilitSistemi";
+const String base_url = "http://192.168.1.130:8001/kilitSistemi";
 //AsyncWebServer server(80);
 
-const char* mqtt_server = "pve.izu.edu.tr";
+const char* mqtt_server = "192.168.1.130";
 const int mqtt_port = 1883;
 const String mqtt_base_topic = String("v1/") + String(room_id).c_str(); 
 WiFiClient espClient;
@@ -76,6 +76,7 @@ lv_obj_t* statusLabel = nullptr;
 lv_obj_t* table = nullptr;
 lv_obj_t* other_table = nullptr;
 lv_obj_t* timeLabel = nullptr; // <-- added: simple time label (HH:MM)
+lv_obj_t* status_card = nullptr;
 bool showingMainTable = true;
 unsigned long lastSwitch = 0;
 const unsigned long mainTableDuration = 45000;  // 45 saniye
@@ -179,6 +180,7 @@ void processUnlockCommand(const String& msg) {
   String token = doc["token"] | "";
   if (verifyJWT(token, jwtSecret)) {
     lv_label_set_text(statusLabel, "Kilit Açık");
+    lv_obj_clear_flag(status_card, LV_OBJ_FLAG_HIDDEN);
     unlockTime = millis();
     lockOpen = true;
     Serial.println("Door unlocked successfully");
@@ -272,7 +274,7 @@ void processScheduleResponse(const String& msg) {
   if (cellValue && strcmp(cellValue, "DOLU") == 0) {
     Serial.println("Current slot is busy, looking for rendezvous details");
     
-    int rendezvous_id = -1;
+    String rendezvous_id = "-1";
     for (JsonObject item : schedule) {
       const char* hourStr = item["hour"];
       if (hourStr) {
@@ -284,7 +286,7 @@ void processScheduleResponse(const String& msg) {
         Serial.println(currentHour);
         
         if (hour == currentHour) {
-          rendezvous_id = item["rendezvous_id"].as<int>();
+          rendezvous_id = item["rendezvous_id"].as<String>();
           Serial.print("Found matching rendezvous_id: ");
           Serial.println(rendezvous_id);
           break;
@@ -292,7 +294,7 @@ void processScheduleResponse(const String& msg) {
       }
     }
     
-    if (rendezvous_id != -1 && !other_table) {
+    if (rendezvous_id != "-1" && !other_table) {
       Serial.println("Requesting schedule details");
       processScheduleDetailsResponse(rendezvous_id);
     }
@@ -309,7 +311,7 @@ void processScheduleResponse(const String& msg) {
 }
 
 // Separate function to handle schedule details responses
-void processScheduleDetailsResponse(int rendezvous_id) {
+void processScheduleDetailsResponse(String rendezvous_id) {
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("WiFi bağlı değil!");
     return;
@@ -320,7 +322,7 @@ void processScheduleDetailsResponse(int rendezvous_id) {
   http.addHeader("Content-Type", "application/json");
   String token = createJWT(jwtSecret, 30);
   // JSON body (rendezvous_id + room_id + token)
-  String body = "{\"rendezvous_id\":\"" + String(rendezvous_id) + 
+  String body = "{\"rendezvous_id\":\"" + rendezvous_id + 
                 "\",\"room_id\":\"" + String(room_id) + 
                 "\",\"token\":\"" + token + "\"}";
 
@@ -522,12 +524,26 @@ void setup() {
   
   lv_timer_handler();// To Update Spinner
 
-  statusLabel = lv_label_create(main_screen);
-  lv_label_set_text(statusLabel, "");
-  lv_obj_align_to(statusLabel,qrAltYazi, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 30);
+  // --- Status Card ---
+  status_card = lv_obj_create(main_screen);
+  lv_obj_set_size(status_card, LV_SIZE_CONTENT, LV_SIZE_CONTENT);  
+  lv_obj_align_to(status_card, qrAltYazi, LV_ALIGN_OUT_BOTTOM_LEFT, -10, 15);
+
+  // Stil: yeşil arka plan + radius + padding + gölge
+  lv_obj_set_style_radius(status_card, 12, 0);
+  lv_obj_set_style_bg_color(status_card, lv_color_hex(0x4CAF50), 0); // yeşil
+  lv_obj_set_style_shadow_width(status_card, 15, 0);
+  lv_obj_set_style_shadow_color(status_card, lv_color_hex(0x2F4858), 0);
+  lv_obj_set_style_pad_all(status_card, 10, 0); 
+
+  // --- Status Label ---
+  statusLabel = lv_label_create(status_card);
+  lv_label_set_text(statusLabel, "");  
   lv_obj_add_style(statusLabel, &NormalFontStyle, LV_PART_MAIN);
-  
+  lv_obj_set_style_text_color(statusLabel, lv_color_hex(0xFFFFFF), 0); // beyaz yazı
+  lv_obj_set_style_text_font(statusLabel, &turkish_better_26, 0);
   lv_timer_handler();// To Update Spinner
+  lv_obj_add_flag(status_card, LV_OBJ_FLAG_HIDDEN);
 
   // simple time label (bottom-left) - shows HH:MM
 	lv_obj_t* time_card = lv_obj_create(main_screen);
@@ -545,7 +561,7 @@ void setup() {
 	timeLabel = lv_label_create(time_card);
 	lv_label_set_text(timeLabel, "--:--");
 	lv_obj_add_style(timeLabel, &NormalFontStyle, LV_PART_MAIN);
-	lv_obj_set_style_text_font(timeLabel, &turkish_24, 0);
+	lv_obj_set_style_text_font(timeLabel, &turkish_better_26, 0);
 	lv_obj_set_style_text_color(timeLabel, lv_color_hex(0xFFFFFF), 0);
 
   lv_timer_handler();// To Update Spinner
@@ -565,7 +581,7 @@ void setup() {
 
   lv_timer_handler(); // To Update Spinner
 
-  configTime(2*3600, 0, "time.ume.tubitak.gov.tr", "0.tr.pool.ntp.org");
+  configTime(-4*3600, 0, "time.ume.tubitak.gov.tr", "0.tr.pool.ntp.org");
 
 
   lv_timer_handler();
@@ -615,6 +631,14 @@ unsigned long lastJwt = 0;
 const unsigned long interval = 60000;   // 60 sn
 void loop() {
     unsigned long now = millis();
+
+    if (lockOpen) {
+        if (now - unlockTime > 10000) {  // 10 saniye geçti
+            lv_obj_add_flag(status_card, LV_OBJ_FLAG_HIDDEN);
+            lv_label_set_text(statusLabel, "");
+            lockOpen = false;
+        }
+    }
 
     // QR isteği: her 60 sn
     if (now - lastJwt > interval || lastJwt == 0) {

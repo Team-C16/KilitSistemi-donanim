@@ -154,12 +154,12 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     return;
   }
 
-  String scheduleDetailsTopic = mqtt_base_topic + "/scheduleDetails/response";
+  /*String scheduleDetailsTopic = mqtt_base_topic + "/scheduleDetails/response";
   if (t.equals(scheduleDetailsTopic)) {
     Serial.println("-> Processing schedule details response");
     processScheduleDetailsResponse(msg);
     return;
-  }
+  }*/
 
   Serial.println("-> No topic matched");
   Serial.println("=== MQTT CALLBACK END ===");
@@ -294,13 +294,7 @@ void processScheduleResponse(const String& msg) {
     
     if (rendezvous_id != -1 && !other_table) {
       Serial.println("Requesting schedule details");
-      DynamicJsonDocument d(1024);
-      d["room_id"] = room_id;
-      d["rendezvous_id"] = rendezvous_id;
-      d["token"] = createJWT(jwtSecret, 30);
-      String rb;
-      serializeJson(d, rb);
-      publishRequest(mqtt_base_topic + "/scheduleDetails", rb);
+      processScheduleDetailsResponse(rendezvous_id);
     }
   } else {
     Serial.println("Current slot is empty");
@@ -315,26 +309,52 @@ void processScheduleResponse(const String& msg) {
 }
 
 // Separate function to handle schedule details responses
-void processScheduleDetailsResponse(const String& msg) {
-  DynamicJsonDocument reply(4096);
-  DeserializationError error = deserializeJson(reply, msg);
-  
-  if (error) {
-    Serial.print("Schedule details JSON error: ");
-    Serial.println(error.c_str());
+void processScheduleDetailsResponse(int rendezvous_id) {
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("WiFi bağlı değil!");
     return;
   }
-  
-  if (other_table) {
-    lv_obj_del(other_table);
-    other_table = nullptr;
+
+  HTTPClient http;
+  http.begin(base_url + "/getScheduleDetails");
+  http.addHeader("Content-Type", "application/json");
+  String token = createJWT(jwtSecret, 30);
+  // JSON body (rendezvous_id + room_id + token)
+  String body = "{\"rendezvous_id\":\"" + String(rendezvous_id) + 
+                "\",\"room_id\":\"" + String(room_id) + 
+                "\",\"token\":\"" + token + "\"}";
+
+  int httpResponseCode = http.POST(body);
+  if (httpResponseCode > 0) {
+    String payload = http.getString();
+    Serial.println("Schedule Details geldi: " + payload);
+
+    DynamicJsonDocument reply(12288);
+    DeserializationError error = deserializeJson(reply, payload);
+    if (error) {
+      Serial.print("Schedule details JSON error: ");
+      Serial.println(error.c_str());
+      http.end();
+      return;
+    }
+
+    if (other_table) {
+      lv_obj_del(other_table);
+      other_table = nullptr;
+    }
+
+    other_table = create_details_screen(lv_scr_act(), qr, payload.c_str());
+    lv_obj_add_flag(other_table, LV_OBJ_FLAG_HIDDEN);
+
+    Serial.println("Schedule details screen created");
+  } else {
+    Serial.print("HTTP Hatası: ");
+    Serial.println(httpResponseCode);
   }
-  
-  other_table = create_details_screen(lv_scr_act(), qr, msg.c_str());
-  lv_obj_add_flag(other_table, LV_OBJ_FLAG_HIDDEN);
-  
-  Serial.println("Schedule details screen created");
+
+  http.end();
 }
+
 
 // Fix the mqttReconnect function to ensure proper subscription
 bool mqttReconnect() {
@@ -545,7 +565,7 @@ void setup() {
 
   lv_timer_handler(); // To Update Spinner
 
-  configTime(3 * 3600, 0, "time.ume.tubitak.gov.tr", "0.tr.pool.ntp.org");
+  configTime(2*3600, 0, "time.ume.tubitak.gov.tr", "0.tr.pool.ntp.org");
 
 
   lv_timer_handler();
@@ -566,14 +586,18 @@ void setup() {
 }
 
 void handleTableToggle() {
-    if (!other_table) return; // diğer tablo yoksa çık
+    if (!other_table)
+    {
+      return; // diğer tablo yoksa çık
+    }
+    Serial.println("toggle girdi");
     unsigned long nowMillis = millis();
     unsigned long duration = showingMainTable ? mainTableDuration : otherTableDuration;
 
     if (nowMillis - lastSwitch >= duration) {
         lastSwitch = nowMillis;
         showingMainTable = !showingMainTable;
-
+        Serial.println("toggle zamanına geldi ve girdi");
         if (showingMainTable) {
             lv_obj_clear_flag(table, LV_OBJ_FLAG_HIDDEN);
             lv_obj_add_flag(other_table, LV_OBJ_FLAG_HIDDEN);
@@ -620,9 +644,9 @@ void loop() {
         String responseBody = http.getString();
         http.end();
         Serial.println(responseBody);
-        if (code == 200) {
-            processScheduleResponse(responseBody);
-        }
+          if (code == 200) {
+              processScheduleResponse(responseBody);
+          }
         }
     }
 

@@ -61,6 +61,10 @@ void refresh_table_headers_if_date_changed(lv_obj_t* table) {
 }
 
 lv_obj_t* create_schedule_table(lv_obj_t* parent, lv_obj_t* qr) {
+    if (!qr) {
+        Serial.println("QR objesi null! schedule ekranı oluşturulamayacak.");
+        return nullptr;
+    }
     lv_coord_t screen_w = 800;
     lv_coord_t screen_h = 480;
 
@@ -278,8 +282,26 @@ void mark_schedule_from_json(lv_obj_t* table, const char* jsonStr) {
     }
 }
 
+
 // --- Detay ekranı ---
 lv_obj_t* create_details_screen(lv_obj_t* parent, lv_obj_t* qr, const char* json_text) {
+
+    if (!qr) {
+        Serial.println("QR objesi null! Detay ekranı oluşturulamayacak.");
+        return nullptr;
+    }
+    Serial.println("=== Gelen JSON ===");
+    DynamicJsonDocument debugDoc(8192);
+    DeserializationError err = deserializeJson(debugDoc, json_text);
+    if (err) {
+        Serial.print("JSON parse hatası: ");
+        Serial.println(err.f_str());
+    } else {
+        serializeJsonPretty(debugDoc, Serial);
+        Serial.println();
+    }
+
+
     // Ekran boyutları
     lv_coord_t screen_w = 800;
     lv_coord_t screen_h = 480;
@@ -288,19 +310,27 @@ lv_obj_t* create_details_screen(lv_obj_t* parent, lv_obj_t* qr, const char* json
     lv_area_t qr_area;
     lv_obj_get_coords(qr, &qr_area);
 
-    lv_coord_t container_x = qr_area.x2;
-    lv_coord_t container_w = screen_w - container_x;
-    lv_coord_t container_h = screen_h;
+    lv_coord_t container_x = qr_area.x2 + 30;
+    lv_coord_t container_w = screen_w - container_x - 10;
+    lv_coord_t container_h = screen_h - 20;
 
-    // Container (scrollable)
+
+    // Ana container
     lv_obj_t* container = lv_obj_create(parent);
+    lv_obj_set_style_bg_color(container, lv_color_hex(0x000000), 0);
+    lv_obj_set_style_bg_opa(container, LV_OPA_TRANSP, 0);
     lv_obj_set_size(container, container_w, container_h);
-    lv_obj_set_pos(container, container_x, 0);
-    lv_obj_set_scrollbar_mode(container, LV_SCROLLBAR_MODE_AUTO);
+    lv_obj_set_pos(container, container_x, 10);
+    lv_obj_set_scrollbar_mode(container, LV_SCROLLBAR_MODE_OFF);
     lv_obj_set_flex_flow(container, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_pad_all(container, 16, 0);
-    lv_obj_set_style_pad_gap(container, 12, 0);
+    lv_obj_set_style_pad_all(container, 12, 0);
+    lv_obj_set_style_pad_gap(container, 8, 0);
+    lv_obj_set_style_border_width(container, 0, 0); // border kalınlığı 0
+    lv_obj_set_style_border_opa(container, LV_OPA_TRANSP, 0); // border tamamen saydam
 
+
+    lv_obj_set_scrollbar_mode(container, LV_SCROLLBAR_MODE_OFF); // Scrollbar'ı kapat
+        
     // JSON parse
     DynamicJsonDocument doc(8192);
     deserializeJson(doc, json_text);
@@ -311,73 +341,108 @@ lv_obj_t* create_details_screen(lv_obj_t* parent, lv_obj_t* qr, const char* json
 
     if (doc.containsKey("dataResult")) {
         dataArr = doc["dataResult"].as<JsonArray>();
-        groupArr = doc["groupResult"].as<JsonArray>();
-        isGroup = true;
+    
+        if (doc.containsKey("groupResult") && !doc["groupResult"].isNull()) {
+            groupArr = doc["groupResult"].as<JsonArray>();
+            isGroup = true;
+        } else {
+            isGroup = false;
+        }
     } else {
         dataArr = doc.as<JsonArray>();
     }
-
     JsonObject detail = dataArr[0];
     const char* title    = detail["title"];
     const char* message  = detail["message"];
-    const char* dayStr   = detail["day"];
     const char* hourStr  = detail["hour"];
     const char* fullName = detail["fullName"];
 
-    // --- Zaman formatlama ---
-    struct tm tm{};
-    strptime(dayStr, "%Y-%m-%dT%H:%M:%S.000Z", &tm);
-
-    char dateBuf[32];
-    strftime(dateBuf, sizeof(dateBuf), "%d %B %Y", &tm);
 
     // hourStr "17:00:00" -> "17:00"
     char hourBuf[6];
     strncpy(hourBuf, hourStr, 5);
     hourBuf[5] = '\0';
+    // === En üst başlık ===
+    lv_obj_t* lbl_header = lv_label_create(container);
+    lv_label_set_text(lbl_header, "Toplantı Detayları");
+    lv_obj_set_style_text_font(lbl_header, &turkish_24, 0);
+    lv_obj_set_style_text_align(lbl_header, LV_TEXT_ALIGN_CENTER, 0);
 
-    // === Başlık ===
-    lv_obj_t* lbl_title = lv_label_create(container);
+    // === Tek satır info bar ===
+    lv_obj_t* info_bar = lv_obj_create(container);
+    lv_obj_set_size(info_bar, container_w - 20, 40);
+    lv_obj_set_flex_flow(info_bar, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(info_bar, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_shadow_width(info_bar, 20, 0); // Gölge kalınlığı
+    lv_obj_set_style_shadow_spread(info_bar, 2, 0); // Gölge yayılımı
+    lv_obj_set_style_shadow_color(info_bar, lv_color_hex(0x8E4162), 0); // Gölge rengi
+
+    lv_obj_t* lbl_title = lv_label_create(info_bar);
     lv_label_set_text_fmt(lbl_title, "%s", title);
-    lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_22, 0);
-    lv_obj_set_style_text_align(lbl_title, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_font(lbl_title, &turkish_24, 0); 
 
-    // === Mesaj ===
-    lv_obj_t* lbl_msg = lv_label_create(container);
+    lv_obj_t* lbl_hour = lv_label_create(info_bar);
+    lv_label_set_text(lbl_hour, hourBuf);
+    lv_obj_set_style_text_font(lbl_hour, &turkish_24, 0);
+
+    // === Mesaj alanı ===
+    lv_obj_t* msg_cont = lv_obj_create(container);
+    lv_obj_set_size(msg_cont, container_w - 20, container_h / 2 - 60);
+    lv_obj_t* lbl_msg = lv_label_create(msg_cont);
     lv_label_set_text(lbl_msg, message);
     lv_label_set_long_mode(lbl_msg, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(lbl_msg, container_w - 40);
-    lv_obj_set_style_text_font(lbl_msg, &lv_font_montserrat_18, 0);
-    lv_obj_set_style_text_align(lbl_msg, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_center(lbl_msg);
+    lv_obj_set_style_text_font(lbl_msg, &turkish_24, 0);
+    lv_obj_set_style_shadow_width(msg_cont, 20, 0); // Gölge kalınlığı
+    lv_obj_set_style_shadow_spread(msg_cont, 2, 0); // Gölge yayılımı
+    lv_obj_set_style_shadow_color(msg_cont, lv_color_hex(0x8E4162), 0); // Gölge rengi
 
-    // === Tarih & Saat ===
-    lv_obj_t* lbl_dt = lv_label_create(container);
-    lv_label_set_text_fmt(lbl_dt, "%s   %s", dateBuf, hourBuf);
-    lv_obj_set_style_text_font(lbl_dt, &lv_font_montserrat_16, 0);
-    lv_obj_set_style_text_color(lbl_dt, lv_palette_darken(LV_PALETTE_GREY, 2), 0);
-    lv_obj_set_style_text_align(lbl_dt, LV_TEXT_ALIGN_CENTER, 0);
+    // === Katılımcılar alanı ===
+    lv_obj_t* member_cont = lv_obj_create(container);
+    lv_obj_set_size(member_cont, container_w - 20, container_h / 2 - 60);
+    lv_obj_set_flex_flow(member_cont, LV_FLEX_FLOW_ROW);
+    lv_obj_set_scroll_dir(member_cont, LV_DIR_HOR);
+    lv_obj_set_scrollbar_mode(member_cont, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_set_style_shadow_width(member_cont, 20, 0); // Gölge kalınlığı
+    lv_obj_set_style_shadow_spread(member_cont, 2, 0); // Gölge yayılımı
+    lv_obj_set_style_shadow_color(member_cont, lv_color_hex(0x8E4162), 0); // Gölge rengi
+    // Katılımcı ekleme
+    auto add_member = [&](const char* name) {
+        lv_obj_t* card = lv_obj_create(member_cont);
+        lv_obj_set_size(card, (container_w - 40) / 4, 100); // max 4 tane yan yana
+        lv_obj_set_style_radius(card, 12, 0);
+        lv_obj_set_style_bg_color(card, lv_color_hex(0x2F4858), 0);
 
-    // === Katılımcılar ===
-    lv_obj_t* lbl_part = lv_label_create(container);
-    lv_label_set_text(lbl_part, "Katılımcılar:");
-    lv_obj_set_style_text_font(lbl_part, &lv_font_montserrat_18, 0);
-    lv_obj_set_style_text_color(lbl_part, lv_palette_main(LV_PALETTE_BLUE), 0);
-    lv_obj_set_style_text_align(lbl_part, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_t* lbl = lv_label_create(card);
+        lv_label_set_text(lbl, name);
+        lv_obj_set_style_text_font(lbl, &turkish_24, 0);
+        lv_obj_set_style_text_color(lbl, lv_color_hex(0xFFFFFF), 0);
+        lv_obj_center(lbl);
+    };
 
-    if (isGroup) {
+    add_member(fullName);
+    if (isGroup && groupArr.size() > 0) {
+    
         for (JsonObject member : groupArr) {
-            const char* memberName = member["fullName"];
-            lv_obj_t* lbl_member = lv_label_create(container);
-            lv_label_set_text_fmt(lbl_member, "- %s", memberName);
-            lv_obj_set_style_text_font(lbl_member, &lv_font_montserrat_16, 0);
-            lv_obj_set_style_text_align(lbl_member, LV_TEXT_ALIGN_CENTER, 0);
+            const char* memberName = member["fullName"] | "Bilinmiyor";
+            add_member(memberName);
         }
-    } else {
-        lv_obj_t* lbl_member = lv_label_create(container);
-        lv_label_set_text_fmt(lbl_member, "- %s", fullName);
-        lv_obj_set_style_text_font(lbl_member, &lv_font_montserrat_16, 0);
-        lv_obj_set_style_text_align(lbl_member, LV_TEXT_ALIGN_CENTER, 0);
-    }
+    } 
+        
+    
 
+    // === Otomatik scroll animasyonu ===
+    lv_anim_t a;
+    lv_anim_init(&a);
+    lv_anim_set_var(&a, member_cont);
+    lv_anim_set_exec_cb(&a, [](void* obj, int32_t v) {
+        lv_obj_scroll_to_x((lv_obj_t*)obj, v, LV_ANIM_OFF);
+    });
+    lv_anim_set_values(&a, 0, lv_obj_get_scroll_right(member_cont));
+    lv_anim_set_time(&a, 8000);     // 8 sn’de kay
+    lv_anim_set_playback_time(&a, 8000);
+    lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
+    lv_anim_start(&a);
     return container;
 }

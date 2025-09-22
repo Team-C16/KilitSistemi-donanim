@@ -62,10 +62,10 @@ const char* password = "Kerem332.";
 const String jwtSecret = "DENEME";
 const int room_id = 2;
 const int accessType = 1;
-const String base_url = "http://192.168.1.130:8001/kilitSistemi";
+const String base_url = "http://192.168.1.33:8001/kilitSistemi";
 //AsyncWebServer server(80);
 
-const char* mqtt_server = "192.168.1.130";
+const char* mqtt_server = "192.168.1.33";
 const int mqtt_port = 1883;
 const String mqtt_base_topic = String("v1/") + String(room_id).c_str(); 
 WiFiClient espClient;
@@ -531,7 +531,9 @@ void setup() {
 
   // Stil: yeşil arka plan + radius + padding + gölge
   lv_obj_set_style_radius(status_card, 12, 0);
-  lv_obj_set_style_bg_color(status_card, lv_color_hex(0x4CAF50), 0); // yeşil
+  lv_obj_set_style_bg_color(status_card, lv_color_hex(0x4CAF50), 0);   // Başlangıç yeşil
+  lv_obj_set_style_bg_grad_color(status_card, lv_color_hex(0x81C784), 0); // Daha açık yeşil
+  lv_obj_set_style_bg_grad_dir(status_card, LV_GRAD_DIR_VER, 0);       // Dikey gradient
   lv_obj_set_style_shadow_width(status_card, 15, 0);
   lv_obj_set_style_shadow_color(status_card, lv_color_hex(0x2F4858), 0);
   lv_obj_set_style_pad_all(status_card, 10, 0); 
@@ -541,28 +543,39 @@ void setup() {
   lv_label_set_text(statusLabel, "");  
   lv_obj_add_style(statusLabel, &NormalFontStyle, LV_PART_MAIN);
   lv_obj_set_style_text_color(statusLabel, lv_color_hex(0xFFFFFF), 0); // beyaz yazı
-  lv_obj_set_style_text_font(statusLabel, &turkish_better_26, 0);
+  lv_obj_set_style_text_font(statusLabel, &turkish_24, 0);
   lv_timer_handler();// To Update Spinner
   lv_obj_add_flag(status_card, LV_OBJ_FLAG_HIDDEN);
 
   // simple time label (bottom-left) - shows HH:MM
 	lv_obj_t* time_card = lv_obj_create(main_screen);
-	lv_obj_set_size(time_card, LV_SIZE_CONTENT, LV_SIZE_CONTENT);  // İçeriğe göre boyut
-	lv_obj_align(time_card, LV_ALIGN_BOTTOM_LEFT, 8, -8);
+  lv_obj_set_scrollbar_mode(time_card, LV_SCROLLBAR_MODE_OFF);
+	lv_obj_set_size(time_card, 820, LV_SIZE_CONTENT);  // İçeriğe göre boyut
+	lv_obj_align(time_card, LV_ALIGN_BOTTOM_LEFT, -12, 4);
 
-	// Stil: gölge + padding + radius
-	lv_obj_set_style_radius(time_card, 12, 0);
-	lv_obj_set_style_bg_color(time_card, lv_color_hex(0x8E4162), 0);   // Arka plan rengi
-	lv_obj_set_style_shadow_width(time_card, 20, 0);
-	lv_obj_set_style_shadow_color(time_card, lv_color_hex(0x2F4858), 0); // gölgeyi daha koyu yapabilirsin
-	lv_obj_set_style_pad_all(time_card, 12, 0); // iç boşluk
+  lv_obj_set_style_pad_all(time_card, 12, 0);
+  lv_obj_set_style_bg_color(time_card, lv_color_hex(0x8E4162), 0);        // Başlangıç rengi
+  lv_obj_set_style_bg_grad_color(time_card, lv_color_hex(0x853c43), 0);   // Bitiş rengi (kırmızı ton)
+  lv_obj_set_style_bg_grad_dir(time_card, LV_GRAD_DIR_VER, 0);            // Yatay gradient (sol→sağ)
+  lv_obj_set_style_shadow_width(time_card, 20, 0);
+  lv_obj_set_style_shadow_color(time_card, lv_color_hex(0x2F4858), 0);
 
-	// --- Time Label ---
-	timeLabel = lv_label_create(time_card);
-	lv_label_set_text(timeLabel, "--:--");
-	lv_obj_add_style(timeLabel, &NormalFontStyle, LV_PART_MAIN);
-	lv_obj_set_style_text_font(timeLabel, &turkish_better_26, 0);
-	lv_obj_set_style_text_color(timeLabel, lv_color_hex(0xFFFFFF), 0);
+	// --- Sol Label (yazı) ---
+  lv_obj_t* leftLabel = lv_label_create(time_card);
+  lv_label_set_text(leftLabel, "Durum: Aktif");  // kendi yazını buraya koy
+  lv_obj_set_style_text_font(leftLabel, &turkish_24, 0);
+  lv_obj_set_style_text_color(leftLabel, lv_color_hex(0xFFFFFF), 0);
+  lv_obj_align(leftLabel, LV_ALIGN_LEFT_MID, 0, 0);
+  
+  // --- Sağ Label (saat) ---
+  lv_obj_t* rightLabel = lv_label_create(time_card);
+  lv_label_set_text(rightLabel, "--:--");
+  lv_obj_set_style_text_font(rightLabel, &turkish_24, 0);
+  lv_obj_set_style_text_color(rightLabel, lv_color_hex(0xFFFFFF), 0);
+  lv_obj_align(rightLabel, LV_ALIGN_RIGHT_MID, 0, 0);
+  
+  // global değişken yapmak istersen
+  timeLabel = rightLabel;
 
   lv_timer_handler();// To Update Spinner
   // --- WiFi ---
@@ -581,7 +594,7 @@ void setup() {
 
   lv_timer_handler(); // To Update Spinner
 
-  configTime(-4*3600, 0, "time.ume.tubitak.gov.tr", "0.tr.pool.ntp.org");
+  configTime(+3*3600, 0, "time.ume.tubitak.gov.tr", "0.tr.pool.ntp.org");
 
 
   lv_timer_handler();

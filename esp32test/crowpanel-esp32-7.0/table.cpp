@@ -4,7 +4,7 @@
 #include <time.h>
 #include <string.h>  // strlen için
 #include <ArduinoJson.h>
-
+#include "turkish_better_26.h"
 
 // Event callback fonksiyonunun bildirimi
 static void table_draw_cb(lv_event_t* e);
@@ -75,12 +75,12 @@ lv_obj_t* create_schedule_table(lv_obj_t* parent, lv_obj_t* qr) {
 
     lv_coord_t table_x = qr_area.x2 + 20;
     lv_coord_t table_w = screen_w - table_x - 10;
-    lv_coord_t table_h = screen_h - 20;
+    lv_coord_t table_h = screen_h - 50;
 
     // Tablo oluştur
     lv_obj_t* table = lv_table_create(parent);
     lv_obj_set_size(table, table_w, table_h); // biraz küçültüp boşluk bırak
-    lv_obj_set_pos(table, table_x, 10);
+    lv_obj_set_pos(table, table_x, 0);
 
     lv_obj_set_scrollbar_mode(table, LV_SCROLLBAR_MODE_OFF); // Scrollbar'ı kapat
 
@@ -102,13 +102,17 @@ lv_obj_t* create_schedule_table(lv_obj_t* parent, lv_obj_t* qr) {
     lv_style_set_bg_color(&style_table_header, lv_color_hex(0x2F4858));
     lv_style_set_text_color(&style_table_header, lv_color_hex(0xFFFFFF));
     lv_style_set_border_width(&style_table_header, 2);
-    lv_style_set_border_color(&style_table_header, lv_color_hex(0x33658A));
+    lv_style_set_border_color(&style_table_header, lv_color_hex(0x33658A)); 
 
     lv_style_init(&style_table_items);
     lv_style_set_border_width(&style_table_items, 1);
     lv_style_set_border_color(&style_table_items, lv_color_hex(0x33658A));
     lv_style_set_pad_all(&style_table_items, 6);
     lv_style_set_text_align(&style_table_items, LV_TEXT_ALIGN_CENTER);
+    
+ 
+    lv_style_set_bg_color(&style_table_items, lv_color_hex(0x53a4e0));     
+ 
 
     // Uygula
     lv_obj_add_style(table, &style_table_main, LV_PART_MAIN);
@@ -212,11 +216,18 @@ static void table_draw_cb(lv_event_t* e) {
             dsc->rect_dsc->border_width = 1;
         }
     } else if (val && strlen(val) > 0) {
-        dsc->rect_dsc->bg_color = lv_color_hex(0x8E4162);  // dolu hücre – mavi ton
+        dsc->rect_dsc->bg_grad.dir = LV_GRAD_DIR_VER; // Dikey gradient
+        dsc->rect_dsc->bg_grad.stops_count = 2;
+        dsc->rect_dsc->bg_grad.stops[0].color = lv_color_hex(0x853c43);
+        dsc->rect_dsc->bg_grad.stops[1].color = lv_color_hex(0x8E4162);
         dsc->rect_dsc->border_color = lv_color_hex(0x8E4162);
         dsc->rect_dsc->border_width = 1;
     } else {
-        dsc->rect_dsc->bg_color = lv_color_hex(0x86BBD8);  // boş hücre – açık mavi
+        dsc->rect_dsc->bg_grad.dir = LV_GRAD_DIR_VER; // Dikey gradient
+        dsc->rect_dsc->bg_color = lv_color_hex(0x86BBD8); // Üst renk (açık mavi)
+        dsc->rect_dsc->bg_grad.stops_count = 2;
+        dsc->rect_dsc->bg_grad.stops[0].color = lv_color_hex(0x4e8cba);
+        dsc->rect_dsc->bg_grad.stops[1].color = lv_color_hex(0x53a4e0);
         dsc->rect_dsc->border_color = lv_color_hex(0x2F4858);
         dsc->rect_dsc->border_width = 1;
     }

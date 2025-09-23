@@ -109,7 +109,6 @@ lv_obj_t* create_schedule_table(lv_obj_t* parent, lv_obj_t* qr) {
     lv_style_set_border_color(&style_table_items, lv_color_hex(0x33658A));
     lv_style_set_pad_all(&style_table_items, 6);
     lv_style_set_text_align(&style_table_items, LV_TEXT_ALIGN_CENTER);
-    
  
     lv_style_set_bg_color(&style_table_items, lv_color_hex(0x53a4e0));     
  
@@ -209,9 +208,12 @@ static void table_draw_cb(lv_event_t* e) {
         if (cell_hour == current_hour) {
             // 🔵 Şu anki saati göster
             //dsc->rect_dsc->bg_color = lv_color_hex(0x8E4162); // vişne/pembe ton
+            dsc->rect_dsc->bg_grad.dir = LV_GRAD_DIR_NONE;
+            dsc->rect_dsc->bg_color = lv_color_hex(0xFFFFFF);
             dsc->rect_dsc->border_color = lv_color_hex(0x8E4162); 
             dsc->rect_dsc->border_width = 6;
         } else {
+            dsc->rect_dsc->bg_grad.dir = LV_GRAD_DIR_NONE;
             dsc->rect_dsc->bg_color = lv_color_hex(0xFFFFFF); // beyaz
             dsc->rect_dsc->border_width = 1;
         }
@@ -222,6 +224,9 @@ static void table_draw_cb(lv_event_t* e) {
         dsc->rect_dsc->bg_grad.stops[1].color = lv_color_hex(0x8E4162);
         dsc->rect_dsc->border_color = lv_color_hex(0x8E4162);
         dsc->rect_dsc->border_width = 1;
+        if (dsc->label_dsc) {
+            dsc->label_dsc->color = lv_color_hex(0xFFFFFF); // dolu hücrelerde beyaz yazı
+        }
     } else {
         dsc->rect_dsc->bg_grad.dir = LV_GRAD_DIR_VER; // Dikey gradient
         dsc->rect_dsc->bg_color = lv_color_hex(0x86BBD8); // Üst renk (açık mavi)
@@ -423,7 +428,7 @@ lv_obj_t* create_details_screen(lv_obj_t* parent, lv_obj_t* qr, const char* json
 
     // === Katılımcılar alanı ===
     lv_obj_t* member_cont = lv_obj_create(container);
-    lv_obj_set_size(member_cont, container_w - 20, container_h / 2 - 60);
+    lv_obj_set_size(member_cont, container_w - 20, container_h / 2 - 90);
     lv_obj_set_flex_flow(member_cont, LV_FLEX_FLOW_ROW);
     lv_obj_set_scroll_dir(member_cont, LV_DIR_HOR);
     lv_obj_set_scrollbar_mode(member_cont, LV_SCROLLBAR_MODE_OFF);
@@ -436,16 +441,41 @@ lv_obj_t* create_details_screen(lv_obj_t* parent, lv_obj_t* qr, const char* json
         lv_obj_t* card = lv_obj_create(member_cont);
         lv_obj_set_size(card, (container_w - 40) / 4, 100); // max 4 tane yan yana
         lv_obj_set_style_radius(card, 12, 0);
+        lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_VER, 0);
         lv_obj_set_style_bg_color(card, lv_color_hex(0x2F4858), 0);
+        lv_obj_set_style_bg_grad_color(card, lv_color_hex(0x576691), 0); // alt
         lv_obj_set_scrollbar_mode(card, LV_SCROLLBAR_MODE_OFF);
-
+    
         lv_obj_t* lbl = lv_label_create(card);
         lv_label_set_text(lbl, name);
+    
+        // Font ve renk
         lv_obj_set_style_text_font(lbl, &turkish_better_21, 0);
         lv_obj_set_style_text_color(lbl, lv_color_hex(0xFFFFFF), 0);
+    
+        // Label genişliği kartın genişliğinden küçük olmalı
+        lv_obj_set_width(lbl, lv_obj_get_width(card) - 10);
+    
+        // Önce WRAP ile satıra sığdırmayı dene
+        lv_label_set_long_mode(lbl, LV_LABEL_LONG_WRAP);
+    
+        // Ortala
         lv_obj_center(lbl);
+        lv_obj_set_style_text_align(card, LV_TEXT_ALIGN_CENTER, 0);
+        // WRAP sonrasında label yüksekliğini kontrol et
+        lv_obj_update_layout(lbl); // boyutları güncelle
+    
+        lv_coord_t lbl_h = lv_obj_get_height(lbl);
+        lv_coord_t card_h = lv_obj_get_height(card);
+    
+        if (lbl_h > card_h - 10) {
+            // Çok uzun -> ... ile kısalt
+            lv_label_set_long_mode(lbl, LV_LABEL_LONG_DOT);
+            lv_obj_set_width(lbl, lv_obj_get_width(card) - 10);
+            lv_obj_center(lbl);
+        }
+                
     };
-
     add_member(fullName);
     if (isGroup && groupArr.size() > 0) {
     

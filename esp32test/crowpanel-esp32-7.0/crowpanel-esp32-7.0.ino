@@ -57,15 +57,15 @@ unsigned long unlockTime = 0;
 bool lockOpen = false;
 
 // --- Global ayarlar ---
-const char* ssid = "kerem";
-const char* password = "Kerem332.";
+const char* ssid = "BlokZincirLab";
+const char* password = "Network123!";
 const String jwtSecret = "DENEME";
 const int room_id = 2;
 const int accessType = 1;
-const String base_url = "http://192.168.1.33:8001/kilitSistemi";
+const String base_url = "https://pve.izu.edu.tr/kilitSistemi";
 //AsyncWebServer server(80);
 
-const char* mqtt_server = "192.168.1.33";
+const char* mqtt_server = "pve.izu.edu.tr";
 const int mqtt_port = 1883;
 const String mqtt_base_topic = String("v1/") + String(room_id).c_str(); 
 WiFiClient espClient;
@@ -369,6 +369,14 @@ bool mqttReconnect() {
     
     if (mqttClient.connect(clientId.c_str(), String(room_id).c_str(), token.c_str())) {
       Serial.println("connected");
+
+      String saveipTopic = "v1/" + String(room_id) + "/saveip";
+      bool ok = mqttClient.publish(saveipTopic.c_str(), "");  // boş payload
+      if (ok) {
+          Serial.printf("[SAVEIP] MQTT publish -> %s\n", saveipTopic.c_str());
+      } else {
+          Serial.printf("[SAVEIP] Hata: MQTT publish başarısız -> %s\n", saveipTopic.c_str());
+      }
       
       // Subscribe to topics with QoS 1 for reliability
       String scheduleResponseTopic = mqtt_base_topic + "/schedule/response";
@@ -527,7 +535,7 @@ void setup() {
   // --- Status Card ---
   status_card = lv_obj_create(main_screen);
   lv_obj_set_size(status_card, LV_SIZE_CONTENT, LV_SIZE_CONTENT);  
-  lv_obj_align_to(status_card, qrAltYazi, LV_ALIGN_OUT_BOTTOM_LEFT, -10, 15);
+  lv_obj_align_to(status_card, qrAltYazi, LV_ALIGN_OUT_BOTTOM_LEFT, -10, 25);
 
   // Stil: yeşil arka plan + radius + padding + gölge
   lv_obj_set_style_radius(status_card, 12, 0);
@@ -562,15 +570,15 @@ void setup() {
 
 	// --- Sol Label (yazı) ---
   lv_obj_t* leftLabel = lv_label_create(time_card);
-  lv_label_set_text(leftLabel, "Durum: Aktif");  // kendi yazını buraya koy
-  lv_obj_set_style_text_font(leftLabel, &turkish_24, 0);
+  lv_label_set_text(leftLabel, " UzLock.com");  
+  lv_obj_set_style_text_font(leftLabel, &turkish_better_21, 0);
   lv_obj_set_style_text_color(leftLabel, lv_color_hex(0xFFFFFF), 0);
   lv_obj_align(leftLabel, LV_ALIGN_LEFT_MID, 0, 0);
   
   // --- Sağ Label (saat) ---
   lv_obj_t* rightLabel = lv_label_create(time_card);
   lv_label_set_text(rightLabel, "--:--");
-  lv_obj_set_style_text_font(rightLabel, &turkish_24, 0);
+  lv_obj_set_style_text_font(rightLabel, &turkish_better_21, 0);
   lv_obj_set_style_text_color(rightLabel, lv_color_hex(0xFFFFFF), 0);
   lv_obj_align(rightLabel, LV_ALIGN_RIGHT_MID, 0, 0);
   
@@ -619,14 +627,12 @@ void handleTableToggle() {
     {
       return; // diğer tablo yoksa çık
     }
-    Serial.println("toggle girdi");
     unsigned long nowMillis = millis();
     unsigned long duration = showingMainTable ? mainTableDuration : otherTableDuration;
 
     if (nowMillis - lastSwitch >= duration) {
         lastSwitch = nowMillis;
         showingMainTable = !showingMainTable;
-        Serial.println("toggle zamanına geldi ve girdi");
         if (showingMainTable) {
             lv_obj_clear_flag(table, LV_OBJ_FLAG_HIDDEN);
             lv_obj_add_flag(other_table, LV_OBJ_FLAG_HIDDEN);

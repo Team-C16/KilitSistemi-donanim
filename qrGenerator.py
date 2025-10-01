@@ -17,7 +17,7 @@ import json
 jwtsecret = "JWT_SECRET"
 
 # Raspberry Node IP
-raspberryNodeip = 'https://pve.izu.edu.tr/kilitSistemi'
+raspberryNodeip = 'https://pve.izu.edu.tr/randevu'
 
 room_id = 2
 

@@ -20,7 +20,7 @@ import json
 jwtsecret = "DENEME"
 
 # Raspberry Node IP
-raspberryNodeip = 'https://pve.izu.edu.tr/kilitSistemi'
+raspberryNodeip = 'https://pve.izu.edu.tr/randevu'
 mqttbrokerip = "192.168.1.130"
 mqttbrokerport = 1883
 room_id = 2

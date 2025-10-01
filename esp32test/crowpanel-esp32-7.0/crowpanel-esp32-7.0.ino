@@ -62,7 +62,7 @@ const char* password = "Network123!";
 const String jwtSecret = "DENEME";
 const int room_id = 2;
 const int accessType = 1;
-const String base_url = "https://pve.izu.edu.tr/kilitSistemi";
+const String base_url = "https://pve.izu.edu.tr/randevu";
 //AsyncWebServer server(80);
 
 const char* mqtt_server = "pve.izu.edu.tr";

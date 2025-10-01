@@ -22,7 +22,7 @@ room_id = 1
 
 accessType = 1
 
-API_BASE = "https://pve.izu.edu.tr/kilitSistemi"
+API_BASE = "https://pve.izu.edu.tr/randevu"
 
 kayitMenu = None
 

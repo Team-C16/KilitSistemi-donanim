@@ -109,14 +109,18 @@ def transform_schedule(api_data):
 
     # Determine display week: if today is Sat/Sun show next week's Mon-Fri,
     # otherwise show current week's Mon-Fri
-    today_date = datetime.now().date() 
+    today_date = datetime.now().date()
     if today_date.weekday() >= 5:  # Sat(5), Sun(6)
         monday = today_date + timedelta(days=(7 - today_date.weekday()))
     else:
         monday = today_date - timedelta(days=today_date.weekday())
 
+    display_start = monday
+    display_end = monday + timedelta(days=4)
+    display_start = monday
+    days = [datetime.combine(display_start + timedelta(days=i), datetime.min.time()) for i in range(5)]
     # Build 5 weekdays (Mon-Fri)
-    days = [(datetime.combine(monday + timedelta(days=i), datetime.min.time())) for i in range(5)]
+    days = [datetime.combine(display_start + timedelta(days=i), datetime.min.time()) for i in range(5)]
     hours = [f"{h:02}:30" for h in range(9, 19)]  # 09:00 to 18:00
 
     # Step 1: fill with all "Boş"
@@ -145,7 +149,11 @@ def transform_schedule(api_data):
             utc_time = datetime.strptime(day_clean, "%Y-%m-%dT%H:%M:%S")
             # Keep UTC -> convert to local date if needed (here we use utc_time.date())
             local_date = (utc_time).date() + timedelta(days=1)
+            if not (display_start <= local_date <= display_end):
+                continue
+
             weekday_tr = dict_tr[local_date.strftime("%A")]
+
 
             # Get hour string from entry if present, fallback to utc_time hour
             if "hour" in entry and isinstance(entry["hour"], str) and ":" in entry["hour"]:

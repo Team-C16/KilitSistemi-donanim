@@ -7,7 +7,8 @@ from time import sleep
 import tkinter as tk
 from tkinter import font as tkfont
 import paho.mqtt.client as mqtt
-
+from gpiozero import LED
+led = LED(12)
 SECRET_KEY = "DENEME"
 mqttbrokerip = "192.168.1.130"
 mqttbrokerport = 1883
@@ -104,7 +105,10 @@ def on_message(client, userdata, msg):
                 return
             if verify_jwt(token):
                 print("[OPENDOOR] Token geçerli, kapı açılıyor.")
-                show_notification("Kilit Açık!", duration=10, color='green')
+                led.on()
+                show_notification("Kilit Açık!", duration=5, color='green')
+                sleep(5)
+                led.off()
             else:
                 print("[OPENDOOR] Geçersiz token.")
         except Exception as e:

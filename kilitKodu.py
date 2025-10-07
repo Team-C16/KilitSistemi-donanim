@@ -146,10 +146,8 @@ def verify_token():
         if decoded:
             # JWT geçerli, sinyal gönder (LED'i aç)
             led.on()
-            
-            print("TESTTTTTTT")
-            show_notification("Kilit Açık!", duration=10, color='green')
-            sleep(10)
+            show_notification("Kilit Açık!", duration=5, color='green')
+            sleep(5)
             led.off()
             return jsonify({"message": "JWT is valid, LED is ON!"}), 200
         else:

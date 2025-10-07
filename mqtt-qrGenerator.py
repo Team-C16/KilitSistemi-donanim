@@ -610,7 +610,7 @@ def draw_footer(screen, fonts):
            "left", "center")
     
     # App info with logo/icon
-    app_info = "Oda Rezervasyon Sistemi"
+    app_info = "pve.izu.edu.tr/randevu"
     app_info_rect = pygame.Rect(20, screen_height - footer_height, 300, footer_height)
     
     # App logo (simple calendar icon)

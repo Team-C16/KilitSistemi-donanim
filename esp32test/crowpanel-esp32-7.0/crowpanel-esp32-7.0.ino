@@ -694,6 +694,7 @@ void loop() {
     }
 
     mqttClient.loop();
+    mqttReconnect();
     // update simple time label once per second
     static unsigned long lastTimeUpdate = 0;
     if (millis() - lastTimeUpdate >= 1000) {

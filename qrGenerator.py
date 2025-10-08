@@ -12,14 +12,14 @@ from pygame.locals import *
 import re
 import ast
 import json
-
+time_suffix = ":30"
 # JWT secret key
 jwtsecret = "JWT_SECRET"
 
 # Raspberry Node IP
 raspberryNodeip = 'https://pve.izu.edu.tr/randevu'
 
-room_id = 2
+room_id = 13
 
 accessType = 1
 
@@ -626,7 +626,7 @@ def fetch_details_data(rendezvous_id):
 
     try:
         encoded_jwt = jwt.encode(
-            {"exp": time.time() + 300},
+            {"exp": time.time() + 30},
             jwtsecret,
             algorithm="HS256"
         )
@@ -758,6 +758,48 @@ def is_meeting_happening_now(meeting):
 
     except Exception as e:
         print("Time check failed:", e)
+        return False
+
+
+
+def check_if_slot_is_current(day_name, hour_str, time_suffix):
+    """
+    Verilen gün adı ve saat diliminin şu anki zamana denk gelip gelmediğini kontrol eder.
+    API çağrısı yapmadan önce kullanılır.
+    """
+    try:
+        now = datetime.now()
+        today_name = now.strftime('%A') # Örn: 'Wednesday'
+
+        # Türkçe gün adlarını İngilizce'ye çevirerek karşılaştırma
+        gun_map = {
+            "Pazartesi": "Monday", "Salı": "Tuesday", "Çarşamba": "Wednesday",
+            "Perşembe": "Thursday", "Cuma": "Friday", "Cumartesi": "Saturday", "Pazar": "Sunday"
+        }
+
+        # Eğer gün adı Türkçe ise İngilizce'ye çevir, değilse olduğu gibi kullan
+        english_day_name = gun_map.get(day_name, day_name)
+        
+        # Sadece bugünün toplantılarını kontrol et
+        if english_day_name != today_name:
+            return False
+
+        # Zaman aralığını oluştur ("14:30" -> 14:30 - 15:30)
+        start_hour = int(hour_str.split(':')[0])
+        start_minute = int(hour_str.split(':')[1])
+        
+        # Bitiş saati, başlangıçtan bir saat sonrası olarak hesaplanıyor
+        # time_suffix'e göre bu mantığı değiştirebilirsiniz
+        # Örn: Eğer yarım saatlik dilimlerse end_minute = start_minute + 30
+        end_hour = start_hour + 1
+        end_minute = start_minute
+        
+        start_time = now.replace(hour=start_hour, minute=start_minute, second=0, microsecond=0)
+        end_time = now.replace(hour=end_hour, minute=end_minute, second=0, microsecond=0)
+
+        return start_time <= now < end_time
+    except Exception as e:
+        print(f"Error in check_if_slot_is_current: {e}")
         return False
 
 
@@ -1117,6 +1159,8 @@ while running:
                 if entry["durum"] == "Dolu" and entry.get("rendezvous_id"):
                     rendezvous_id = entry["rendezvous_id"]
 
+                    if not check_if_slot_is_current(day,hour,time_suffix):
+                        continue
                     # Assuming fetch_details_data handles token globally
                     data = fetch_details_data(rendezvous_id)
                     if data:

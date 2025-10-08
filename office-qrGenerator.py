@@ -17,7 +17,7 @@ import json
 jwtsecret = "JWT_SECRET"
 time_suffix = ":30" # Varsayılan değer, API'den çekilemezse kullanılır
 # Raspberry Node IP
-raspberryNodeip = 'http://pve.izu.edu.tr/randevu'
+raspberryNodeip = 'https://pve.izu.edu.tr/randevu'
 
 room_id = 13
 
@@ -413,9 +413,18 @@ def draw_schedule_table(screen, fonts):
         pygame.draw.rect(screen, COLORS["border"], hour_rect, 1)
         draw_text(screen, hour, fonts["hour"], COLORS["text_primary"], hour_rect, "center", "center")
 
-        # Highlight current hour
+        suffix_minute = int(time_suffix.split(':')[1])
+
+        # 2. Vurgulanması gereken hedef saati hesapla
+        target_highlight_hour = 0
+        if current_minute < suffix_minute:
+            target_highlight_hour = current_hour - 1 
+        else:
+            target_highlight_hour = current_hour
+        # 3. Mevcut satırın saatini al ("14:30" -> 14)
         hour_val = int(hour.split(":")[0])
-        if hour_val == current_hour:
+
+        if hour_val == target_highlight_hour:
             pygame.draw.rect(screen, COLORS["highlight"], hour_rect, 6)
 
         # Schedule cells
@@ -648,7 +657,7 @@ def fetch_details_data(rendezvous_id):
 
     try:
         encoded_jwt = jwt.encode(
-            {"exp": time.time() + 300},
+            {"exp": time.time() + 30},
             jwtsecret,
             algorithm="HS256"
         )
@@ -681,7 +690,7 @@ def update_data():
     try:
         encoded_jwt = jwt.encode(
         {
-            "exp": time.time() + 300000  # 300000 saniye içinde geçersiz olacak
+            "exp": time.time() + 30  # 30 saniye içinde geçersiz olacak
         },
         jwtsecret,
         algorithm="HS256"
@@ -780,6 +789,46 @@ def is_meeting_happening_now(meeting):
 
     except Exception as e:
         print("Time check failed:", e)
+        return False
+
+def check_if_slot_is_current(day_name, hour_str, time_suffix):
+    """
+    Verilen gün adı ve saat diliminin şu anki zamana denk gelip gelmediğini kontrol eder.
+    API çağrısı yapmadan önce kullanılır.
+    """
+    try:
+        now = datetime.now()
+        today_name = now.strftime('%A') # Örn: 'Wednesday'
+
+        # Türkçe gün adlarını İngilizce'ye çevirerek karşılaştırma
+        gun_map = {
+            "Pazartesi": "Monday", "Salı": "Tuesday", "Çarşamba": "Wednesday",
+            "Perşembe": "Thursday", "Cuma": "Friday", "Cumartesi": "Saturday", "Pazar": "Sunday"
+        }
+
+        # Eğer gün adı Türkçe ise İngilizce'ye çevir, değilse olduğu gibi kullan
+        english_day_name = gun_map.get(day_name, day_name)
+        
+        # Sadece bugünün toplantılarını kontrol et
+        if english_day_name != today_name:
+            return False
+
+        # Zaman aralığını oluştur ("14:30" -> 14:30 - 15:30)
+        start_hour = int(hour_str.split(':')[0])
+        start_minute = int(hour_str.split(':')[1])
+        
+        # Bitiş saati, başlangıçtan bir saat sonrası olarak hesaplanıyor
+        # time_suffix'e göre bu mantığı değiştirebilirsiniz
+        # Örn: Eğer yarım saatlik dilimlerse end_minute = start_minute + 30
+        end_hour = start_hour + 1
+        end_minute = start_minute
+        
+        start_time = now.replace(hour=start_hour, minute=start_minute, second=0, microsecond=0)
+        end_time = now.replace(hour=end_hour, minute=end_minute, second=0, microsecond=0)
+
+        return start_time <= now < end_time
+    except Exception as e:
+        print(f"Error in check_if_slot_is_current: {e}")
         return False
 
 
@@ -1123,6 +1172,9 @@ while running:
             for hour, entry in hours.items():
                 if entry["durum"] == "Dolu" and entry.get("rendezvous_id"):
                     rendezvous_id = entry["rendezvous_id"]
+
+                    if not check_if_slot_is_current(day,hour,time_suffix):
+                        continue
 
                     # Assuming fetch_details_data handles token globally
                     data = fetch_details_data(rendezvous_id)

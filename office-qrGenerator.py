@@ -15,11 +15,11 @@ import json
 
 # JWT secret key
 jwtsecret = "JWT_SECRET"
-
+time_suffix = ":30" # Varsayılan değer, API'den çekilemezse kullanılır
 # Raspberry Node IP
-raspberryNodeip = 'https://pve.izu.edu.tr/randevu'
+raspberryNodeip = 'http://pve.izu.edu.tr/randevu'
 
-room_id = 1
+room_id = 13
 
 accessType = 1
 
@@ -121,7 +121,7 @@ def transform_schedule(api_data):
     days = [datetime.combine(display_start + timedelta(days=i), datetime.min.time()) for i in range(5)]
     # Build 5 weekdays (Mon-Fri)
     days = [datetime.combine(display_start + timedelta(days=i), datetime.min.time()) for i in range(5)]
-    hours = [f"{h:02}:30" for h in range(9, 19)]  # 09:00 to 18:00
+    hours = [f"{h:02}{time_suffix}" for h in range(9, 19)]
 
     # Step 1: fill with all "Boş"
     ders_programi = {}
@@ -156,11 +156,12 @@ def transform_schedule(api_data):
 
 
             # Get hour string from entry if present, fallback to utc_time hour
+            # DEĞİŞİKLİK 3 ve 4: Saat formatını dinamik yap
             if "hour" in entry and isinstance(entry["hour"], str) and ":" in entry["hour"]:
                 time_str = entry["hour"].split(":")[0]
-                hour_str = f"{int(time_str):02d}:30"
+                hour_str = f"{int(time_str):02d}{time_suffix}"
             else:
-                hour_str = f"{utc_time.hour:02d}:30"
+                hour_str = f"{utc_time.hour:02d}{time_suffix}"
 
             # Only accept entries that fall inside our displayed Mon-Fri set
             if weekday_tr in ders_programi and hour_str in ders_programi[weekday_tr]:
@@ -260,6 +261,48 @@ def fetch_room_name():
     return None
 
 
+def fetch_time_format_config():
+    """
+    Zaman formatı (örn: ':00', ':30') bilgisini API'den çeker.
+    Bu fonksiyon POST metodu, room_id ve JWT token kullanır.
+    """
+    global time_suffix
+    try:
+        encoded_jwt = jwt.encode(
+            {"exp": time.time() + 300},
+            jwtsecret,
+            algorithm="HS256"
+        )
+        
+        url = f"{raspberryNodeip}/getIndexesRasp"
+        payload = {
+            "room_id": room_id,
+            "token": encoded_jwt
+        }
+        
+        print(f"DEBUG: İstek gönderiliyor -> {url}")
+        response = requests.post(url, json=payload, timeout=5)
+        response.raise_for_status()
+        
+        config_data = response.json()
+        
+        # --- İsteğiniz üzerine eklenen debug print'i ---
+        print("DEBUG: /getIndexesRasp API Yanıtı:", config_data)
+        # ----------------------------------------------
+
+        for item in config_data:
+            if item.get("indexName") == "hour":
+                time_suffix = item.get("indexValue", ":30")
+                print(f"✅ Zaman formatı API'den başarıyla alındı: '{time_suffix}'")
+                return
+        
+        print("⚠️ 'hour' için zaman formatı API yanıtında bulunamadı. Varsayılan kullanılıyor.")
+
+    except requests.RequestException as e:
+        print(f"API bağlantı hatası (getIndexesRasp): {e}. Varsayılan zaman formatı ('{time_suffix}') kullanılacak.")
+    except Exception as e:
+        print(f"Bir hata oluştu (getIndexesRasp): {e}. Varsayılan zaman formatı ('{time_suffix}') kullanılacak.")
+
 # Ders programı tablosu çizme fonksiyonu
 def draw_schedule_table(screen, fonts):
     # Map English weekday names to Turkish
@@ -290,7 +333,7 @@ def draw_schedule_table(screen, fonts):
         days_with_dates.append((day_name_tr, day_key, date_obj))
 
     # All hours
-    hours = ["09:30","10:30","11:30","12:30", "13:30", "14:30", "15:30", "16:30", "17:30", "18:30"]
+    hours = [f"{h:02}{time_suffix}" for h in range(9, 19)]
 
     # Pre-fill missing data in ders_programi with "Boş"
     for (day_tr, date_key, date_obj) in days_with_dates:
@@ -1007,7 +1050,10 @@ room_name = "Örnek Oda"  # Varsayılan oda adı
 clock = pygame.time.Clock()
 FPS = 1  # Increased FPS for smoother animations
 
-# İlk oda adını al
+# YENİ KOD
+# UYGULAMA BAŞLANGICINDA ZAMAN FORMATINI ÇEK
+fetch_time_format_config()
+
 fetched_room_name = fetch_room_name()
 if fetched_room_name:
     room_name = fetched_room_name
@@ -1119,7 +1165,7 @@ while running:
                             meeting_info = {
                                 "rendezvous_id": rendezvous_id,
                                 "day": get_date_from_day_name(day),
-                                "time": f"{hour}-{int(hour[:2])+1:02d}:30",
+                                "time": f"{hour}-{int(hour.split(':')[0])+1:02d}{time_suffix}",
                                 "title": details.get("title", entry["aktivite"]),
                                 "organizer": details.get("fullName", entry["düzenleyen"]),
                                 "users": users,

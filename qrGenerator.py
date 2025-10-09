@@ -12,7 +12,7 @@ from pygame.locals import *
 import re
 import ast
 import json
-time_suffix = ":30"
+
 # JWT secret key
 jwtsecret = "JWT_SECRET"
 
@@ -39,15 +39,20 @@ COLORS = {
     "light": (255, 255, 255),           # Pure white
     "dark": (44, 62, 80),               # Deep blue-gray
     "white": (255, 255, 255),           # White
-    "text_primary": (44, 62, 80),       # Dark blue-gray text
+    "text_primary": (0,0,0),            # Dark blue-gray text 44, 62, 80
     "text_secondary": (127, 140, 141),  # Medium gray text
-    "available": (46, 204, 113),        # Vibrant green for available
-    "unavailable": (231, 76, 60),       # Softer red for unavailable
+    "available": (134, 187, 216),       # Vibrant green for available
+    "unavailable": (142, 65, 98),       # Softer red for unavailable
     "border": (214, 219, 233),          # Subtle border color
     "highlight": (241, 196, 15),        # Highlight color
-    "softBackground": (0,119,204),       # soft blue
+    "softBackground": (0,119,204),      # soft blue
     "StartColour": (209, 96, 61),
-    "grey": (211, 211, 211)
+    "grey": (211, 211, 211),
+    "black": (0,0,0),
+    "Charcoal": (47, 72, 88), # org_clr 1
+    "Lapis-Lazuli": (51, 100, 138), # org_clr 2
+    "Carolina-blue" : (134, 187, 216), # org_clr 3
+    "Magenta": (142, 65, 98), # org_clr 4
 }
 
 # :root {
@@ -109,7 +114,6 @@ def transform_schedule(api_data):
 
     # Define the 5 days and hours you display
     start_date = datetime.now()
-    end_date = datetime.now() + timedelta(days=7)
     days = [(start_date + timedelta(days=i)) for i in range(5)]
     hours = [f"{h:02}:00" for h in range(9, 19)]  # 09:00 to 18:00
 
@@ -141,9 +145,6 @@ def transform_schedule(api_data):
             # Get hour in local time (keeping same hour for simplicity)
             time_str = entry["hour"].split(":")[0]  # Get "12" from "12:00:00"
             hour_str = f"{int(time_str):02d}:00"  # Format as "12:00"
-
-            if not (start_date <= local_time <= end_date):
-                continue
 
             # Update the schedule
             if weekday_tr in ders_programi and hour_str in ders_programi[weekday_tr]:
@@ -218,7 +219,7 @@ def fetch_room_name():
     # JWT oluşturma (300000 saniye içinde geçersiz olacak şekilde ayarlanır)
     encoded_jwt = jwt.encode(
         {
-           "exp": time.time() + 30
+           "exp": time.time() + 300000
         },
         jwtsecret,
         algorithm="HS256"
@@ -287,12 +288,12 @@ def draw_schedule_table(screen, fonts):
 
     # Header row with gradient
     header_rect = pygame.Rect(table_x, table_y, table_width, header_height)
-    draw_gradient_rect(screen, COLORS["primary"], darken_color(COLORS["primary"]), header_rect, border_radius)
+    draw_gradient_rect(screen, COLORS["Lapis-Lazuli"], darken_color(COLORS["Lapis-Lazuli"]), header_rect, border_radius)
     
     # Time column header (top-left cell)
     time_header_rect = pygame.Rect(table_x, table_y, time_column_width, header_height)
-    pygame.draw.rect(screen, COLORS["secondary"], time_header_rect, 0)
-    draw_text(screen, "Saat", fonts["day"], COLORS["white"], time_header_rect, "center", "center")
+    pygame.draw.rect(screen, COLORS["Lapis-Lazuli"], time_header_rect, 0)
+    draw_text(screen, "Saat", fonts["day"], (0,0,0), time_header_rect, "center", "center")
 
     # Day headers
     for i, day in enumerate(days):
@@ -300,14 +301,14 @@ def draw_schedule_table(screen, fonts):
         
         # Highlight current day
         if day == today_tr:
-            pygame.draw.rect(screen, COLORS["info"], day_rect, 0)
-            draw_text(screen, day, fonts["day"], COLORS["white"], day_rect, "center", "center")
+            pygame.draw.rect(screen, COLORS["Carolina-blue"], day_rect, 0)
+            draw_text(screen, day, fonts["day"], (0,0,0), day_rect, "center", "center")
             # Add "Bugün" indicator
             today_indicator = fonts["title_small"].render("Bugün", True, COLORS["light"])
             indicator_rect = today_indicator.get_rect(centerx=day_rect.centerx, bottom=day_rect.bottom - 5)
             screen.blit(today_indicator, indicator_rect)
         else:
-            draw_text(screen, day, fonts["day"], COLORS["white"], day_rect, "center", "center")
+            draw_text(screen, day, fonts["day"], (0,0,0), day_rect, "center", "center")
 
     # Get current time for highlighting
     current_hour = datetime.now().hour
@@ -318,7 +319,7 @@ def draw_schedule_table(screen, fonts):
     for j, hour in enumerate(hours):
         # Hour cell
         hour_rect = pygame.Rect(table_x, table_y + header_height + j * row_height, time_column_width, row_height)
-        pygame.draw.rect(screen, COLORS["light"], hour_rect, 0)
+        pygame.draw.rect(screen, COLORS["Lapis-Lazuli"], hour_rect, 0)
         pygame.draw.rect(screen, COLORS["border"], hour_rect, 1)
         draw_text(screen, hour, fonts["hour"], COLORS["text_primary"], hour_rect, "center", "center")
 
@@ -339,7 +340,7 @@ def draw_schedule_table(screen, fonts):
 
                 if status == "Boş":
                     # Available cell with gradient
-                    draw_gradient_rect(screen, COLORS["available"], lighten_color(COLORS["available"]), cell_rect)
+                    draw_gradient_rect(screen, darken_color(COLORS["available"]), darken_color(COLORS["available"]), cell_rect)
                     
                     # Draw clock icon
                     clock_center = (cell_rect.left + 25, cell_rect.centery)
@@ -352,12 +353,12 @@ def draw_schedule_table(screen, fonts):
                                    (clock_center[0] + 6, clock_center[1]), 2)
                     
                     cell_text = 'Randevuya'
-                    draw_text(screen, cell_text, fonts["empty_cell"], COLORS["dark"], 
+                    draw_text(screen, cell_text, fonts["empty_cell"], COLORS["black"], 
                            pygame.Rect(cell_rect.left + 40, cell_rect.top-11, cell_rect.width - 35, cell_rect.height), 
                            "left", "center")
 
                     cell_text2 = 'Uygun'
-                    draw_text(screen, cell_text2, fonts["empty_cell"], COLORS["dark"], 
+                    draw_text(screen, cell_text2, fonts["empty_cell"], COLORS["black"], 
                            pygame.Rect(cell_rect.left + 40, cell_rect.top+11, cell_rect.width - 35, cell_rect.height), 
                            "left", "center")
                 else:
@@ -543,7 +544,7 @@ def lighten_color(color, factor=0.3):
 def fetch_qr_token():
     encoded_jwt = jwt.encode(
         {
-            "exp": time.time() + 30  # 300000 saniye içinde geçersiz olacak
+            "exp": time.time() + 300000  # 300000 saniye içinde geçersiz olacak
         },
         jwtsecret,
         algorithm="HS256"
@@ -630,7 +631,7 @@ def fetch_details_data(rendezvous_id):
 
     try:
         encoded_jwt = jwt.encode(
-            {"exp": time.time() + 30},
+            {"exp": time.time() + 300},
             jwtsecret,
             algorithm="HS256"
         )
@@ -663,7 +664,7 @@ def update_data():
     try:
         encoded_jwt = jwt.encode(
         {
-            "exp": time.time() + 30  # 300000 saniye içinde geçersiz olacak
+            "exp": time.time() + 300000  # 300000 saniye içinde geçersiz olacak
         },
         jwtsecret,
         algorithm="HS256"
@@ -762,48 +763,6 @@ def is_meeting_happening_now(meeting):
 
     except Exception as e:
         print("Time check failed:", e)
-        return False
-
-
-
-def check_if_slot_is_current(day_name, hour_str, time_suffix):
-    """
-    Verilen gün adı ve saat diliminin şu anki zamana denk gelip gelmediğini kontrol eder.
-    API çağrısı yapmadan önce kullanılır.
-    """
-    try:
-        now = datetime.now()
-        today_name = now.strftime('%A') # Örn: 'Wednesday'
-
-        # Türkçe gün adlarını İngilizce'ye çevirerek karşılaştırma
-        gun_map = {
-            "Pazartesi": "Monday", "Salı": "Tuesday", "Çarşamba": "Wednesday",
-            "Perşembe": "Thursday", "Cuma": "Friday", "Cumartesi": "Saturday", "Pazar": "Sunday"
-        }
-
-        # Eğer gün adı Türkçe ise İngilizce'ye çevir, değilse olduğu gibi kullan
-        english_day_name = gun_map.get(day_name, day_name)
-        
-        # Sadece bugünün toplantılarını kontrol et
-        if english_day_name != today_name:
-            return False
-
-        # Zaman aralığını oluştur ("14:30" -> 14:30 - 15:30)
-        start_hour = int(hour_str.split(':')[0])
-        start_minute = int(hour_str.split(':')[1])
-        
-        # Bitiş saati, başlangıçtan bir saat sonrası olarak hesaplanıyor
-        # time_suffix'e göre bu mantığı değiştirebilirsiniz
-        # Örn: Eğer yarım saatlik dilimlerse end_minute = start_minute + 30
-        end_hour = start_hour + 1
-        end_minute = start_minute
-        
-        start_time = now.replace(hour=start_hour, minute=start_minute, second=0, microsecond=0)
-        end_time = now.replace(hour=end_hour, minute=end_minute, second=0, microsecond=0)
-
-        return start_time <= now < end_time
-    except Exception as e:
-        print(f"Error in check_if_slot_is_current: {e}")
         return False
 
 
@@ -999,7 +958,7 @@ def draw_meeting_details(screen, fonts, current_meeting, qr_code_img, room_icon,
                 circular_img = make_circle_image(img_surface) # making the image circular
                 container_rect = pygame.Rect(rect_x, rect_y, rect_width, rect_height) # drawing the container box for the photo in memory
                 rect = pygame.Rect(rect_x, rect_y, rect_width, blue_rect_height) # drawing the blue box for the photo in memory
-                rect2 = pygame.Rect(rect_x, rect_y + 20, rect_width, blue_rect_height - 20) # drawing the downisde of teh blue box
+                rect2 = pygame.Rect(rect_x, rect_y + 20, rect_width, blue_rect_height - 20) # drawing the downside of the blue box
 
                 draw_gradient_rect(screen, COLORS["primary"], COLORS["primary"], rect, border_radius= radius) # drawing the blue box on the screen
                 draw_gradient_rect(screen, COLORS["primary"], darken_color(COLORS["primary"]), rect2) # drawing the down side of the blue box
@@ -1126,7 +1085,7 @@ while running:
         update_data() # This should update `ders_programi`
 
     # Clear screen with gradient background
-    draw_gradient_background(screen, darken_color(COLORS["background"]), COLORS["background"])
+    draw_gradient_background(screen, darken_color(COLORS["Charcoal"]), COLORS["white"])
     
     # Draw components (main room QR card)
     if qr_surface:
@@ -1163,8 +1122,6 @@ while running:
                 if entry["durum"] == "Dolu" and entry.get("rendezvous_id"):
                     rendezvous_id = entry["rendezvous_id"]
 
-                    if not check_if_slot_is_current(day,hour,time_suffix):
-                        continue
                     # Assuming fetch_details_data handles token globally
                     data = fetch_details_data(rendezvous_id)
                     if data:
@@ -1246,7 +1203,7 @@ while running:
         qr_data_for_detail = current_meeting.get("rendezvous_id") if current_meeting else None
         qr_code_img = generate_qr_code_surface(str(qr_data_for_detail), screen_width, screen_height) if qr_data_for_detail else None
         
-        draw_gradient_background(screen,COLORS["light"], COLORS["light"]) 
+        draw_gradient_background(screen,COLORS["Charcoal"], COLORS["light"]) 
         
         draw_meeting_details(screen, fonts, current_meeting, qr_code_img, None, None)
         

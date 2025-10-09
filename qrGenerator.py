@@ -39,7 +39,7 @@ COLORS = {
     "light": (255, 255, 255),           # Pure white
     "dark": (44, 62, 80),               # Deep blue-gray
     "white": (255, 255, 255),           # White
-    "text_primary": (0,0,0),            # Dark blue-gray text 44, 62, 80
+    "text_primary": (255,255,255),       # Dark blue-gray text 44, 62, 80
     "text_secondary": (127, 140, 141),  # Medium gray text
     "available": (134, 187, 216),       # Vibrant green for available
     "unavailable": (142, 65, 98),       # Softer red for unavailable
@@ -293,7 +293,7 @@ def draw_schedule_table(screen, fonts):
     # Time column header (top-left cell)
     time_header_rect = pygame.Rect(table_x, table_y, time_column_width, header_height)
     pygame.draw.rect(screen, COLORS["Lapis-Lazuli"], time_header_rect, 0)
-    draw_text(screen, "Saat", fonts["day"], (0,0,0), time_header_rect, "center", "center")
+    draw_text(screen, "Saat", fonts["day"],COLORS["white"], time_header_rect, "center", "center")
 
     # Day headers
     for i, day in enumerate(days):
@@ -302,13 +302,13 @@ def draw_schedule_table(screen, fonts):
         # Highlight current day
         if day == today_tr:
             pygame.draw.rect(screen, COLORS["Carolina-blue"], day_rect, 0)
-            draw_text(screen, day, fonts["day"], (0,0,0), day_rect, "center", "center")
+            draw_text(screen, day, fonts["day"], darken_color(COLORS["Charcoal"]), day_rect, "center", "center")
             # Add "Bugün" indicator
-            today_indicator = fonts["title_small"].render("Bugün", True, COLORS["light"])
+            today_indicator = fonts["title_small"].render("Bugün", True, darken_color(COLORS["Charcoal"]))
             indicator_rect = today_indicator.get_rect(centerx=day_rect.centerx, bottom=day_rect.bottom - 5)
             screen.blit(today_indicator, indicator_rect)
         else:
-            draw_text(screen, day, fonts["day"], (0,0,0), day_rect, "center", "center")
+            draw_text(screen, day, fonts["day"], COLORS["white"], day_rect, "center", "center")
 
     # Get current time for highlighting
     current_hour = datetime.now().hour
@@ -962,7 +962,7 @@ def draw_meeting_details(screen, fonts, current_meeting, qr_code_img, room_icon,
 
                 draw_gradient_rect(screen, COLORS["primary"], COLORS["primary"], rect, border_radius= radius) # drawing the blue box on the screen
                 draw_gradient_rect(screen, COLORS["primary"], darken_color(COLORS["primary"]), rect2) # drawing the down side of the blue box
-                pygame.draw.rect(screen,(0,0,0), container_rect, 1, border_radius=radius) # drawing the box on the screen
+                pygame.draw.rect(screen,COLORS["white"], container_rect, 1, border_radius=radius) # drawing the box on the screen
                 screen.blit(circular_img, (img_x + i * img_spacing, img_y)) # drawing the image
                 img_num += 1
                 i += 1

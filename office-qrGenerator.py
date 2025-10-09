@@ -14,7 +14,7 @@ import ast
 import json
 
 # JWT secret key
-jwtsecret = "JWT_SECRET"
+jwtsecret = "jwt_secret"
 time_suffix = ":30" # Varsayılan değer, API'den çekilemezse kullanılır
 # Raspberry Node IP
 raspberryNodeip = 'https://pve.izu.edu.tr/randevu'
@@ -537,7 +537,7 @@ def draw_schedule_table(screen, fonts):
         # Hour label cell
         hour_rect = pygame.Rect(table_x, table_y + header_height + j * row_height,
                                 time_column_width, row_height)
-        pygame.draw.rect(screen, COLORS["Lapis-Lazuli"], hour_rect, 0)
+        pygame.draw.rect(screen, COLORS["white"], hour_rect, 0)
         pygame.draw.rect(screen, COLORS["border"], hour_rect, 1)
         draw_text(screen, hour, fonts["hour"], COLORS["text_primary"], hour_rect, "center", "center")
 
@@ -573,10 +573,10 @@ def draw_schedule_table(screen, fonts):
                     pygame.draw.line(screen, COLORS["available"], clock_center, (clock_center[0], clock_center[1]-8), 2)
                     pygame.draw.line(screen, COLORS["available"], clock_center, (clock_center[0]+6, clock_center[1]), 2)
                     # Text
-                    draw_text(screen, "Randevuya", fonts["empty_cell"], COLORS["black"],
+                    draw_text(screen, "Randevuya", fonts["empty_cell"], COLORS["white"],
                               pygame.Rect(cell_rect.left+40, cell_rect.top-11, cell_rect.width-35, cell_rect.height),
                               "left", "center")
-                    draw_text(screen, "Uygun", fonts["empty_cell"], COLORS["black"],
+                    draw_text(screen, "Uygun", fonts["empty_cell"], COLORS["white"],
                               pygame.Rect(cell_rect.left+40, cell_rect.top+11, cell_rect.width-35, cell_rect.height),
                               "left", "center")
                 else:

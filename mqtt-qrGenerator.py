@@ -21,9 +21,9 @@ jwtsecret = "DENEME"
 
 # Raspberry Node IP
 raspberryNodeip = 'https://pve.izu.edu.tr/randevu'
-mqttbrokerip = "192.168.1.130"
+mqttbrokerip = "pve.izu.edu.tr"
 mqttbrokerport = 1883
-room_id = 2
+room_id = 1
 
 accessType = 1
 
@@ -268,8 +268,8 @@ def transform_schedule(api_data):
         "Saturday": "Cumartesi",
         "Sunday": "Pazar"
     }
-    print(api_data)
     # Define the 5 days and hours you display
+    end_date = datetime.now() + timedelta(days=7)
     start_date = datetime.now()
     days = [(start_date + timedelta(days=i)) for i in range(5)]
     hours = [f"{h:02}:00" for h in range(9, 19)]  # 09:00 to 18:00
@@ -303,6 +303,8 @@ def transform_schedule(api_data):
             time_str = entry["hour"].split(":")[0]  # Get "12" from "12:00:00"
             hour_str = f"{int(time_str):02d}:00"  # Format as "12:00"
 
+            if not (start_date <= local_time <= end_date):
+                continue
             # Update the schedule
             if weekday_tr in ders_programi and hour_str in ders_programi[weekday_tr]:
                 ders_programi[weekday_tr][hour_str] = {

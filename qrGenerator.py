@@ -19,7 +19,7 @@ jwtsecret = "JWT_SECRET"
 # Raspberry Node IP
 raspberryNodeip = 'https://pve.izu.edu.tr/randevu'
 
-room_id = 13
+room_id = 1
 
 accessType = 1
 
@@ -109,6 +109,7 @@ def transform_schedule(api_data):
 
     # Define the 5 days and hours you display
     start_date = datetime.now()
+    end_date = datetime.now() + timedelta(days=7)
     days = [(start_date + timedelta(days=i)) for i in range(5)]
     hours = [f"{h:02}:00" for h in range(9, 19)]  # 09:00 to 18:00
 
@@ -140,6 +141,9 @@ def transform_schedule(api_data):
             # Get hour in local time (keeping same hour for simplicity)
             time_str = entry["hour"].split(":")[0]  # Get "12" from "12:00:00"
             hour_str = f"{int(time_str):02d}:00"  # Format as "12:00"
+
+            if not (start_date <= local_time <= end_date):
+                continue
 
             # Update the schedule
             if weekday_tr in ders_programi and hour_str in ders_programi[weekday_tr]:
@@ -214,7 +218,7 @@ def fetch_room_name():
     # JWT oluşturma (300000 saniye içinde geçersiz olacak şekilde ayarlanır)
     encoded_jwt = jwt.encode(
         {
-           "exp": time.time() + 300000
+           "exp": time.time() + 30
         },
         jwtsecret,
         algorithm="HS256"
@@ -539,7 +543,7 @@ def lighten_color(color, factor=0.3):
 def fetch_qr_token():
     encoded_jwt = jwt.encode(
         {
-            "exp": time.time() + 300000  # 300000 saniye içinde geçersiz olacak
+            "exp": time.time() + 30  # 300000 saniye içinde geçersiz olacak
         },
         jwtsecret,
         algorithm="HS256"
@@ -659,7 +663,7 @@ def update_data():
     try:
         encoded_jwt = jwt.encode(
         {
-            "exp": time.time() + 300000  # 300000 saniye içinde geçersiz olacak
+            "exp": time.time() + 30  # 300000 saniye içinde geçersiz olacak
         },
         jwtsecret,
         algorithm="HS256"

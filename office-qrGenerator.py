@@ -30,7 +30,7 @@ last_scroll_time = 0
 # Renk Paleti (Modern, Flat UI)
 COLORS = {
     "background": (245, 248, 255),      # Slightly blue-tinted background
-    "primary": (41, 98, 255),           # Richer blue for primary elements
+    "primary": (51, 100, 138),           # Richer blue for primary elements
     "secondary": (72, 101, 129),        # Deep blue-gray
     "success": (46, 204, 113),          # Vibrant green
     "danger": (231, 76, 60),            # Softer red
@@ -39,15 +39,20 @@ COLORS = {
     "light": (255, 255, 255),           # Pure white
     "dark": (44, 62, 80),               # Deep blue-gray
     "white": (255, 255, 255),           # White
-    "text_primary": (44, 62, 80),       # Dark blue-gray text
+    "text_primary": (0,0,0),       # Dark blue-gray text 44, 62, 80
     "text_secondary": (127, 140, 141),  # Medium gray text
-    "available": (46, 204, 113),        # Vibrant green for available
-    "unavailable": (231, 76, 60),       # Softer red for unavailable
+    "available": (134, 187, 216),       # Vibrant green for available
+    "unavailable": (142, 65, 98),       # Softer red for unavailable
     "border": (214, 219, 233),          # Subtle border color
     "highlight": (241, 196, 15),        # Highlight color
-    "softBackground": (0,119,204),       # soft blue
+    "softBackground": (0,119,204),      # soft blue
     "StartColour": (209, 96, 61),
-    "grey": (211, 211, 211)
+    "grey": (211, 211, 211),
+    "black": (0,0,0),
+    "Charcoal": (47, 72, 88), # org_clr 1
+    "Lapis-Lazuli": (51, 100, 138), # org_clr 2
+    "Carolina-blue" : (134, 187, 216), # org_clr 3
+    "Magenta": (142, 65, 98), # org_clr 4
 }
 
 # :root {
@@ -269,7 +274,7 @@ def fetch_time_format_config():
     global time_suffix
     try:
         encoded_jwt = jwt.encode(
-            {"exp": time.time() + 300},
+            {"exp": time.time() + 300000000},
             jwtsecret,
             algorithm="HS256"
         )
@@ -367,12 +372,12 @@ def draw_schedule_table(screen, fonts):
 
     # Header background
     header_rect = pygame.Rect(table_x, table_y, table_width, header_height)
-    draw_gradient_rect(screen, COLORS["primary"], darken_color(COLORS["primary"]), header_rect, border_radius)
+    draw_gradient_rect(screen, COLORS["Lapis-Lazuli"], darken_color(COLORS["Lapis-Lazuli"]), header_rect, border_radius)
 
     # Time column header
     time_header_rect = pygame.Rect(table_x, table_y, time_column_width, header_height)
-    pygame.draw.rect(screen, COLORS["secondary"], time_header_rect, 0)
-    draw_text(screen, "Saat", fonts["day"], COLORS["white"], time_header_rect, "center", "center")
+    pygame.draw.rect(screen, COLORS["Lapis-Lazuli"], time_header_rect, 0)
+    draw_text(screen, "Saat", fonts["day"],COLORS["white"], time_header_rect, "center", "center")
 
     # Day headers with name + date
     today_date = datetime.now().date()
@@ -381,19 +386,19 @@ def draw_schedule_table(screen, fonts):
                                table_y, column_width, header_height)
 
         if date_obj == today_date:
-            pygame.draw.rect(screen, COLORS["info"], day_rect, 0)
+            pygame.draw.rect(screen, COLORS["Carolina-blue"], day_rect, 0)
 
             # Day name (top)
-            draw_text(screen, day_tr, fonts["day"], COLORS["white"], day_rect, "center", "top")
+            draw_text(screen, day_tr, fonts["day"], COLORS["black"], day_rect, "center", "top")
 
             # "Bugün" slightly above the bottom
-            today_indicator = fonts["title_small"].render("Bugün", True, COLORS["light"])
+            today_indicator = fonts["title_small"].render("Bugün", True, COLORS["black"])
             indicator_rect = today_indicator.get_rect(centerx=day_rect.centerx, bottom=day_rect.bottom - 25)
             screen.blit(today_indicator, indicator_rect)
 
             # Date directly under "Bugün"
-            draw_text(screen, day_tr, fonts["day"], COLORS["white"], day_rect, "center", "top")
-            draw_text(screen, date_obj.strftime("%Y-%m-%d"), fonts["cell_small"], COLORS["white"], day_rect, "center", "bottom")
+            draw_text(screen, day_tr, fonts["day"], COLORS["black"], day_rect, "center", "top")
+            draw_text(screen, date_obj.strftime("%Y-%m-%d"), fonts["cell_small"], COLORS["black"], day_rect, "center", "bottom")
 
         else:
             draw_text(screen, day_tr, fonts["day"], COLORS["white"], day_rect, "center", "top")
@@ -409,7 +414,7 @@ def draw_schedule_table(screen, fonts):
         # Hour label cell
         hour_rect = pygame.Rect(table_x, table_y + header_height + j * row_height,
                                 time_column_width, row_height)
-        pygame.draw.rect(screen, COLORS["light"], hour_rect, 0)
+        pygame.draw.rect(screen, COLORS["Lapis-Lazuli"], hour_rect, 0)
         pygame.draw.rect(screen, COLORS["border"], hour_rect, 1)
         draw_text(screen, hour, fonts["hour"], COLORS["text_primary"], hour_rect, "center", "center")
 
@@ -437,7 +442,7 @@ def draw_schedule_table(screen, fonts):
                 status = cell_data.get("durum", "Boş")
 
                 if status == "Boş":
-                    draw_gradient_rect(screen, COLORS["available"], lighten_color(COLORS["available"]), cell_rect)
+                    draw_gradient_rect(screen, darken_color(COLORS["available"]), darken_color(COLORS["available"]), cell_rect)
                     # Clock icon
                     clock_center = (cell_rect.left + 25, cell_rect.centery)
                     pygame.draw.circle(screen, COLORS["white"], clock_center, 12, 0)
@@ -445,10 +450,10 @@ def draw_schedule_table(screen, fonts):
                     pygame.draw.line(screen, COLORS["available"], clock_center, (clock_center[0], clock_center[1]-8), 2)
                     pygame.draw.line(screen, COLORS["available"], clock_center, (clock_center[0]+6, clock_center[1]), 2)
                     # Text
-                    draw_text(screen, "Randevuya", fonts["empty_cell"], COLORS["dark"],
+                    draw_text(screen, "Randevuya", fonts["empty_cell"], COLORS["black"],
                               pygame.Rect(cell_rect.left+40, cell_rect.top-11, cell_rect.width-35, cell_rect.height),
                               "left", "center")
-                    draw_text(screen, "Uygun", fonts["empty_cell"], COLORS["dark"],
+                    draw_text(screen, "Uygun", fonts["empty_cell"], COLORS["black"],
                               pygame.Rect(cell_rect.left+40, cell_rect.top+11, cell_rect.width-35, cell_rect.height),
                               "left", "center")
                 else:
@@ -657,7 +662,7 @@ def fetch_details_data(rendezvous_id):
 
     try:
         encoded_jwt = jwt.encode(
-            {"exp": time.time() + 30},
+            {"exp": time.time() + 3000000},
             jwtsecret,
             algorithm="HS256"
         )
@@ -1140,7 +1145,7 @@ while running:
         update_data() # This should update `ders_programi`
 
     # Clear screen with gradient background
-    draw_gradient_background(screen, darken_color(COLORS["background"]), COLORS["background"])
+    draw_gradient_background(screen, darken_color(COLORS["Charcoal"]), COLORS["white"])
 
     print(f"Display mode: {display_mode}, Time since last switch: {pygame.time.get_ticks() - last_switch_time}")
     
@@ -1253,7 +1258,7 @@ while running:
         # Pass required arguments to `draw_schedule_table`
         draw_schedule_table(screen, fonts) 
     else: # display_mode == "detail"        
-        draw_gradient_background(screen,COLORS["light"], COLORS["light"]) 
+        draw_gradient_background(screen,darken_color(COLORS["Charcoal"]), COLORS["white"]) 
         
         draw_meeting_details(screen, fonts, current_meeting)
 

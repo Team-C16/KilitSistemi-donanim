@@ -12,7 +12,7 @@ from pygame.locals import *
 import re
 import ast
 import json
-
+time_suffix = ":30"
 # JWT secret key
 jwtsecret = "JWT_SECRET"
 
@@ -30,7 +30,7 @@ last_scroll_time = 0
 # Renk Paleti (Modern, Flat UI)
 COLORS = {
     "background": (245, 248, 255),      # Slightly blue-tinted background
-    "primary": (41, 98, 255),           # Richer blue for primary elements
+    "primary": (51, 100, 138),           # Richer blue for primary elements
     "secondary": (72, 101, 129),        # Deep blue-gray
     "success": (46, 204, 113),          # Vibrant green
     "danger": (231, 76, 60),            # Softer red
@@ -39,7 +39,7 @@ COLORS = {
     "light": (255, 255, 255),           # Pure white
     "dark": (44, 62, 80),               # Deep blue-gray
     "white": (255, 255, 255),           # White
-    "text_primary": (255,255,255),       # Dark blue-gray text 44, 62, 80
+    "text_primary": (0,0,0),       # Dark blue-gray text 44, 62, 80
     "text_secondary": (127, 140, 141),  # Medium gray text
     "available": (134, 187, 216),       # Vibrant green for available
     "unavailable": (142, 65, 98),       # Softer red for unavailable
@@ -114,6 +114,7 @@ def transform_schedule(api_data):
 
     # Define the 5 days and hours you display
     start_date = datetime.now()
+    end_date = datetime.now() + timedelta(days=7)
     days = [(start_date + timedelta(days=i)) for i in range(5)]
     hours = [f"{h:02}:00" for h in range(9, 19)]  # 09:00 to 18:00
 
@@ -145,6 +146,9 @@ def transform_schedule(api_data):
             # Get hour in local time (keeping same hour for simplicity)
             time_str = entry["hour"].split(":")[0]  # Get "12" from "12:00:00"
             hour_str = f"{int(time_str):02d}:00"  # Format as "12:00"
+
+            if not (start_date <= local_time <= end_date):
+                continue
 
             # Update the schedule
             if weekday_tr in ders_programi and hour_str in ders_programi[weekday_tr]:
@@ -219,7 +223,7 @@ def fetch_room_name():
     # JWT oluşturma (300000 saniye içinde geçersiz olacak şekilde ayarlanır)
     encoded_jwt = jwt.encode(
         {
-           "exp": time.time() + 300000
+           "exp": time.time() + 30
         },
         jwtsecret,
         algorithm="HS256"
@@ -319,7 +323,7 @@ def draw_schedule_table(screen, fonts):
     for j, hour in enumerate(hours):
         # Hour cell
         hour_rect = pygame.Rect(table_x, table_y + header_height + j * row_height, time_column_width, row_height)
-        pygame.draw.rect(screen, COLORS["Lapis-Lazuli"], hour_rect, 0)
+        pygame.draw.rect(screen, COLORS["white"], hour_rect, 0)
         pygame.draw.rect(screen, COLORS["border"], hour_rect, 1)
         draw_text(screen, hour, fonts["hour"], COLORS["text_primary"], hour_rect, "center", "center")
 
@@ -544,7 +548,7 @@ def lighten_color(color, factor=0.3):
 def fetch_qr_token():
     encoded_jwt = jwt.encode(
         {
-            "exp": time.time() + 300000  # 300000 saniye içinde geçersiz olacak
+            "exp": time.time() + 30  # 300000 saniye içinde geçersiz olacak
         },
         jwtsecret,
         algorithm="HS256"
@@ -631,7 +635,7 @@ def fetch_details_data(rendezvous_id):
 
     try:
         encoded_jwt = jwt.encode(
-            {"exp": time.time() + 300},
+            {"exp": time.time() + 30},
             jwtsecret,
             algorithm="HS256"
         )
@@ -664,7 +668,7 @@ def update_data():
     try:
         encoded_jwt = jwt.encode(
         {
-            "exp": time.time() + 300000  # 300000 saniye içinde geçersiz olacak
+            "exp": time.time() + 30  # 300000 saniye içinde geçersiz olacak
         },
         jwtsecret,
         algorithm="HS256"
@@ -765,6 +769,47 @@ def is_meeting_happening_now(meeting):
         print("Time check failed:", e)
         return False
 
+
+
+def check_if_slot_is_current(day_name, hour_str, time_suffix):
+    """
+    Verilen gün adı ve saat diliminin şu anki zamana denk gelip gelmediğini kontrol eder.
+    API çağrısı yapmadan önce kullanılır.
+    """
+    try:
+        now = datetime.now()
+        today_name = now.strftime('%A') # Örn: 'Wednesday'
+
+        # Türkçe gün adlarını İngilizce'ye çevirerek karşılaştırma
+        gun_map = {
+            "Pazartesi": "Monday", "Salı": "Tuesday", "Çarşamba": "Wednesday",
+            "Perşembe": "Thursday", "Cuma": "Friday", "Cumartesi": "Saturday", "Pazar": "Sunday"
+        }
+
+        # Eğer gün adı Türkçe ise İngilizce'ye çevir, değilse olduğu gibi kullan
+        english_day_name = gun_map.get(day_name, day_name)
+        
+        # Sadece bugünün toplantılarını kontrol et
+        if english_day_name != today_name:
+            return False
+
+        # Zaman aralığını oluştur ("14:30" -> 14:30 - 15:30)
+        start_hour = int(hour_str.split(':')[0])
+        start_minute = int(hour_str.split(':')[1])
+        
+        # Bitiş saati, başlangıçtan bir saat sonrası olarak hesaplanıyor
+        # time_suffix'e göre bu mantığı değiştirebilirsiniz
+        # Örn: Eğer yarım saatlik dilimlerse end_minute = start_minute + 30
+        end_hour = start_hour + 1
+        end_minute = start_minute
+        
+        start_time = now.replace(hour=start_hour, minute=start_minute, second=0, microsecond=0)
+        end_time = now.replace(hour=end_hour, minute=end_minute, second=0, microsecond=0)
+
+        return start_time <= now < end_time
+    except Exception as e:
+        print(f"Error in check_if_slot_is_current: {e}")
+        return False
 
 def wrap_text(text, font, max_width):
     words = text.split()
@@ -1076,6 +1121,7 @@ while running:
         if fetched_room_name:
             room_name = fetched_room_name
         
+        
         # Yeni QR kodunu al
         qr_token = fetch_qr_token()
         if qr_token:
@@ -1121,6 +1167,9 @@ while running:
             for hour, entry in hours.items():
                 if entry["durum"] == "Dolu" and entry.get("rendezvous_id"):
                     rendezvous_id = entry["rendezvous_id"]
+
+                    if not check_if_slot_is_current(day,hour,time_suffix):
+                        continue
 
                     # Assuming fetch_details_data handles token globally
                     data = fetch_details_data(rendezvous_id)

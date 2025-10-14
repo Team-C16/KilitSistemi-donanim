@@ -14,7 +14,7 @@ import ast
 import json
 
 # JWT secret key
-jwtsecret = "JWT_SECRET"
+jwtsecret = "jwt_secret"
 time_suffix = ":30" # Varsayılan değer, API'den çekilemezse kullanılır
 # Raspberry Node IP
 raspberryNodeip = 'https://pve.izu.edu.tr/randevu'
@@ -199,6 +199,129 @@ def draw_gradient_background(screen, color1, color2):
         g = int(color1[1] + (color2[1] - color1[1]) * factor)
         b = int(color1[2] + (color2[2] - color1[2]) * factor)
         pygame.draw.line(screen, (r, g, b), (0, y), (screen_width, y))
+
+def draw_rounded_rect_with_shadow(surface, rect, color, border_color, border_width, radius, shadow_offset, shadow_color):
+    """ Helper function to draw a card with shadow and border. """
+    shadow_rect = rect.move(shadow_offset)
+    pygame.draw.rect(surface, shadow_color, shadow_rect, border_radius=radius)
+    pygame.draw.rect(surface, color, rect, border_radius=radius)
+    pygame.draw.rect(surface, border_color, rect, border_width, border_radius=radius)
+
+
+def draw_meeting_details_v2(screen, fonts, current_meeting):
+    """
+    Yeniden tasarlanmış, modern ve kullanıcı dostu toplantı detayları ekranı.
+    """
+    if not current_meeting:
+        return
+
+    # --- 1. Verileri ve Temel Ayarları Hazırla ---
+    title = current_meeting.get("title", "Başlıksız Toplantı")
+    time_str = current_meeting.get("time", "Zaman Belirtilmemiş")
+    description = current_meeting.get("description", "Açıklama bulunmuyor.")
+    participants = current_meeting.get("users", [])
+    
+    padding = 30
+    
+    # --- 2. Ana Panel (Kart) Konumlandırması ---
+    # Sol Panel: Toplantı Detayları
+    details_panel_rect = pygame.Rect(
+        padding * 2,
+        padding * 2,
+        screen_width * 0.6 - (padding * 3),
+        screen_height - (padding * 4) - 70 # 70 for footer
+    )
+    
+    # Sağ Panel: Katılımcılar
+    participants_panel_rect = pygame.Rect(
+        details_panel_rect.right + padding,
+        padding * 2,
+        screen_width * 0.4 - (padding * 3),
+        screen_height - (padding * 4) - 70 # 70 for footer
+    )
+
+    # --- 3. Panelleri (Kartları) Ekrana Çiz ---
+    draw_rounded_rect_with_shadow(
+        screen, details_panel_rect, COLORS["light"], COLORS["border"], 2, 20, (5, 5), (0, 0, 0, 40)
+    )
+    draw_rounded_rect_with_shadow(
+        screen, participants_panel_rect, COLORS["light"], COLORS["border"], 2, 20, (5, 5), (0, 0, 0, 40)
+    )
+
+    # --- 4. Sol Paneli (Toplantı Detayları) Doldur ---
+    content_x = details_panel_rect.x + padding
+    current_y = details_panel_rect.y + padding
+
+    # Başlık
+    title_surface = fonts['bold_large'].render(title, True, COLORS["text_primary"])
+    screen.blit(title_surface, (content_x, current_y))
+    current_y += title_surface.get_height() + 10
+
+    # Saat Bilgisi (İkon ile)
+    clock_icon_pos = (content_x, current_y + 8)
+    pygame.draw.circle(screen, COLORS["secondary"], clock_icon_pos, 10, 2)
+    pygame.draw.line(screen, COLORS["secondary"], clock_icon_pos, (clock_icon_pos[0], clock_icon_pos[1] - 5), 2)
+    pygame.draw.line(screen, COLORS["secondary"], clock_icon_pos, (clock_icon_pos[0] + 4, clock_icon_pos[1]), 2)
+    
+    time_surface = fonts['regular'].render(time_str, True, COLORS["text_secondary"])
+    screen.blit(time_surface, (content_x + 25, current_y))
+    current_y += time_surface.get_height() + 25
+    
+    # Ayırıcı Çizgi
+    pygame.draw.line(screen, COLORS["border"], (content_x, current_y), (details_panel_rect.right - padding, current_y), 2)
+    current_y += 20
+    
+    # Açıklama
+    desc_title_surface = fonts['bold'].render("Açıklama", True, COLORS["text_primary"])
+    screen.blit(desc_title_surface, (content_x, current_y))
+    current_y += desc_title_surface.get_height() + 10
+    
+    wrapped_lines = wrap_text(description, fonts['regular'], details_panel_rect.width - (padding * 2))
+    for line in wrapped_lines:
+        line_surface = fonts['regular'].render(line, True, COLORS["text_secondary"])
+        screen.blit(line_surface, (content_x, current_y))
+        current_y += line_surface.get_height() + 5
+        if current_y > details_panel_rect.bottom - padding: # Panelin dışına taşmayı önle
+            break
+
+    # --- 5. Sağ Paneli (Katılımcılar) Doldur ---
+    participant_x = participants_panel_rect.x + padding
+    current_y = participants_panel_rect.y + padding
+
+    # Panel Başlığı
+    participants_title_surface = fonts['bold'].render(f"Katılımcılar ({len(participants)})", True, COLORS["text_primary"])
+    screen.blit(participants_title_surface, (participant_x, current_y))
+    current_y += participants_title_surface.get_height() + 15
+    
+    # Ayırıcı Çizgi
+    pygame.draw.line(screen, COLORS["border"], (participant_x, current_y), (participants_panel_rect.right - padding, current_y), 2)
+    current_y += 20
+    
+    # Katılımcı Listesi
+    img_size = (60, 60)
+    for person in participants:
+        # Resim
+        picture_path = person.get("picture")
+        if picture_path and picture_path.strip() and picture_path != "null":
+            full_url = raspberryNodeip + picture_path # Global raspberryNodeip değişkenini kullanır
+            img_surface = load_image_from_url(full_url)
+        else:
+            img_surface = pygame.image.load("profil.jpg").convert_alpha() # Yerel fallback resim
+        
+        if img_surface:
+            circular_img = make_circle_image(img_surface, size=img_size, border_color=COLORS["primary"], border_width=3)
+            screen.blit(circular_img, (participant_x, current_y))
+
+        # İsim
+        fullName = person.get("fullName", "İsimsiz")
+        name_surface = fonts['cell'].render(fullName, True, COLORS["text_secondary"])
+        # Resmi ortalayacak şekilde ismi dikey olarak hizala
+        name_rect = name_surface.get_rect(left=participant_x + img_size[0] + 15, centery=current_y + img_size[1] // 2)
+        screen.blit(name_surface, name_rect)
+
+        current_y += img_size[1] + 15
+        if current_y > participants_panel_rect.bottom - padding: # Panelin dışına taşmayı önle
+            break        
 
 # QR kod oluşturma fonksiyonu
 def generate_qr_code_surface(qr_data, screen_width, screen_height):
@@ -414,7 +537,7 @@ def draw_schedule_table(screen, fonts):
         # Hour label cell
         hour_rect = pygame.Rect(table_x, table_y + header_height + j * row_height,
                                 time_column_width, row_height)
-        pygame.draw.rect(screen, COLORS["Lapis-Lazuli"], hour_rect, 0)
+        pygame.draw.rect(screen, COLORS["white"], hour_rect, 0)
         pygame.draw.rect(screen, COLORS["border"], hour_rect, 1)
         draw_text(screen, hour, fonts["hour"], COLORS["text_primary"], hour_rect, "center", "center")
 
@@ -450,10 +573,10 @@ def draw_schedule_table(screen, fonts):
                     pygame.draw.line(screen, COLORS["available"], clock_center, (clock_center[0], clock_center[1]-8), 2)
                     pygame.draw.line(screen, COLORS["available"], clock_center, (clock_center[0]+6, clock_center[1]), 2)
                     # Text
-                    draw_text(screen, "Randevuya", fonts["empty_cell"], COLORS["black"],
+                    draw_text(screen, "Randevuya", fonts["empty_cell"], COLORS["white"],
                               pygame.Rect(cell_rect.left+40, cell_rect.top-11, cell_rect.width-35, cell_rect.height),
                               "left", "center")
-                    draw_text(screen, "Uygun", fonts["empty_cell"], COLORS["black"],
+                    draw_text(screen, "Uygun", fonts["empty_cell"], COLORS["white"],
                               pygame.Rect(cell_rect.left+40, cell_rect.top+11, cell_rect.width-35, cell_rect.height),
                               "left", "center")
                 else:
@@ -1260,7 +1383,7 @@ while running:
     else: # display_mode == "detail"        
         draw_gradient_background(screen,darken_color(COLORS["Charcoal"]), COLORS["white"]) 
         
-        draw_meeting_details(screen, fonts, current_meeting)
+        draw_meeting_details_v2(screen, fonts, current_meeting)
 
     draw_footer(screen, fonts) # Only call once at the end
 

@@ -357,12 +357,12 @@ def draw_schedule_table(screen, fonts):
                                    (clock_center[0] + 6, clock_center[1]), 2)
                     
                     cell_text = 'Randevuya'
-                    draw_text(screen, cell_text, fonts["empty_cell"], COLORS["black"], 
+                    draw_text(screen, cell_text, fonts["empty_cell"], COLORS["white"], 
                            pygame.Rect(cell_rect.left + 40, cell_rect.top-11, cell_rect.width - 35, cell_rect.height), 
                            "left", "center")
 
                     cell_text2 = 'Uygun'
-                    draw_text(screen, cell_text2, fonts["empty_cell"], COLORS["black"], 
+                    draw_text(screen, cell_text2, fonts["empty_cell"], COLORS["white"], 
                            pygame.Rect(cell_rect.left + 40, cell_rect.top+11, cell_rect.width - 35, cell_rect.height), 
                            "left", "center")
                 else:
@@ -484,7 +484,7 @@ def draw_footer(screen, fonts):
            "left", "center")
     
     # App info with logo/icon
-    app_info = "pve.izu.edu.tr/randevu"
+    app_info = "pve.izu.edu.tr/randevu ← Randevu İçin"
     app_info_rect = pygame.Rect(20, screen_height - footer_height, 300, footer_height)
     
     # App logo (simple calendar icon)

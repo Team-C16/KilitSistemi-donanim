@@ -495,8 +495,8 @@ void setup() {
   // --- UI: QR ve Tablo ---
   // QR kodu sola koy
   lv_obj_t* qr_card = lv_obj_create(main_screen);
-  lv_obj_set_size(qr_card, 220, 220); // Kart boyutu (QR boyutundan biraz büyük)
-  lv_obj_align(qr_card, LV_ALIGN_LEFT_MID, 0, 0);
+  lv_obj_set_size(qr_card, 220, 250); // Kart boyutu (QR boyutundan biraz büyük)
+  lv_obj_align(qr_card, LV_ALIGN_LEFT_MID, 7, -20);
 
   lv_obj_set_scrollbar_mode(qr_card, LV_SCROLLBAR_MODE_OFF);
   lv_obj_set_scroll_dir(qr_card, LV_DIR_NONE);
@@ -512,7 +512,7 @@ void setup() {
   lv_obj_set_style_pad_top(qr_card, 20, 0);
   
   // QR kod objesi kartın içinde
-  qr = lv_qrcode_create(qr_card, 160, lv_color_black(), lv_color_white());
+  qr = lv_qrcode_create(qr_card, 200, lv_color_black(), lv_color_white());
   lv_obj_center(qr); // Kartın ortasına hizala
   lv_qrcode_update(qr, "örnek veri", strlen("örnek veri"));
   
@@ -521,7 +521,7 @@ void setup() {
   // Room Name
   qrAltYazi = lv_label_create(main_screen);
   lv_label_set_text(qrAltYazi, "");
-  lv_obj_align_to(qrAltYazi, qr, LV_ALIGN_OUT_BOTTOM_LEFT, -10, 10);
+  lv_obj_align_to(qrAltYazi, qr, LV_ALIGN_OUT_BOTTOM_LEFT, 10, 10);
   lv_obj_add_style(qrAltYazi, &NormalFontStyle, LV_PART_MAIN);
   
   lv_timer_handler();// To Update Spinner
@@ -602,7 +602,7 @@ void setup() {
 
   lv_timer_handler(); // To Update Spinner
 
-  configTime(+3*3600, 0, "time.ume.tubitak.gov.tr", "0.tr.pool.ntp.org");
+  configTime(+3*3600, 0, "0.tr.pool.ntp.org", "1.tr.pool.ntp.org", "2.tr.pool.ntp.org");
 
 
   lv_timer_handler();

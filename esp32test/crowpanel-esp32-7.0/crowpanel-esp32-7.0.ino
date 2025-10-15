@@ -1,6 +1,6 @@
 #include "libs.h"
 #define MQTT_MAX_PACKET_SIZE 16384
-
+#define LED_PIN 19
 
 lv_obj_t *qr;
 
@@ -57,10 +57,10 @@ unsigned long unlockTime = 0;
 bool lockOpen = false;
 
 // --- Global ayarlar ---
-const char* ssid = "BlokZincirLab";
-const char* password = "Network123!";
+const char* ssid = "Your SSID";
+const char* password = "Your Password";
 const String jwtSecret = "DENEME";
-const int room_id = 2;
+const int room_id = 13;
 const int accessType = 1;
 const String base_url = "https://pve.izu.edu.tr/randevu";
 //AsyncWebServer server(80);
@@ -183,6 +183,7 @@ void processUnlockCommand(const String& msg) {
     lv_obj_clear_flag(status_card, LV_OBJ_FLAG_HIDDEN);
     unlockTime = millis();
     lockOpen = true;
+    digitalWrite(LED_PIN, HIGH);
     Serial.println("Door unlocked successfully");
   } else {
     lv_label_set_text(statusLabel, "Geçersiz token");
@@ -448,6 +449,8 @@ void setup() {
   Serial.begin(115200);
   pinMode(2, OUTPUT);
   digitalWrite(2, HIGH);
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, LOW);
 
   lcd.begin();
   lcd.setBrightness(255);
@@ -655,6 +658,7 @@ void loop() {
         if (now - unlockTime > 10000) {  // 10 saniye geçti
             lv_obj_add_flag(status_card, LV_OBJ_FLAG_HIDDEN);
             lv_label_set_text(statusLabel, "");
+            digitalWrite(LED_PIN, LOW);
             lockOpen = false;
         }
     }

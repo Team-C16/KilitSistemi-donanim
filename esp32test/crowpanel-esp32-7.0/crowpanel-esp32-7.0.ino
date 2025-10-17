@@ -1,44 +1,46 @@
 #include "libs.h"
 #define MQTT_MAX_PACKET_SIZE 16384
+#include <Preferences.h>
 #define LED_PIN 19
+Preferences preferences;
 
 lv_obj_t *qr;
 
 // --- Ekran sınıfı ---
 class LGFX : public lgfx::LGFX_Device {
-public:
-  lgfx::Bus_RGB _bus_instance;
-  lgfx::Panel_RGB _panel_instance;
+  public:
+    lgfx::Bus_RGB _bus_instance;
+    lgfx::Panel_RGB _panel_instance;
 
-  LGFX(void) {
-    {
-      auto cfg = _bus_instance.config();
-      cfg.panel = &_panel_instance;
-      cfg.pin_d0  = GPIO_NUM_15; cfg.pin_d1  = GPIO_NUM_7;  cfg.pin_d2  = GPIO_NUM_6;
-      cfg.pin_d3  = GPIO_NUM_5;  cfg.pin_d4  = GPIO_NUM_4;  cfg.pin_d5  = GPIO_NUM_9;
-      cfg.pin_d6  = GPIO_NUM_46; cfg.pin_d7  = GPIO_NUM_3;  cfg.pin_d8  = GPIO_NUM_8;
-      cfg.pin_d9  = GPIO_NUM_16; cfg.pin_d10 = GPIO_NUM_1;  cfg.pin_d11 = GPIO_NUM_14;
-      cfg.pin_d12 = GPIO_NUM_21; cfg.pin_d13 = GPIO_NUM_47; cfg.pin_d14 = GPIO_NUM_48;
-      cfg.pin_d15 = GPIO_NUM_45;
-      cfg.pin_henable = GPIO_NUM_41; cfg.pin_vsync = GPIO_NUM_40;
-      cfg.pin_hsync = GPIO_NUM_39; cfg.pin_pclk = GPIO_NUM_0;
-      cfg.freq_write = 15000000;
-      cfg.hsync_polarity = 0; cfg.hsync_front_porch = 40; cfg.hsync_pulse_width = 48;
-      cfg.hsync_back_porch = 40; cfg.vsync_polarity = 0; cfg.vsync_front_porch = 1;
-      cfg.vsync_pulse_width = 31; cfg.vsync_back_porch = 13;
-      cfg.pclk_active_neg = 1; cfg.de_idle_high = 0; cfg.pclk_idle_high = 0;
-      _bus_instance.config(cfg);
+    LGFX(void) {
+      {
+        auto cfg = _bus_instance.config();
+        cfg.panel = &_panel_instance;
+        cfg.pin_d0  = GPIO_NUM_15; cfg.pin_d1  = GPIO_NUM_7;  cfg.pin_d2  = GPIO_NUM_6;
+        cfg.pin_d3  = GPIO_NUM_5;  cfg.pin_d4  = GPIO_NUM_4;  cfg.pin_d5  = GPIO_NUM_9;
+        cfg.pin_d6  = GPIO_NUM_46; cfg.pin_d7  = GPIO_NUM_3;  cfg.pin_d8  = GPIO_NUM_8;
+        cfg.pin_d9  = GPIO_NUM_16; cfg.pin_d10 = GPIO_NUM_1;  cfg.pin_d11 = GPIO_NUM_14;
+        cfg.pin_d12 = GPIO_NUM_21; cfg.pin_d13 = GPIO_NUM_47; cfg.pin_d14 = GPIO_NUM_48;
+        cfg.pin_d15 = GPIO_NUM_45;
+        cfg.pin_henable = GPIO_NUM_41; cfg.pin_vsync = GPIO_NUM_40;
+        cfg.pin_hsync = GPIO_NUM_39; cfg.pin_pclk = GPIO_NUM_0;
+        cfg.freq_write = 15000000;
+        cfg.hsync_polarity = 0; cfg.hsync_front_porch = 40; cfg.hsync_pulse_width = 48;
+        cfg.hsync_back_porch = 40; cfg.vsync_polarity = 0; cfg.vsync_front_porch = 1;
+        cfg.vsync_pulse_width = 31; cfg.vsync_back_porch = 13;
+        cfg.pclk_active_neg = 1; cfg.de_idle_high = 0; cfg.pclk_idle_high = 0;
+        _bus_instance.config(cfg);
+      }
+      {
+        auto cfg = _panel_instance.config();
+        cfg.memory_width = 800; cfg.memory_height = 480;
+        cfg.panel_width = 800;  cfg.panel_height = 480;
+        cfg.offset_x = 0; cfg.offset_y = 0;
+        _panel_instance.config(cfg);
+      }
+      _panel_instance.setBus(&_bus_instance);
+      setPanel(&_panel_instance);
     }
-    {
-      auto cfg = _panel_instance.config();
-      cfg.memory_width = 800; cfg.memory_height = 480;
-      cfg.panel_width = 800;  cfg.panel_height = 480;
-      cfg.offset_x = 0; cfg.offset_y = 0;
-      _panel_instance.config(cfg);
-    }
-    _panel_instance.setBus(&_bus_instance);
-    setPanel(&_panel_instance);
-  }
 };
 
 LGFX lcd;
@@ -57,17 +59,19 @@ unsigned long unlockTime = 0;
 bool lockOpen = false;
 
 // --- Global ayarlar ---
-const char* ssid = "Your SSID";
-const char* password = "Your Password";
-const String jwtSecret = "DENEME";
-const int room_id = 13;
-const int accessType = 1;
+String ssid;
+String password;
+String jwtSecret;
+int room_id;
+int accessType;
+
+
 const String base_url = "https://pve.izu.edu.tr/randevu";
 //AsyncWebServer server(80);
 
 const char* mqtt_server = "pve.izu.edu.tr";
 const int mqtt_port = 1883;
-const String mqtt_base_topic = String("v1/") + String(room_id).c_str(); 
+String mqtt_base_topic;
 WiFiClient espClient;
 PubSubClient mqttClient(espClient);
 
@@ -99,13 +103,13 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   Serial.println(length);
   Serial.print("Free Heap: ");
   Serial.println(ESP.getFreeHeap());
-  
+
   // Check if we have enough memory
   if (ESP.getFreeHeap() < (length * 2 + 4096)) {
     Serial.println("ERROR: Not enough memory for message processing");
     return;
   }
-  
+
   // Check message size limit
   if (length > (MQTT_MAX_PACKET_SIZE - 256)) {
     Serial.print("ERROR: Message too large: ");
@@ -115,24 +119,24 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     Serial.println(")");
     return;
   }
-  
+
   // Create message string with proper memory management
   String msg;
   msg.reserve(length + 100); // Reserve memory to prevent fragmentation
-  
+
   for (unsigned int i = 0; i < length; i++) {
     msg += (char)payload[i];
   }
-  
+
   String t = String(topic);
-  
+
   // Print first 300 characters of message for debugging
   Serial.print("Message preview: ");
   Serial.println(msg.substring(0, min((int)msg.length(), 300)));
   if (msg.length() > 300) {
     Serial.println("... (message truncated for display)");
   }
-  
+
   // Process topics
   String unlockTopic = mqtt_base_topic + "/opendoor";
   if (t.equals(unlockTopic)) {
@@ -156,11 +160,11 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   }
 
   /*String scheduleDetailsTopic = mqtt_base_topic + "/scheduleDetails/response";
-  if (t.equals(scheduleDetailsTopic)) {
+    if (t.equals(scheduleDetailsTopic)) {
     Serial.println("-> Processing schedule details response");
     processScheduleDetailsResponse(msg);
     return;
-  }*/
+    }*/
 
   Serial.println("-> No topic matched");
   Serial.println("=== MQTT CALLBACK END ===");
@@ -170,13 +174,13 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 void processUnlockCommand(const String& msg) {
   DynamicJsonDocument doc(1024);
   DeserializationError error = deserializeJson(doc, msg);
-  
+
   if (error) {
     Serial.print("Unlock JSON error: ");
     Serial.println(error.c_str());
     return;
   }
-  
+
   String token = doc["token"] | "";
   if (verifyJWT(token, jwtSecret)) {
     lv_label_set_text(statusLabel, "Kilit Açık");
@@ -196,31 +200,31 @@ void processQRResponse(const String& msg) {
   // Use larger buffer for QR response
   DynamicJsonDocument reply(2048);
   DeserializationError error = deserializeJson(reply, msg);
-  
+
   if (error) {
     Serial.print("QR JSON error: ");
     Serial.println(error.c_str());
     return;
   }
-  
+
   String qrToken = reply["token"].as<String>();
   String roomName = reply["room_name"].as<String>();
-  
+
   lv_qrcode_update(qr, qrToken.c_str(), qrToken.length());
   lv_label_set_text_fmt(qrAltYazi, "Oda Adı: %s", roomName.c_str());
-  
+
   Serial.println("QR code updated successfully");
 }
 
 // Separate function to handle schedule responses - WITH LARGE BUFFER
 void processScheduleResponse(const String& msg) {
   Serial.println("*** PROCESSING SCHEDULE RESPONSE ***");
-  
+
   // Use much larger buffer for schedule data
   DynamicJsonDocument reply(12288); // 12KB buffer for large schedule data
-  
+
   DeserializationError error = deserializeJson(reply, msg);
-  
+
   if (error) {
     Serial.print("Schedule JSON parsing failed: ");
     Serial.println(error.c_str());
@@ -228,12 +232,12 @@ void processScheduleResponse(const String& msg) {
     Serial.println(msg.length());
     Serial.print("Buffer size was: ");
     Serial.println(reply.capacity());
-    
+
     // Try with an even larger buffer
     Serial.println("Trying with larger buffer...");
     DynamicJsonDocument largeReply(20480); // 20KB buffer
     DeserializationError error2 = deserializeJson(largeReply, msg);
-    
+
     if (error2) {
       Serial.print("Large buffer also failed: ");
       Serial.println(error2.c_str());
@@ -243,13 +247,13 @@ void processScheduleResponse(const String& msg) {
       reply = largeReply; // Use the successful parse
     }
   }
-  
+
   Serial.println("Schedule JSON parsed successfully");
   Serial.print("Number of schedule items: ");
-  
+
   JsonArray schedule = reply["schedule"].as<JsonArray>();
   Serial.println(schedule.size());
-  
+
   // Update the table
   mark_schedule_from_json(table, msg.c_str());
 
@@ -274,7 +278,7 @@ void processScheduleResponse(const String& msg) {
   // Check if current hour is busy
   if (cellValue && strcmp(cellValue, "DOLU") == 0) {
     Serial.println("Current slot is busy, looking for rendezvous details");
-    
+
     String rendezvous_id = "-1";
     for (JsonObject item : schedule) {
       const char* hourStr = item["hour"];
@@ -285,7 +289,7 @@ void processScheduleResponse(const String& msg) {
         Serial.print(hour);
         Serial.print(" against current: ");
         Serial.println(currentHour);
-        
+
         if (hour == currentHour) {
           rendezvous_id = item["rendezvous_id"].as<String>();
           Serial.print("Found matching rendezvous_id: ");
@@ -294,7 +298,7 @@ void processScheduleResponse(const String& msg) {
         }
       }
     }
-    
+
     if (rendezvous_id != "-1" && !other_table) {
       Serial.println("Requesting schedule details");
       processScheduleDetailsResponse(rendezvous_id);
@@ -307,7 +311,7 @@ void processScheduleResponse(const String& msg) {
     }
     lv_obj_clear_flag(table, LV_OBJ_FLAG_HIDDEN);
   }
-  
+
   Serial.println("*** SCHEDULE RESPONSE PROCESSING COMPLETE ***");
 }
 
@@ -323,8 +327,8 @@ void processScheduleDetailsResponse(String rendezvous_id) {
   http.addHeader("Content-Type", "application/json");
   String token = createJWT(jwtSecret, 30);
   // JSON body (rendezvous_id + room_id + token)
-  String body = "{\"rendezvous_id\":\"" + rendezvous_id + 
-                "\",\"room_id\":\"" + String(room_id) + 
+  String body = "{\"rendezvous_id\":\"" + rendezvous_id +
+                "\",\"room_id\":\"" + String(room_id) +
                 "\",\"token\":\"" + token + "\"}";
 
   int httpResponseCode = http.POST(body);
@@ -364,49 +368,49 @@ bool mqttReconnect() {
   if (!mqttClient.connected()) {
     String token = createJWT(jwtSecret, 30);
     Serial.print("MQTT connecting...");
-    
+
     // Use a unique client ID to avoid conflicts
     String clientId = "crowpanel-" + String(room_id) + "-" + String(random(0xffff), HEX);
-    
+
     if (mqttClient.connect(clientId.c_str(), String(room_id).c_str(), token.c_str())) {
       Serial.println("connected");
 
       String saveipTopic = "v1/" + String(room_id) + "/saveip";
       bool ok = mqttClient.publish(saveipTopic.c_str(), "");  // boş payload
       if (ok) {
-          Serial.printf("[SAVEIP] MQTT publish -> %s\n", saveipTopic.c_str());
+        Serial.printf("[SAVEIP] MQTT publish -> %s\n", saveipTopic.c_str());
       } else {
-          Serial.printf("[SAVEIP] Hata: MQTT publish başarısız -> %s\n", saveipTopic.c_str());
+        Serial.printf("[SAVEIP] Hata: MQTT publish başarısız -> %s\n", saveipTopic.c_str());
       }
-      
+
       // Subscribe to topics with QoS 1 for reliability
       String scheduleResponseTopic = mqtt_base_topic + "/schedule/response";
       String unlockTopic = mqtt_base_topic + "/opendoor";
       String qrResponseTopic = mqtt_base_topic + "/qr/response";
       String scheduleDetailsTopic = mqtt_base_topic + "/scheduleDetails/response";
-      
+
       Serial.print("Subscribing to: ");
       Serial.println(scheduleResponseTopic);
       bool sub1 = mqttClient.subscribe(scheduleResponseTopic.c_str(), 1);
-      
+
       Serial.print("Subscribing to: ");
       Serial.println(unlockTopic);
       bool sub2 = mqttClient.subscribe(unlockTopic.c_str(), 1);
-      
+
       Serial.print("Subscribing to: ");
       Serial.println(qrResponseTopic);
       bool sub3 = mqttClient.subscribe(qrResponseTopic.c_str(), 1);
-      
+
       Serial.print("Subscribing to: ");
       Serial.println(scheduleDetailsTopic);
       bool sub4 = mqttClient.subscribe(scheduleDetailsTopic.c_str(), 1);
-      
+
       Serial.print("Subscription results: ");
       Serial.print(sub1); Serial.print(" ");
       Serial.print(sub2); Serial.print(" ");
       Serial.print(sub3); Serial.print(" ");
       Serial.println(sub4);
-      
+
     } else {
       Serial.print("failed, rc=");
       Serial.print(mqttClient.state());
@@ -423,35 +427,55 @@ bool publishRequest(const String &topic, const String &payload) {
   Serial.println(topic);
   Serial.print("Payload: ");
   Serial.println(payload);
-  
+
   unsigned long startConnect = millis();
   while (!mqttClient.connected() && millis() - startConnect < 5000) { // Increased timeout
     Serial.println("MQTT not connected, attempting reconnection...");
     mqttReconnect();
     delay(100);
   }
-  
+
   if (!mqttClient.connected()) {
     Serial.println("Failed to connect to MQTT broker");
     return false;
   }
-  
+
   // Use QoS 1 for reliable delivery
   bool result = mqttClient.publish(topic.c_str(), payload.c_str(), true); // retained = true
   Serial.print("Publish result: ");
   Serial.println(result ? "SUCCESS" : "FAILED");
-  
+
   return result;
 }
 
 
 void setup() {
   Serial.begin(115200);
+  
   pinMode(2, OUTPUT);
   digitalWrite(2, HIGH);
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
 
+  preferences.begin("config", true); // Okuma modunda aç
+  
+  ssid = preferences.getString("ssid", "HATA");
+  password = preferences.getString("password", "HATA");
+  jwtSecret = preferences.getString("jwtSecret", "HATA"); // ÖNEMLİ: NVS'e yazarken kullandığın anahtarın ("jwtSecret" veya "jwt_secret") aynısı olduğundan emin ol!
+  room_id = preferences.getInt("room_id", 0);
+  accessType = preferences.getInt("accessType", 0);
+
+  preferences.end();
+
+  Serial.println("Dogrulama icin NVS'ten okunan veriler:");
+  Serial.printf("Oda ID: %d\n", room_id);
+  Serial.printf("JWT Secret: %s\n", jwtSecret.c_str());
+  Serial.printf("SSID: %s\n", ssid.c_str());
+  Serial.printf("Password: %s\n", password.c_str());
+  Serial.printf("Access Type: %d\n", accessType);
+
+  mqtt_base_topic = String("v1/") + String(room_id).c_str();
+  
   lcd.begin();
   lcd.setBrightness(255);
   lv_init();
@@ -469,14 +493,14 @@ void setup() {
 
   static lv_style_t bg_style;
   lv_style_init(&bg_style);
-  
+
   // Gradient tipini dikey yap (yukarıdan aşağıya)
   lv_style_set_bg_grad_dir(&bg_style, LV_GRAD_DIR_VER);
-  
+
   // Gradient renkleri (örnek: üst beyaz -> alt açık gri)
   lv_style_set_bg_color(&bg_style, lv_color_hex(0xFFFFFF));   // üst
   lv_style_set_bg_grad_color(&bg_style, lv_color_hex(0xBABABA)); // alt
-  
+
   // Bu stili main_screen’e uygula
   lv_style_set_bg_opa(&bg_style, LV_OPA_COVER);
   lv_obj_add_style(main_screen, &bg_style, LV_PART_MAIN);
@@ -503,7 +527,7 @@ void setup() {
 
   lv_obj_set_scrollbar_mode(qr_card, LV_SCROLLBAR_MODE_OFF);
   lv_obj_set_scroll_dir(qr_card, LV_DIR_NONE);
-  
+
   // Kart stil
   lv_obj_set_style_radius(qr_card, 16, 0); // Köşe yuvarlama
   lv_obj_set_style_bg_color(qr_card, lv_color_hex(0xFFFFFF), 0); // Beyaz arka plan
@@ -513,12 +537,12 @@ void setup() {
 
   lv_obj_set_style_pad_bottom(qr_card, 50, 0);
   lv_obj_set_style_pad_top(qr_card, 20, 0);
-  
+
   // QR kod objesi kartın içinde
   qr = lv_qrcode_create(qr_card, 200, lv_color_black(), lv_color_white());
   lv_obj_center(qr); // Kartın ortasına hizala
   lv_qrcode_update(qr, "örnek veri", strlen("örnek veri"));
-  
+
   lv_timer_handler();// To Update Spinner
 
   // Room Name
@@ -526,18 +550,18 @@ void setup() {
   lv_label_set_text(qrAltYazi, "");
   lv_obj_align_to(qrAltYazi, qr, LV_ALIGN_OUT_BOTTOM_LEFT, 10, 10);
   lv_obj_add_style(qrAltYazi, &NormalFontStyle, LV_PART_MAIN);
-  
+
   lv_timer_handler();// To Update Spinner
 
   // Table
-  
 
-  
+
+
   lv_timer_handler();// To Update Spinner
 
   // --- Status Card ---
   status_card = lv_obj_create(main_screen);
-  lv_obj_set_size(status_card, LV_SIZE_CONTENT, LV_SIZE_CONTENT);  
+  lv_obj_set_size(status_card, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
   lv_obj_align_to(status_card, qrAltYazi, LV_ALIGN_OUT_BOTTOM_LEFT, -10, 25);
 
   // Stil: yeşil arka plan + radius + padding + gölge
@@ -547,11 +571,11 @@ void setup() {
   lv_obj_set_style_bg_grad_dir(status_card, LV_GRAD_DIR_VER, 0);       // Dikey gradient
   lv_obj_set_style_shadow_width(status_card, 15, 0);
   lv_obj_set_style_shadow_color(status_card, lv_color_hex(0x2F4858), 0);
-  lv_obj_set_style_pad_all(status_card, 10, 0); 
+  lv_obj_set_style_pad_all(status_card, 10, 0);
 
   // --- Status Label ---
   statusLabel = lv_label_create(status_card);
-  lv_label_set_text(statusLabel, "");  
+  lv_label_set_text(statusLabel, "");
   lv_obj_add_style(statusLabel, &NormalFontStyle, LV_PART_MAIN);
   lv_obj_set_style_text_color(statusLabel, lv_color_hex(0xFFFFFF), 0); // beyaz yazı
   lv_obj_set_style_text_font(statusLabel, &turkish_24, 0);
@@ -559,10 +583,10 @@ void setup() {
   lv_obj_add_flag(status_card, LV_OBJ_FLAG_HIDDEN);
 
   // simple time label (bottom-left) - shows HH:MM
-	lv_obj_t* time_card = lv_obj_create(main_screen);
+  lv_obj_t* time_card = lv_obj_create(main_screen);
   lv_obj_set_scrollbar_mode(time_card, LV_SCROLLBAR_MODE_OFF);
-	lv_obj_set_size(time_card, 820, LV_SIZE_CONTENT);  // İçeriğe göre boyut
-	lv_obj_align(time_card, LV_ALIGN_BOTTOM_LEFT, -12, 4);
+  lv_obj_set_size(time_card, 820, LV_SIZE_CONTENT);  // İçeriğe göre boyut
+  lv_obj_align(time_card, LV_ALIGN_BOTTOM_LEFT, -12, 4);
 
   lv_obj_set_style_pad_all(time_card, 12, 0);
   lv_obj_set_style_bg_color(time_card, lv_color_hex(0x8E4162), 0);        // Başlangıç rengi
@@ -571,30 +595,30 @@ void setup() {
   lv_obj_set_style_shadow_width(time_card, 20, 0);
   lv_obj_set_style_shadow_color(time_card, lv_color_hex(0x2F4858), 0);
 
-	// --- Sol Label (yazı) ---
+  // --- Sol Label (yazı) ---
   lv_obj_t* leftLabel = lv_label_create(time_card);
-  lv_label_set_text(leftLabel, " UzLock.com");  
+  lv_label_set_text(leftLabel, " UzLock.com");
   lv_obj_set_style_text_font(leftLabel, &turkish_better_21, 0);
   lv_obj_set_style_text_color(leftLabel, lv_color_hex(0xFFFFFF), 0);
   lv_obj_align(leftLabel, LV_ALIGN_LEFT_MID, 0, 0);
-  
+
   // --- Sağ Label (saat) ---
   lv_obj_t* rightLabel = lv_label_create(time_card);
   lv_label_set_text(rightLabel, "--:--");
   lv_obj_set_style_text_font(rightLabel, &turkish_better_21, 0);
   lv_obj_set_style_text_color(rightLabel, lv_color_hex(0xFFFFFF), 0);
   lv_obj_align(rightLabel, LV_ALIGN_RIGHT_MID, 0, 0);
-  
+
   // global değişken yapmak istersen
   timeLabel = rightLabel;
 
   lv_timer_handler();// To Update Spinner
   // --- WiFi ---
-  WiFi.begin(ssid, password);
+  WiFi.begin(ssid.c_str(), password.c_str());
   WiFi.setSleep(false);
   while (WiFi.status() != WL_CONNECTED) {
     delay(100); Serial.print(".");
-    lv_timer_handler();  
+    lv_timer_handler();
   }
   Serial.println("\nWiFi bağlı");
 
@@ -626,24 +650,24 @@ void setup() {
 }
 
 void handleTableToggle() {
-    if (!other_table)
-    {
-      return; // diğer tablo yoksa çık
-    }
-    unsigned long nowMillis = millis();
-    unsigned long duration = showingMainTable ? mainTableDuration : otherTableDuration;
+  if (!other_table)
+  {
+    return; // diğer tablo yoksa çık
+  }
+  unsigned long nowMillis = millis();
+  unsigned long duration = showingMainTable ? mainTableDuration : otherTableDuration;
 
-    if (nowMillis - lastSwitch >= duration) {
-        lastSwitch = nowMillis;
-        showingMainTable = !showingMainTable;
-        if (showingMainTable) {
-            lv_obj_clear_flag(table, LV_OBJ_FLAG_HIDDEN);
-            lv_obj_add_flag(other_table, LV_OBJ_FLAG_HIDDEN);
-        } else {
-            lv_obj_add_flag(table, LV_OBJ_FLAG_HIDDEN);
-            lv_obj_clear_flag(other_table, LV_OBJ_FLAG_HIDDEN);
-        }
+  if (nowMillis - lastSwitch >= duration) {
+    lastSwitch = nowMillis;
+    showingMainTable = !showingMainTable;
+    if (showingMainTable) {
+      lv_obj_clear_flag(table, LV_OBJ_FLAG_HIDDEN);
+      lv_obj_add_flag(other_table, LV_OBJ_FLAG_HIDDEN);
+    } else {
+      lv_obj_add_flag(table, LV_OBJ_FLAG_HIDDEN);
+      lv_obj_clear_flag(other_table, LV_OBJ_FLAG_HIDDEN);
     }
+  }
 }
 
 
@@ -652,70 +676,70 @@ void handleTableToggle() {
 unsigned long lastJwt = 0;
 const unsigned long interval = 60000;   // 60 sn
 void loop() {
-    unsigned long now = millis();
+  unsigned long now = millis();
 
-    if (lockOpen) {
-        if (now - unlockTime > 10000) {  // 10 saniye geçti
-            lv_obj_add_flag(status_card, LV_OBJ_FLAG_HIDDEN);
-            lv_label_set_text(statusLabel, "");
-            digitalWrite(LED_PIN, LOW);
-            lockOpen = false;
-        }
+  if (lockOpen) {
+    if (now - unlockTime > 10000) {  // 10 saniye geçti
+      lv_obj_add_flag(status_card, LV_OBJ_FLAG_HIDDEN);
+      lv_label_set_text(statusLabel, "");
+      digitalWrite(LED_PIN, LOW);
+      lockOpen = false;
     }
+  }
 
-    // QR isteği: her 60 sn
-    if (now - lastJwt > interval || lastJwt == 0) {
-        lastJwt = now;
-        {
-        DynamicJsonDocument doc(1024);
-        doc["room_name"] = 1;
-        doc["accessType"] = accessType;
-        String requestBody;
-        serializeJson(doc, requestBody);
+  // QR isteği: her 60 sn
+  if (now - lastJwt > interval || lastJwt == 0) {
+    lastJwt = now;
+    {
+      DynamicJsonDocument doc(1024);
+      doc["room_name"] = 1;
+      doc["accessType"] = accessType;
+      String requestBody;
+      serializeJson(doc, requestBody);
 
-        publishRequest(mqtt_base_topic + "/qr", requestBody);
-        }
-        {
-        HTTPClient http;
-        http.begin(base_url + "/getSchedule");
-        http.addHeader("Content-Type", "application/json");
-
-        DynamicJsonDocument doc2(1024);
-        doc2["room_id"] = room_id;
-        doc2["token"] = createJWT(jwtSecret, 30);
-
-        String requestBody;
-        serializeJson(doc2, requestBody);
-
-        int code = http.POST(requestBody);
-        String responseBody = http.getString();
-        http.end();
-        Serial.println(responseBody);
-          if (code == 200) {
-              processScheduleResponse(responseBody);
-          }
-        }
+      publishRequest(mqtt_base_topic + "/qr", requestBody);
     }
+    {
+      HTTPClient http;
+      http.begin(base_url + "/getSchedule");
+      http.addHeader("Content-Type", "application/json");
 
-    mqttClient.loop();
-    mqttReconnect();
-    // update simple time label once per second
-    static unsigned long lastTimeUpdate = 0;
-    if (millis() - lastTimeUpdate >= 1000) {
-        lastTimeUpdate = millis();
-        if (timeLabel) {
-            struct tm timeinfo;
-            if (getLocalTime(&timeinfo)) {
-                char buf[6];
-                strftime(buf, sizeof(buf), "%H:%M", &timeinfo);
-                lv_label_set_text(timeLabel, buf);
-            } else {
-                lv_label_set_text(timeLabel, "--:--");
-            }
-        }
+      DynamicJsonDocument doc2(1024);
+      doc2["room_id"] = room_id;
+      doc2["token"] = createJWT(jwtSecret, 30);
+
+      String requestBody;
+      serializeJson(doc2, requestBody);
+
+      int code = http.POST(requestBody);
+      String responseBody = http.getString();
+      http.end();
+      Serial.println(responseBody);
+      if (code == 200) {
+        processScheduleResponse(responseBody);
+      }
     }
+  }
 
-    handleTableToggle();
-    lv_timer_handler();
-    delay(5);
+  mqttClient.loop();
+  mqttReconnect();
+  // update simple time label once per second
+  static unsigned long lastTimeUpdate = 0;
+  if (millis() - lastTimeUpdate >= 1000) {
+    lastTimeUpdate = millis();
+    if (timeLabel) {
+      struct tm timeinfo;
+      if (getLocalTime(&timeinfo)) {
+        char buf[6];
+        strftime(buf, sizeof(buf), "%H:%M", &timeinfo);
+        lv_label_set_text(timeLabel, buf);
+      } else {
+        lv_label_set_text(timeLabel, "--:--");
+      }
+    }
+  }
+
+  handleTableToggle();
+  lv_timer_handler();
+  delay(5);
 }

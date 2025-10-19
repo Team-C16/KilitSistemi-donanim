@@ -13,6 +13,7 @@ import re
 import ast
 import paho.mqtt.client as mqtt
 import json
+import ssl
 
 
 
@@ -22,8 +23,8 @@ jwtsecret = "DENEME"
 # Raspberry Node IP
 raspberryNodeip = 'https://pve.izu.edu.tr/randevu'
 mqttbrokerip = "pve.izu.edu.tr"
-mqttbrokerport = 1883
-room_id = 1
+mqttbrokerport = 8883
+room_id = 13
 
 accessType = 1
 
@@ -184,6 +185,14 @@ client.on_connect = on_connect
 client.on_disconnect = on_disconnect
 
 # Broker’a bağlan
+try:
+    client.tls_set(
+    cert_reqs=ssl.CERT_NONE,
+    tls_version=ssl.PROTOCOL_TLSv1_2
+    )
+    print("[MQTT] TSL/SSL ayarlandı (Güvenli Bağlantı.)")
+except Exception as e:
+    print(f"[MQTT] TLS/SSl hatası: {e}")
 client.connect(f"{mqttbrokerip}", mqttbrokerport, 60)
 
 # Arka planda loop başlat

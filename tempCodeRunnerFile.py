@@ -1,0 +1,1 @@
+cert_reqs=ssl.CERT_NONE,

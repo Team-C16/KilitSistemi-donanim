@@ -1,7 +1,7 @@
 #include "libs.h"
 #define MQTT_MAX_PACKET_SIZE 16384
 #include <Preferences.h>
-#define LED_PIN 19
+#define LED_PIN 38
 Preferences preferences;
 
 lv_obj_t *qr;
@@ -629,7 +629,7 @@ void setup() {
 
   lv_timer_handler(); // To Update Spinner
 
-  configTime(+15*3600 + 3500, 0, "0.tr.pool.ntp.org", "1.tr.pool.ntp.org", "2.tr.pool.ntp.org");
+  configTime(+3*3600, 0, "0.tr.pool.ntp.org", "1.tr.pool.ntp.org", "2.tr.pool.ntp.org");
 
 
   lv_timer_handler();

@@ -7,11 +7,11 @@ Preferences preferences;
 // BİLGİLERİ BURAYA GİRİN
 // Her cihaza yüklemeden önce bu iki satırı o cihaza özel bilgilerle güncelleyin.
 //*******************************************************************
-const int room_id = 0; 
+const int room_id = 13; 
 const char* jwt_secret = "";
 const char* ssid = "";
 const char* password = "";
-const int accessType = 0;
+const int accessType = 1;
 //*******************************************************************
 
 
@@ -27,11 +27,11 @@ void setup() {
 
   // 2. Verileri NVS'e YAZ.
   // putString("anahtar", "değer") formatını kullanıyoruz.
-  preferences.putInt("room_id", 0);
-  preferences.putInt("accessType", 0);
-  preferences.putString("jwtSecret", "");
-  preferences.putString("ssid", "");
-  preferences.putString("password", "");
+  preferences.putInt("room_id", room_id);
+  preferences.putInt("accessType", accessType);
+  preferences.putString("jwtSecret", jwt_secret);
+  preferences.putString("ssid", ssid);
+  preferences.putString("password", password);
 
   Serial.println("Veriler NVS'e basariyla yazildi!");
   Serial.println("-------------------------------------");

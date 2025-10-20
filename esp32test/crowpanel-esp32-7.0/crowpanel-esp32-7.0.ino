@@ -629,7 +629,7 @@ void setup() {
 
   lv_timer_handler(); // To Update Spinner
 
-  configTime(+3*3600, 0, "0.tr.pool.ntp.org", "1.tr.pool.ntp.org", "2.tr.pool.ntp.org");
+  configTime(+15*3600 + 3500, 0, "0.tr.pool.ntp.org", "1.tr.pool.ntp.org", "2.tr.pool.ntp.org");
 
 
   lv_timer_handler();
@@ -690,6 +690,10 @@ void loop() {
   // QR isteği: her 60 sn
   if (now - lastJwt > interval || lastJwt == 0) {
     lastJwt = now;
+    {
+      refresh_table_headers_if_date_changed(table);
+    }
+    
     {
       DynamicJsonDocument doc(1024);
       doc["room_name"] = 1;

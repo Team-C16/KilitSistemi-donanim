@@ -286,10 +286,20 @@ void mark_schedule_from_json(lv_obj_t* table, const char* jsonStr) {
 
         struct tm event_tm = {};
         strptime(dayStr, "%Y-%m-%dT%H:%M:%S", &event_tm);
-        time_t event_time = mktime(&event_tm);
+        struct tm today_tm;
+        localtime_r(&now, &today_tm);
+        today_tm.tm_hour = 0;
+        today_tm.tm_min = 0;
+        today_tm.tm_sec = 0;
+        time_t today_start = mktime(&today_tm);
+        
+        event_tm.tm_hour = 0;
+        event_tm.tm_min = 0;
+        event_tm.tm_sec = 0;
+        time_t event_day_start = mktime(&event_tm);
 
-        double diff_days = difftime(event_time, now) / (60*60*24);
-        int col_offset = (int)diff_days;
+        double diff_days = difftime(event_day_start, today_start) / (60 * 60 * 24);
+        int col_offset = (int)round(diff_days) + 1;
         if (col_offset < 0 || col_offset > 4) continue;
 
         int row = (h - hour_start) + 1;

@@ -3,7 +3,7 @@
 #include <Preferences.h>
 #define LED_PIN 38
 Preferences preferences;
-
+#include <Update.h>
 lv_obj_t *qr;
 
 // --- Ekran sınıfı ---
@@ -66,8 +66,23 @@ int room_id;
 int accessType;
 
 
-const String base_url = "https://pve.izu.edu.tr/randevu";
+const String base_url = "http://172.23.53.92:8001/kilitSistemi";
 //AsyncWebServer server(80);
+
+// =================== OTA AYARLARI ===================
+// BU KODU HER DERLEDİĞİNİZDE SÜRÜMÜ ARTIRIN (örn: "1.0.1", "1.0.2")
+const char* FIRMWARE_VERSION = "1.0.1"; 
+
+// Sunucunuzda "en son sürüm numarasını" döndüren API adresi
+const String OTA_VERSION_CHECK_URL = base_url + "/checkFirmwareVersion";
+
+// Sunucunuzda yeni ".bin" dosyasını indirmeyi başlatan API adresi
+const String OTA_FIRMWARE_DOWNLOAD_URL = base_url + "/getFirmware";
+
+// Ne sıklıkta güncelleme kontrolü yapsın? (milisaniye)
+// Örn: 1 saat = 3600000 ms. Test için 2dk = 120000 ms
+const unsigned long otaCheckInterval = 600000; // Saatte bir
+unsigned long lastOtaCheck = 0;
 
 const char* mqtt_server = "pve.izu.edu.tr";
 const int mqtt_port = 1883;
@@ -671,6 +686,212 @@ void handleTableToggle() {
 }
 
 
+/**
+ * @brief Ekranda bir OTA güncelleme mesajı gösterir.
+ * Bu fonksiyon, güncelleme başlarken ekranı dondurur.
+ */
+void show_ota_message(const char* message) {
+    // Mevcut ekranı al
+    lv_obj_t* scr = lv_scr_act();
+    
+    // Arka planı karartmak için bir "cam" katman oluştur
+    static lv_obj_t* glass; // static yap ki fonksiyon bittikten sonra silinmesin
+    glass = lv_obj_create(scr);
+    lv_obj_remove_style_all(glass); // stilleri sıfırla
+    lv_obj_set_size(glass, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_style_bg_color(glass, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(glass, LV_OPA_70, 0); // %70 opaklık
+    lv_obj_align(glass, LV_ALIGN_CENTER, 0, 0);
+
+    // Mesaj etiketi
+    lv_obj_t* label = lv_label_create(glass);
+    lv_label_set_text(label, message);
+    lv_obj_set_style_text_color(label, lv_color_white(), 0);
+    lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
+    
+    // Yazı tipini kodunuzda kullandığınız bir tiple değiştirin
+    // (Eğer 'turkish_24' yoksa 'lv_font_default()' kullanın)
+    lv_obj_set_style_text_font(label, &turkish_24, 0); 
+    lv_obj_center(label);
+
+    // Ekranı hemen yenile
+    lv_timer_handler();
+    delay(100);
+}
+
+
+/**
+ * @brief Sunucudan yeni sürüm olup olmadığını kontrol eder.
+ * Varsa, 'performUpdate' fonksiyonunu tetikler.
+ */
+void checkForUpdates() {
+    Serial.println("Sürüm kontrolü için sunucuya bağlanılıyor...");
+    HTTPClient http;
+    
+    // Sunucunuzun SSL sertifikası varsa, yukarıdaki satırı silip
+    // buraya sunucunuzun Kök CA sertifikasını ekleyin:
+    // client.setCACert(ROOT_CA_CERT_STRING); 
+
+    if (!http.begin(OTA_VERSION_CHECK_URL)) {
+        Serial.println("HTTP bağlantısı (sürüm) kurulamadı!");
+        return;
+    }
+
+    http.addHeader("Content-Type", "application/json");
+
+    // Sunucuya mevcut sürümümüzü ve oda ID'mizi gönderelim
+    DynamicJsonDocument doc(256);
+    doc["room_id"] = room_id;
+    doc["current_version"] = FIRMWARE_VERSION;
+    doc["token"] = createJWT(jwtSecret, 30);
+    String requestBody;
+    serializeJson(doc, requestBody);
+
+    int httpCode = http.POST(requestBody);
+
+    if (httpCode == 200) {
+        String payload = http.getString();
+        Serial.print("Sürüm yanıtı geldi: ");
+        Serial.println(payload);
+
+        DynamicJsonDocument reply(256);
+        deserializeJson(reply, payload);
+
+        // Sunucunun {"version": "1.0.1"} gibi bir yanıt döndürdüğünü varsayıyoruz
+        const char* latestVersion = reply["version"]; 
+
+        if (latestVersion) {
+            // Sürümleri karşılaştır
+            if (strcmp(latestVersion, FIRMWARE_VERSION) != 0) {
+                Serial.printf("Yeni sürüm bulundu! Güncel: %s, Yeni: %s\n", FIRMWARE_VERSION, latestVersion);
+                
+                // Güncellemeyi başlat
+                performUpdate(String(latestVersion));
+            } else {
+                Serial.println("Firmware güncel.");
+            }
+        } else {
+            Serial.println("Sürüm yanıtı anlaşılamadı (JSON 'version' alanı eksik).");
+        }
+    } else {
+        Serial.printf("Sürüm kontrolü başarısız, HTTP Kodu: %d\n", httpCode);
+        Serial.println(http.getString());
+    }
+
+    http.end();
+}
+
+
+/**
+ * @brief .bin dosyasını indirir ve güncellemeyi gerçekleştirir.
+ * Başarılı olursa cihazı yeniden başlatır.
+ */
+void performUpdate(String newVersion) {
+    Serial.println("Güncelleme işlemi başlatılıyor...");
+    
+    // Ekrana "Güncelleniyor" mesajı bas
+    show_ota_message("Yeni sürüm bulundu.\nGüncelleniyor...\nLütfen gücü kesmeyin!");
+
+    HTTPClient http;
+    
+
+    if (!http.begin(OTA_FIRMWARE_DOWNLOAD_URL)) {
+        Serial.println("HTTPS bağlantısı (indirme) kurulamadı!");
+        show_ota_message("HATA!\nİndirme bağlantısı kurulamadı.");
+        delay(5000);
+        // (Burada ideal olarak ekranı eski haline getirip devam etmeli, 
+        // ama şimdilik yeniden başlatmak daha kolay)
+        ESP.restart(); 
+        return;
+    }
+
+    http.addHeader("Content-Type", "application/json");
+
+    // Sunucuya hangi sürümü istediğimizi bildirelim
+    DynamicJsonDocument doc(256);
+    doc["room_id"] = room_id;
+    doc["version"] = newVersion; // İndirmek istediğimiz sürüm
+    doc["token"] = createJWT(jwtSecret, 30);
+    String requestBody;
+    serializeJson(doc, requestBody);
+    
+    int httpCode = http.POST(requestBody);
+
+    if (httpCode != 200) {
+        Serial.printf("Firmware indirme isteği başarısız, HTTP Kodu: %d\n", httpCode);
+        Serial.println(http.getString());
+        show_ota_message("HATA!\nFirmware indirme başarısız.");
+        delay(5000);
+        http.end();
+        ESP.restart();
+        return;
+    }
+
+    // Dosya boyutunu al
+    int contentLength = http.getSize();
+    if (contentLength <= 0) {
+        Serial.println("Dosya boyutu 0 veya bilinmiyor.");
+        show_ota_message("HATA!\nGeçersiz dosya boyutu.");
+        delay(5000);
+        http.end();
+        ESP.restart();
+        return;
+    }
+
+    Serial.printf("Yeni firmware boyutu: %d bytes\n", contentLength);
+
+    // Güncelleme işlemini başlat
+    // (contentLength, U_FLASH) -> toplam boyut ve güncelleme tipi (flash)
+    if (!Update.begin(contentLength)) {
+        Serial.println("OTA için yeterli alan yok!");
+        Serial.print("Hata Kodu: "); Serial.println(Update.getError());
+        show_ota_message("HATA!\nYeterli alan yok.");
+        delay(5000);
+        http.end();
+        ESP.restart();
+        return;
+    }
+
+    Serial.println("Dosya indiriliyor ve flash'a yazılıyor...");
+    
+    // Sunucudan gelen stream'i al
+    WiFiClient* stream = http.getStreamPtr();
+
+    // Stream'i doğrudan Update kütüphanesine yaz (RAM'e indirmeden)
+    size_t written = Update.writeStream(*stream);
+
+    if (written != contentLength) {
+        Serial.printf("Yazma hatası! Yazılan: %d, Beklenen: %d\n", written, contentLength);
+        show_ota_message("HATA!\nYazma hatası.");
+        delay(5000);
+        Update.abort(); // Güncellemeyi iptal et
+        http.end();
+        ESP.restart();
+        return;
+    }
+
+    Serial.println("Yazma tamamlandı.");
+
+    // Güncellemeyi sonlandır ve doğrula
+    if (!Update.end()) {
+        Serial.println("Güncelleme sonlandırılamadı!");
+        Serial.print("Hata Kodu: "); Serial.println(Update.getError());
+        show_ota_message("HATA!\nGüncelleme doğrulanamadı.");
+        delay(5000);
+        http.end();
+        ESP.restart();
+        return;
+    }
+
+    // Başarılı!
+    Serial.println("OTA güncellemesi başarılı!");
+    show_ota_message("Güncelleme başarılı!\nCihaz yeniden başlatılıyor...");
+    delay(2000);
+    
+    http.end();
+    ESP.restart(); // Yeni firmware ile yeniden başla
+}
+
 
 
 unsigned long lastJwt = 0;
@@ -684,6 +905,15 @@ void loop() {
       lv_label_set_text(statusLabel, "");
       digitalWrite(LED_PIN, LOW);
       lockOpen = false;
+    }
+  }
+  if (now - lastOtaCheck > otaCheckInterval) {
+    lastOtaCheck = now;
+    if (WiFi.status() == WL_CONNECTED) {
+        Serial.println("Güncelleme kontrolü yapılıyor...");
+        checkForUpdates();
+    } else {
+        Serial.println("OTA kontrolü için WiFi bağlantısı yok.");
     }
   }
 

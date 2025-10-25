@@ -66,7 +66,7 @@ int room_id;
 int accessType;
 
 
-const String base_url = "http://172.23.53.92:8001/kilitSistemi";
+const String base_url = "https://pve.izu.edu.tr/randevu";
 //AsyncWebServer server(80);
 
 // =================== OTA AYARLARI ===================
@@ -893,11 +893,27 @@ void performUpdate(String newVersion) {
 }
 
 
-
+unsigned long lastWifiCheck = 0;
 unsigned long lastJwt = 0;
 const unsigned long interval = 60000;   // 60 sn
 void loop() {
   unsigned long now = millis();
+
+  if (WiFi.status() != WL_CONNECTED) {
+    if (now - lastWifiCheck > 5000) { 
+      Serial.println("WiFi bağlantısı koptu! Yeniden bağlanılıyor...");
+      lastWifiCheck = now; // Son deneme zamanını şimdi olarak güncelle
+      
+      WiFi.begin(ssid.c_str(), password.c_str());
+
+      // MQTT bağlantısını da kes ki 'mqttReconnect()' WiFi geri geldiğinde onu yeniden kursun
+      if (mqttClient.connected()) {
+        mqttClient.disconnect(); 
+      }
+    }
+  } else {
+    lastWifiCheck = now;
+  }
 
   if (lockOpen) {
     if (now - unlockTime > 10000) {  // 10 saniye geçti

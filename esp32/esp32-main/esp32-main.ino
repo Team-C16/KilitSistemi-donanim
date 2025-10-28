@@ -4,7 +4,17 @@
 #define LED_PIN 38
 Preferences preferences;
 #include <Update.h>
+#include "esp_wpa2.h"
 lv_obj_t *qr;
+
+IPAddress gateway(172, 23, 254, 254);      // ÖRNEK: Bildiğin Ağ Geçidi
+IPAddress subnet(255, 255, 0, 0);    // ÖRNEK: Bildiğin Alt Ağ Maskesi
+IPAddress primaryDNS(10, 2, 2, 1);      // (Google DNS - çalışmalı)
+IPAddress secondaryDNS(1, 1, 1, 1);    // (Cloudflare DNS - opsiyonel)
+IPAddress ip_base(172, 23, 230, 0);
+
+int ip_start_octet = 0; // ÖRNEK: 100'den başla
+int ip_end_octet = 200;
 
 // --- Ekran sınıfı ---
 class LGFX : public lgfx::LGFX_Device {
@@ -64,7 +74,15 @@ String password;
 String jwtSecret;
 int room_id;
 int accessType;
+String EAP_IDENTITY;
+String EAP_PASSWORD;
+String EAP_ANOIDENTITY;
 
+lv_obj_t* loading_screen = nullptr; // Yükleme ekranını loop'ta silebilmek için
+lv_obj_t* main_screen = nullptr;
+int s_ip_to_try = ip_start_octet; // (Önceki cevaptan) Denenecek 'static' IP okteti
+unsigned long lastWifiCheck = 0;
+const unsigned long wifiCheckInterval = 15000;
 
 const String base_url = "https://pve.izu.edu.tr/randevu";
 //AsyncWebServer server(80);
@@ -466,7 +484,7 @@ bool publishRequest(const String &topic, const String &payload) {
 
 void setup() {
   Serial.begin(115200);
-  
+  Serial.println(WiFi.macAddress());
   pinMode(2, OUTPUT);
   digitalWrite(2, HIGH);
   pinMode(LED_PIN, OUTPUT);
@@ -479,6 +497,9 @@ void setup() {
   jwtSecret = preferences.getString("jwtSecret", "HATA"); // ÖNEMLİ: NVS'e yazarken kullandığın anahtarın ("jwtSecret" veya "jwt_secret") aynısı olduğundan emin ol!
   room_id = preferences.getInt("room_id", 0);
   accessType = preferences.getInt("accessType", 0);
+  EAP_IDENTITY = preferences.getString("EAP_IDENTITY", "HATA");;
+  EAP_PASSWORD = preferences.getString("EAP_PASSWORD", "HATA");;
+  EAP_ANOIDENTITY = preferences.getString("EAP_ANOIDENTITY", "HATA");;
 
   preferences.end();
 
@@ -503,7 +524,7 @@ void setup() {
   disp_drv.draw_buf = &draw_buf;
   lv_disp_drv_register(&disp_drv);
 
-  lv_obj_t* main_screen = lv_obj_create(NULL); // create a seperate main screen and loading screen
+  main_screen = lv_obj_create(NULL); // create a seperate main screen and loading screen
   lv_obj_remove_style_all(main_screen);
 
   static lv_style_t bg_style;
@@ -520,7 +541,7 @@ void setup() {
   lv_style_set_bg_opa(&bg_style, LV_OPA_COVER);
   lv_obj_add_style(main_screen, &bg_style, LV_PART_MAIN);
 
-  lv_obj_t* loading_screen = lv_obj_create(NULL);
+  loading_screen = lv_obj_create(NULL);
   lv_obj_remove_style_all(loading_screen);  // tüm stilleri kaldır (arka plan vs.)
   lv_scr_load(loading_screen);
 
@@ -569,8 +590,6 @@ void setup() {
   lv_timer_handler();// To Update Spinner
 
   // Table
-
-
 
   lv_timer_handler();// To Update Spinner
 
@@ -628,13 +647,27 @@ void setup() {
   timeLabel = rightLabel;
 
   lv_timer_handler();// To Update Spinner
-  // --- WiFi ---
-  WiFi.begin(ssid.c_str(), password.c_str());
-  WiFi.setSleep(false);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(100); Serial.print(".");
-    lv_timer_handler();
-  }
+
+	s_ip_to_try = ip_start_octet; 
+	lastWifiCheck = millis(); // Denemeyi şimdi başlat
+
+	Serial.println("İlk Wi-Fi denemesi başlatılıyor...");
+	if(ssid == "eduroam")
+	{
+		// Sadece İLK IP'yi dene. loop() gerisini halledecek.
+		IPAddress current_ip(ip_base[0], ip_base[1], ip_base[2], s_ip_to_try);
+		if (!WiFi.config(current_ip, gateway, subnet, primaryDNS, secondaryDNS)) {
+			Serial.println("Static IP configuration FAILED");
+		} else {
+			WiFi.begin(ssid.c_str(), WPA2_AUTH_PEAP, EAP_ANOIDENTITY.c_str(), EAP_IDENTITY.c_str(), EAP_PASSWORD.c_str(), NULL);
+		}
+		// BİR SONRAKİ DENEME İÇİN IP'Yİ ARTIR
+		s_ip_to_try++; 
+	}
+	else{
+		WiFi.begin(ssid.c_str(), password.c_str());
+	}
+  
   Serial.println("\nWiFi bağlı");
 
   mqttClient.setServer(mqtt_server, mqtt_port);
@@ -893,26 +926,55 @@ void performUpdate(String newVersion) {
 }
 
 
-unsigned long lastWifiCheck = 0;
 unsigned long lastJwt = 0;
 const unsigned long interval = 60000;   // 60 sn
 void loop() {
   unsigned long now = millis();
-
   if (WiFi.status() != WL_CONNECTED) {
-    if (now - lastWifiCheck > 5000) { 
+    // WiFi bağlı değilse VE son denemenin üzerinden 15 saniye geçtiyse,
+    // YENİ BİR IP DENEMESİ YAP.
+    if (now - lastWifiCheck > wifiCheckInterval) { 
+      lastWifiCheck = now; // Zamanlayıcıyı sıfırla
+		lv_timer_handler();
       Serial.println("WiFi bağlantısı koptu! Yeniden bağlanılıyor...");
-      lastWifiCheck = now; // Son deneme zamanını şimdi olarak güncelle
-      
-      WiFi.begin(ssid.c_str(), password.c_str());
 
-      // MQTT bağlantısını da kes ki 'mqttReconnect()' WiFi geri geldiğinde onu yeniden kursun
+      if (ssid == "eduroam") {
+        Serial.print("Eduroam: Denenen IP son oktet: ");
+        Serial.println(s_ip_to_try);
+        
+        // Sadece bir IP yapılandır ve başlat
+        IPAddress current_ip(ip_base[0], ip_base[1], ip_base[2], s_ip_to_try);
+        if (!WiFi.config(current_ip, gateway, subnet, primaryDNS, secondaryDNS)) {
+            Serial.println("Static IP configuration FAILED");
+        } else {
+            WiFi.begin(ssid.c_str(), WPA2_AUTH_PEAP, EAP_ANOIDENTITY.c_str(), EAP_IDENTITY.c_str(), EAP_PASSWORD.c_str(), NULL);
+        }
+		lv_timer_handler();
+        // Bir sonraki deneme için sıradaki IP'yi hazırla
+        s_ip_to_try++;
+        if (s_ip_to_try > ip_end_octet) {
+            s_ip_to_try = ip_start_octet; // Aralığın sonuna geldiysek başa dön
+            Serial.println("Tüm IP aralığı denendi. 15sn sonra baştan başlanacak.");
+        }
+
+      } else {
+        // Normal WiFi bağlantısı (bu zaten non-blocking idi)
+        Serial.println("Normal WiFi'a bağlanılıyor...");
+        WiFi.begin(ssid.c_str(), password.c_str());
+      }
+      
+      // WiFi düştüyse MQTT'yi de düşür ki 'mqttReconnect' onu tekrar kursun
       if (mqttClient.connected()) {
         mqttClient.disconnect(); 
       }
     }
+    // 15 saniyelik bekleme süresi dolmadıysa, hiçbir şey yapma
+    // ve loop'un geri kalanının çalışmasına izin ver.
+
   } else {
-    lastWifiCheck = now;
+    // WiFi BAĞLI
+    lastWifiCheck = now; // Bağlantı varken zamanlayıcıyı güncel tut
+    s_ip_to_try = ip_start_octet; // Başarılı, IP tarayıcıyı sıfırla
   }
 
   if (lockOpen) {

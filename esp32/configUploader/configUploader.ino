@@ -7,11 +7,14 @@ Preferences preferences;
 // BİLGİLERİ BURAYA GİRİN
 // Her cihaza yüklemeden önce bu iki satırı o cihaza özel bilgilerle güncelleyin.
 //*******************************************************************
-const int room_id = 13; 
+const int room_id = 14; 
 const char* jwt_secret = "";
-const char* ssid = "";
-const char* password = "";
+const char* ssid = "eduroam";
+const char* password = "Kerem332.";
 const int accessType = 1;
+const char* EAP_ANONYMOUS_IDENTITY = "randevu.oys@izu.edu.tr"; // veya kurumunun formatı
+const char* EAP_IDENTITY = "randevu.oys@izu.edu.tr";     // Tam mail adresin
+const char* EAP_PASSWORD = "";
 //*******************************************************************
 
 
@@ -32,6 +35,9 @@ void setup() {
   preferences.putString("jwtSecret", jwt_secret);
   preferences.putString("ssid", ssid);
   preferences.putString("password", password);
+  preferences.putString("EAP_ANOIDENTITY", EAP_ANONYMOUS_IDENTITY);
+  preferences.putString("EAP_IDENTITY", EAP_IDENTITY);
+  preferences.putString("EAP_PASSWORD", EAP_PASSWORD);
 
   Serial.println("Veriler NVS'e basariyla yazildi!");
   Serial.println("-------------------------------------");
@@ -42,6 +48,9 @@ void setup() {
   String okunan_ssid = preferences.getString("ssid", "HATA");
   String okunan_pass = preferences.getString("password", "HATA");
   int okunan_type = preferences.getInt("accessType", 0);
+  String okunan_anonidentity = preferences.getString("EAP_ANOIDENTITY", "HATA");
+  String okunan_identity = preferences.getString("EAP_IDENTITY", "HATA");
+  String okunan_eappass = preferences.getString("EAP_PASSWORD", "HATA");
   
   Serial.println("Dogrulama icin NVS'ten okunan veriler:");
   Serial.printf("Oda ID: %d\n", okunan_id);
@@ -49,6 +58,9 @@ void setup() {
   Serial.printf("SSID: %s\n", okunan_ssid.c_str());
   Serial.printf("Password: %s\n", okunan_pass.c_str());
   Serial.printf("Access Type: %d\n", okunan_type);
+  Serial.printf("okunan_identityanon: %s\n", okunan_anonidentity.c_str());
+  Serial.printf("okunan_identity: %s\n", okunan_identity.c_str());
+  Serial.printf("okunan_eappass: %s\n", okunan_eappass.c_str());
   
   Serial.println("-------------------------------------");
 

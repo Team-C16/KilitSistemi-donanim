@@ -77,6 +77,9 @@ int accessType;
 String EAP_IDENTITY;
 String EAP_PASSWORD;
 String EAP_ANOIDENTITY;
+int g_start_hour = 9;
+int g_end_hour = 18;
+String g_time_suffix = ":00";
 
 lv_obj_t* loading_screen = nullptr; // Yükleme ekranını loop'ta silebilmek için
 lv_obj_t* main_screen = nullptr;
@@ -89,7 +92,7 @@ const String base_url = "https://pve.izu.edu.tr/randevu";
 
 // =================== OTA AYARLARI ===================
 // BU KODU HER DERLEDİĞİNİZDE SÜRÜMÜ ARTIRIN (örn: "1.0.1", "1.0.2")
-const char* FIRMWARE_VERSION = "1.0.1"; 
+const char* FIRMWARE_VERSION = "1.0.2"; 
 
 // Sunucunuzda "en son sürüm numarasını" döndüren API adresi
 const String OTA_VERSION_CHECK_URL = base_url + "/checkFirmwareVersion";
@@ -395,6 +398,99 @@ void processScheduleDetailsResponse(String rendezvous_id) {
   http.end();
 }
 
+void fetchTimeConfig() {
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("Zaman ayarları için WiFi bağlı değil! Varsayılanlar kullanılıyor.");
+        return; // WiFi yoksa fonksiyondan çık, varsayılanlar kullanılsın
+    }
+
+    Serial.println("API'den zaman ayarları alınıyor...");
+
+    HTTPClient http;
+    String url = base_url + "/getIndexesRasp"; 
+    
+    if (!http.begin(url)) {
+        Serial.println("HTTP bağlantısı (getIndexesRasp) kurulamadı!");
+        return; // Başarısızsa varsayılanları kullan
+    }
+
+    http.addHeader("Content-Type", "application/json");
+
+    // JWT oluştur (Mevcut createJWT fonksiyonunuzu kullanıyoruz)
+    String token = createJWT(jwtSecret, 60); // 60 saniyelik token
+
+    
+    DynamicJsonDocument doc(256);
+    doc["room_id"] = room_id;
+    doc["token"] = token;
+    String requestBody;
+    serializeJson(doc, requestBody);
+
+    int httpResponseCode = http.POST(requestBody);
+
+    if (httpResponseCode == 200) {
+        String payload = http.getString();
+        Serial.print("DEBUG: /getIndexesRasp API Yanıtı: ");
+        Serial.println(payload);
+
+        // API yanıtı bir dizi (array) olarak bekleniyor.
+        DynamicJsonDocument jsonDoc(1024); // 1KB ayar verisi için yeterli olmalı
+        DeserializationError error = deserializeJson(jsonDoc, payload);
+
+        if (error) {
+            Serial.print("JSON parse hatası (getIndexesRasp): ");
+            Serial.println(error.c_str());
+            Serial.println("Varsayılan zaman ayarları kullanılacak.");
+        } else {
+            JsonArray array = jsonDoc.as<JsonArray>();
+            bool foundStart = false, foundEnd = false, foundSuffix = false;
+
+            // API'den gelen dizideki her bir objeyi kontrol et
+            for (JsonObject item : array) {
+                String indexName = item["indexName"] | ""; // indexName'i al
+                String indexValue = item["indexValue"] | ""; // indexValue'yu al
+
+                if (indexName == "hour" && !indexValue.isEmpty()) {
+                    g_time_suffix = indexValue;
+                    foundSuffix = true;
+                } else if (indexName == "starthour" && !indexValue.isEmpty()) {
+                    g_start_hour = indexValue.toInt();
+                    // toInt() başarısız olursa (örn: "abc" gelirse) 0 döner. 
+                    // Gelen değer "0" değilse ama sonuç 0'sa hata vardır.
+                    if (g_start_hour == 0 && indexValue != "0") {
+                         Serial.printf("Hata: 'starthour' değeri ('%s') sayıya çevrilemedi. Varsayılan (9) kullanılıyor.\n", indexValue.c_str());
+                         g_start_hour = 9; // Hata durumunda varsayılana dön
+                    } else {
+                         foundStart = true;
+                    }
+                } else if (indexName == "endhour" && !indexValue.isEmpty()) {
+                    g_end_hour = indexValue.toInt();
+                    if (g_end_hour == 0 && indexValue != "0") {
+                         Serial.printf("Hata: 'endhour' değeri ('%s') sayıya çevrilemedi. Varsayılan (18) kullanılıyor.\n", indexValue.c_str());
+                         g_end_hour = 18; // Hata durumunda varsayılana dön
+                    } else {
+                        foundEnd = true;
+                    }
+                }
+            }
+
+            if (foundStart && foundEnd && foundSuffix) {
+                Serial.printf("✅ Zaman ayarları API'den başarıyla alındı: Başlangıç: %d, Bitiş: %d, Küsürat: '%s'\n", g_start_hour, g_end_hour, g_time_suffix.c_str());
+            } else {
+                Serial.println("⚠️ Zaman ayarları API'den eksik alındı! Eksik olanlar için varsayılanlar kullanılacak.");
+                // Not: Eksik veri varsa, global değişkenlerin varsayılan değerleri (9, 18, :00) zaten ayarlı olduğu için ekstra bir şey yapmaya gerek yok.
+            }
+        }
+    } else {
+        Serial.print("Zaman ayarları API hatası, HTTP Kodu: ");
+        Serial.println(httpResponseCode);
+        Serial.println(http.getString());
+        Serial.println("Varsayılan zaman ayarları (9-18, :00) kullanılacak.");
+    }
+
+    http.end();
+}
+
 
 // Fix the mqttReconnect function to ensure proper subscription
 bool mqttReconnect() {
@@ -690,6 +786,7 @@ void setup() {
   }
   Serial.println("Zaman senkronize edildi.");
   lv_timer_handler();// To Update Spinner
+  fetchTimeConfig();
   lv_obj_clean(loading_screen);// To Delete Spinner
   lv_scr_load(main_screen); // load main screen before deleting loading
   lv_obj_del(loading_screen);

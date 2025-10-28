@@ -5,6 +5,9 @@
 #include <string.h>  // strlen için
 #include <ArduinoJson.h>
 #include "turkish_better_26.h"
+extern int g_start_hour;
+extern int g_end_hour;
+extern String g_time_suffix;
 
 // Event callback fonksiyonunun bildirimi
 static void table_draw_cb(lv_event_t* e);
@@ -132,9 +135,7 @@ lv_obj_t* create_schedule_table(lv_obj_t* parent, lv_obj_t* qr) {
     lv_obj_add_style(table, &style_turkish_24, LV_PART_MAIN);
     lv_obj_add_style(table, &style_turkish_24, LV_PART_ITEMS);
 
-    const int hour_start = 9;
-    const int hour_end = 18;
-    const int row_count = (hour_end - hour_start) + 1;
+    const int row_count = (g_end_hour - g_start_hour) + 1;
     const int col_count = 6; // 5 gün + saat
 
     lv_table_set_col_cnt(table, col_count);
@@ -152,8 +153,9 @@ lv_obj_t* create_schedule_table(lv_obj_t* parent, lv_obj_t* qr) {
             } else if (r == 0) {
                 lv_table_set_cell_value(table, r, c, day_names[c - 1]);
             } else if (c == 0) {
-                char buf[8];
-                snprintf(buf, sizeof(buf), "%02d:00", hour_start + r - 1);
+                char buf[10];
+                int current_hour_for_row = g_start_hour + r - 1;
+                snprintf(buf, sizeof(buf), "%02d%s", current_hour_for_row, g_time_suffix.c_str());
                 lv_table_set_cell_value(table, r, c, buf);
             } else {
                 lv_table_set_cell_value(table, r, c, "");
@@ -193,9 +195,7 @@ static void table_draw_cb(lv_event_t* e) {
     const char* val = lv_table_get_cell_value(table, row, col);
 
     if (row == 0 || col == 0) {
-        // Saat başlangıcı
-        const int hour_start = 9;
-
+        
         // Şu anki saati al
         time_t now = time(NULL);
         struct tm t;
@@ -203,7 +203,7 @@ static void table_draw_cb(lv_event_t* e) {
         int current_hour = t.tm_hour;
 
         // Hücre saatini hesapla
-        int cell_hour = hour_start + row - 1;
+        int cell_hour = g_start_hour + row - 1;
 
         if (cell_hour == current_hour) {
             // 🔵 Şu anki saati göster
@@ -255,8 +255,7 @@ void mark_schedule_from_json(lv_obj_t* table, const char* jsonStr) {
 
     JsonArray schedules = doc["schedule"].as<JsonArray>();
 
-    const int hour_start = 9;
-    const int hour_end   = 18;
+    
 
     // Şimdiki zaman
     time_t now = time(NULL);
@@ -282,7 +281,7 @@ void mark_schedule_from_json(lv_obj_t* table, const char* jsonStr) {
         if (confirm != 1) continue;
 
         int h = atoi(hourStr);
-        if (h < hour_start || h > hour_end) continue;
+        if (h < g_start_hour || h > g_end_hour) continue;
 
         struct tm event_tm = {};
         strptime(dayStr, "%Y-%m-%dT%H:%M:%S", &event_tm);
@@ -302,7 +301,7 @@ void mark_schedule_from_json(lv_obj_t* table, const char* jsonStr) {
         int col_offset = (int)round(diff_days) + 1;
         if (col_offset < 0 || col_offset > 4) continue;
 
-        int row = (h - hour_start) + 1;
+        int row = (h - g_start_hour) + 1;
         int col = col_offset + 1;
 
         lv_table_set_cell_value(table, row, col, "DOLU");

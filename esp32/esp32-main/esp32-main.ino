@@ -1,4 +1,5 @@
 #include "libs.h"
+#include "colors.h"
 #define MQTT_MAX_PACKET_SIZE 16384
 #include <Preferences.h>
 #define LED_PIN 38
@@ -630,8 +631,8 @@ void setup() {
   lv_style_set_bg_grad_dir(&bg_style, LV_GRAD_DIR_VER);
 
   // Gradient renkleri (örnek: üst beyaz -> alt açık gri)
-  lv_style_set_bg_color(&bg_style, lv_color_hex(0xFFFFFF));   // üst
-  lv_style_set_bg_grad_color(&bg_style, lv_color_hex(0xBABABA)); // alt
+  lv_style_set_bg_color(&bg_style, COLOR_LIGHT);
+  lv_style_set_bg_grad_color(&bg_style, COLOR_BACKGROUND);
 
   // Bu stili main_screen’e uygula
   lv_style_set_bg_opa(&bg_style, LV_OPA_COVER);
@@ -660,12 +661,12 @@ void setup() {
   lv_obj_set_scrollbar_mode(qr_card, LV_SCROLLBAR_MODE_OFF);
   lv_obj_set_scroll_dir(qr_card, LV_DIR_NONE);
 
-  // Kart stil
-  lv_obj_set_style_radius(qr_card, 16, 0); // Köşe yuvarlama
-  lv_obj_set_style_bg_color(qr_card, lv_color_hex(0xFFFFFF), 0); // Beyaz arka plan
-  lv_obj_set_style_shadow_width(qr_card, 20, 0); // Gölge kalınlığı
-  lv_obj_set_style_shadow_spread(qr_card, 2, 0); // Gölge yayılımı
-  lv_obj_set_style_shadow_color(qr_card, lv_color_hex(0x8E4162), 0); // Gölge rengi
+  // Kart Stil
+  lv_obj_set_style_radius(qr_card, 16, 0); 
+  lv_obj_set_style_bg_color(qr_card, COLOR_WHITE, 0); // Beyaz arka plan
+  lv_obj_set_style_shadow_width(qr_card, 20, 0); 
+  lv_obj_set_style_shadow_spread(qr_card, 2, 0); 
+  lv_obj_set_style_shadow_color(qr_card, COLOR_SECONDARY, 0); // YENİ GÖLGE RENGİ
 
   lv_obj_set_style_pad_bottom(qr_card, 50, 0);
   lv_obj_set_style_pad_top(qr_card, 20, 0);
@@ -694,14 +695,13 @@ void setup() {
   lv_obj_set_size(status_card, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
   lv_obj_align_to(status_card, qrAltYazi, LV_ALIGN_OUT_BOTTOM_LEFT, -10, 25);
 
-  // Stil: yeşil arka plan + radius + padding + gölge
+  // Stil: (Yeni Palet: Başarı yeşili)
   lv_obj_set_style_radius(status_card, 12, 0);
-  lv_obj_set_style_bg_color(status_card, lv_color_hex(0x4CAF50), 0);   // Başlangıç yeşil
-  lv_obj_set_style_bg_grad_color(status_card, lv_color_hex(0x81C784), 0); // Daha açık yeşil
-  lv_obj_set_style_bg_grad_dir(status_card, LV_GRAD_DIR_VER, 0);       // Dikey gradient
+  lv_obj_set_style_bg_color(status_card, COLOR_SUCCESS, 0); 
+  lv_obj_set_style_bg_grad_color(status_card, COLOR_AVAILABLE, 0); 
+  lv_obj_set_style_bg_grad_dir(status_card, LV_GRAD_DIR_VER, 0);
   lv_obj_set_style_shadow_width(status_card, 15, 0);
-  lv_obj_set_style_shadow_color(status_card, lv_color_hex(0x2F4858), 0);
-  lv_obj_set_style_pad_all(status_card, 10, 0);
+  lv_obj_set_style_shadow_color(status_card, COLOR_SECONDARY, 0); // Standart gölge
 
   // --- Status Label ---
   statusLabel = lv_label_create(status_card);
@@ -719,11 +719,11 @@ void setup() {
   lv_obj_align(time_card, LV_ALIGN_BOTTOM_LEFT, -12, 4);
 
   lv_obj_set_style_pad_all(time_card, 12, 0);
-  lv_obj_set_style_bg_color(time_card, lv_color_hex(0x8E4162), 0);        // Başlangıç rengi
-  lv_obj_set_style_bg_grad_color(time_card, lv_color_hex(0x853c43), 0);   // Bitiş rengi (kırmızı ton)
-  lv_obj_set_style_bg_grad_dir(time_card, LV_GRAD_DIR_VER, 0);            // Yatay gradient (sol→sağ)
+  lv_obj_set_style_bg_color(time_card, COLOR_DARK, 0);
+  lv_obj_set_style_bg_grad_color(time_card, COLOR_SECONDARY, 0);
+  lv_obj_set_style_bg_grad_dir(time_card, LV_GRAD_DIR_VER, 0);
   lv_obj_set_style_shadow_width(time_card, 20, 0);
-  lv_obj_set_style_shadow_color(time_card, lv_color_hex(0x2F4858), 0);
+  lv_obj_set_style_shadow_color(time_card, COLOR_DARK, 0); // Koyu gölge
 
   // --- Sol Label (yazı) ---
   lv_obj_t* leftLabel = lv_label_create(time_card);

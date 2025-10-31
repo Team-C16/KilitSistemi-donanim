@@ -2,6 +2,7 @@
 #include "turkish_24.h"
 #include "turkish_better_21.h"
 #include <time.h>
+#include "colors.h"
 #include <string.h>  // strlen için
 #include <ArduinoJson.h>
 #include "turkish_better_26.h"
@@ -87,38 +88,53 @@ lv_obj_t* create_schedule_table(lv_obj_t* parent, lv_obj_t* qr) {
 
     lv_obj_set_scrollbar_mode(table, LV_SCROLLBAR_MODE_OFF); // Scrollbar'ı kapat
 
-    // === Yeni stiller ===
+    // === Yeni Stiller (Yeni Renk Paleti) ===
     static lv_style_t style_table_main;
     static lv_style_t style_table_items;
     static lv_style_t style_table_header;
 
+    // Tablonun ana çerçevesi (dış gölge, arka plan)
     lv_style_init(&style_table_main);
-    lv_style_set_border_width(&style_table_main, 2);
-    lv_style_set_border_color(&style_table_main, lv_color_hex(0x2F4858));
+    lv_style_set_border_width(&style_table_main, 1);
+    lv_style_set_border_color(&style_table_main, COLOR_BORDER);
     lv_style_set_radius(&style_table_main, 6);
-    lv_style_set_bg_color(&style_table_main, lv_color_hex(0x8E4162));
-    lv_style_set_shadow_width(&style_table_main, 20);       // Gölge kalınlığı
-    lv_style_set_shadow_spread(&style_table_main, 2);       // Gölge yayılımı
-    lv_style_set_shadow_color(&style_table_main, lv_color_hex(0x8E4162)); // Gölge rengi
+    lv_style_set_bg_color(&style_table_main, COLOR_WHITE); // Ana arka plan beyaz
+    lv_style_set_shadow_width(&style_table_main, 20);
+    lv_style_set_shadow_spread(&style_table_main, 2);
+    lv_style_set_shadow_color(&style_table_main, COLOR_SECONDARY); // Yeni gölge
 
+    // Başlık hücreleri için stil (KULLANILMIYOR, draw_cb eziyor ama dursun)
     lv_style_init(&style_table_header);
-    lv_style_set_bg_color(&style_table_header, lv_color_hex(0x2F4858));
-    lv_style_set_text_color(&style_table_header, lv_color_hex(0xFFFFFF));
-    lv_style_set_border_width(&style_table_header, 2);
-    lv_style_set_border_color(&style_table_header, lv_color_hex(0x33658A)); 
+    lv_style_set_bg_color(&style_table_header, COLOR_DARK);
+    lv_style_set_text_color(&style_table_header, COLOR_WHITE);
+    lv_style_set_border_width(&style_table_header, 1);
+    lv_style_set_border_color(&style_table_header, COLOR_BORDER); 
 
+    // İç hücreler için varsayılan stil (draw_cb eziyor)
     lv_style_init(&style_table_items);
     lv_style_set_border_width(&style_table_items, 1);
-    lv_style_set_border_color(&style_table_items, lv_color_hex(0x33658A));
+    lv_style_set_border_color(&style_table_items, COLOR_BORDER);
     lv_style_set_pad_all(&style_table_items, 6);
     lv_style_set_text_align(&style_table_items, LV_TEXT_ALIGN_CENTER);
- 
-    lv_style_set_bg_color(&style_table_items, lv_color_hex(0x53a4e0));     
- 
+    lv_style_set_bg_color(&style_table_items, COLOR_BACKGROUND);     
 
     // Uygula
     lv_obj_add_style(table, &style_table_main, LV_PART_MAIN);
     lv_obj_add_style(table, &style_table_items, LV_PART_ITEMS);
+
+    // Tablodaki TÜM yazılar için varsayılan font ve renk
+    static lv_style_t style_turkish_24;
+    lv_style_init(&style_turkish_24);
+    lv_style_set_text_font(&style_turkish_24, &turkish_better_21);
+    lv_style_set_pad_top(&style_turkish_24, 8);
+    lv_style_set_pad_bottom(&style_turkish_24, 8);
+    lv_style_set_text_line_space(&style_turkish_24, 4);
+    lv_style_set_text_align(&style_turkish_24, LV_TEXT_ALIGN_CENTER);
+    lv_style_set_border_width(&style_turkish_24, 0); // Çerçeve draw_cb'de yönetilecek
+    lv_style_set_text_color(&style_turkish_24, COLOR_TEXT_PRIMARY); // Varsayılan yazı rengi
+
+    lv_obj_add_style(table, &style_turkish_24, LV_PART_MAIN);
+    lv_obj_add_style(table, &style_turkish_24, LV_PART_ITEMS);
 
     // Font stili tanımla ve uygula
     static lv_style_t style_turkish_24;
@@ -195,51 +211,78 @@ static void table_draw_cb(lv_event_t* e) {
     const char* val = lv_table_get_cell_value(table, row, col);
 
     if (row == 0 || col == 0) {
-        
-        // Şu anki saati al
+        // === BAŞLIK VE SAAT SÜTUNU HÜCRELERİ ===
+            
+        // Şu anki tam saati al (saat ve dakika)
         time_t now = time(NULL);
         struct tm t;
         localtime_r(&now, &t);
-        int current_hour = t.tm_hour;
+        int current_hour = t.tm_hour; 
+        int current_min = t.tm_min;
 
-        // Hücre saatini hesapla
-        int cell_hour = g_start_hour + row - 1;
+        // API'den gelen küsüratı parse et
+        int slot_start_minute = 0;
+        int colon_index = g_time_suffix.indexOf(':'); 
+        if (colon_index != -1) {
+            slot_start_minute = g_time_suffix.substring(colon_index + 1).toInt();
+        }
 
-        if (cell_hour == current_hour) {
-            // 🔵 Şu anki saati göster
-            //dsc->rect_dsc->bg_color = lv_color_hex(0x8E4162); // vişne/pembe ton
-            dsc->rect_dsc->bg_grad.dir = LV_GRAD_DIR_NONE;
-            dsc->rect_dsc->bg_color = lv_color_hex(0xFFFFFF);
-            dsc->rect_dsc->border_color = lv_color_hex(0x8E4162); 
-            dsc->rect_dsc->border_width = 6;
+        // Aktif saat dilimini hesapla (Saat 15:22 ise aktif saat 14:30'dur)
+        int active_slot_hour;
+        if (current_min < slot_start_minute) {
+            active_slot_hour = current_hour - 1;
         } else {
+            active_slot_hour = current_hour;
+        }
+        int cell_hour = g_start_hour + row - 1; 
+
+        // === RENKLER YENİ PALETTEN GÜNCELLENDİ ===
+        if (cell_hour == active_slot_hour) { 
+            // 🔵 AKTİF SAAT SATIRI VURGUSU
             dsc->rect_dsc->bg_grad.dir = LV_GRAD_DIR_NONE;
-            dsc->rect_dsc->bg_color = lv_color_hex(0xFFFFFF); // beyaz
+            dsc->rect_dsc->bg_color = COLOR_LIGHT;          // Beyaz arka plan
+            dsc->rect_dsc->border_color = COLOR_HIGHLIGHT;  // Sarı vurgu çerçevesi
+            dsc->rect_dsc->border_width = 4;
+            if (dsc->label_dsc) {
+                dsc->label_dsc->color = COLOR_TEXT_PRIMARY; // Koyu ana yazı rengi
+            }
+        } else {
+            // Diğer başlık/saat hücreleri
+            dsc->rect_dsc->bg_grad.dir = LV_GRAD_DIR_NONE;
+            dsc->rect_dsc->bg_color = COLOR_LIGHT;          // Beyaz arka plan
             dsc->rect_dsc->border_width = 1;
+            dsc->rect_dsc->border_color = COLOR_BORDER;     // İnce çerçeve rengi
+             if (dsc->label_dsc) {
+                dsc->label_dsc->color = COLOR_TEXT_PRIMARY; // Koyu ana yazı rengi
+            }
         }
     } else if (val && strlen(val) > 0) {
-        dsc->rect_dsc->bg_grad.dir = LV_GRAD_DIR_VER; // Dikey gradient
+        // === "DOLU" (UNAVAILABLE) HÜCRELER ===
+        dsc->rect_dsc->bg_grad.dir = LV_GRAD_DIR_VER; 
         dsc->rect_dsc->bg_grad.stops_count = 2;
-        dsc->rect_dsc->bg_grad.stops[0].color = lv_color_hex(0x853c43);
-        dsc->rect_dsc->bg_grad.stops[1].color = lv_color_hex(0x8E4162);
-        dsc->rect_dsc->border_color = lv_color_hex(0x8E4162);
+        dsc->rect_dsc->bg_grad.stops[0].color = COLOR_UNAVAILABLE; // Kırmızı
+        dsc->rect_dsc->bg_grad.stops[1].color = COLOR_DANGER;      // Koyu Kırmızı
+        dsc->rect_dsc->border_color = COLOR_DANGER;
         dsc->rect_dsc->border_width = 1;
         if (dsc->label_dsc) {
-            dsc->label_dsc->color = lv_color_hex(0xFFFFFF); // dolu hücrelerde beyaz yazı
+            dsc->label_dsc->color = COLOR_WHITE; // Beyaz yazı
         }
     } else {
-        dsc->rect_dsc->bg_grad.dir = LV_GRAD_DIR_VER; // Dikey gradient
-        dsc->rect_dsc->bg_color = lv_color_hex(0x86BBD8); // Üst renk (açık mavi)
+        // === "BOŞ" (AVAILABLE) HÜCRELER ===
+        dsc->rect_dsc->bg_grad.dir = LV_GRAD_DIR_VER;
         dsc->rect_dsc->bg_grad.stops_count = 2;
-        dsc->rect_dsc->bg_grad.stops[0].color = lv_color_hex(0x4e8cba);
-        dsc->rect_dsc->bg_grad.stops[1].color = lv_color_hex(0x53a4e0);
-        dsc->rect_dsc->border_color = lv_color_hex(0x2F4858);
+        dsc->rect_dsc->bg_grad.stops[0].color = COLOR_LIGHT;        // Beyaz (Üst)
+        dsc->rect_dsc->bg_grad.stops[1].color = COLOR_BACKGROUND;   // Soluk Mavi (Alt)
+        dsc->rect_dsc->border_color = COLOR_BORDER;
         dsc->rect_dsc->border_width = 1;
+         if (dsc->label_dsc) {
+            dsc->label_dsc->color = COLOR_TEXT_PRIMARY; // Koyu ana yazı rengi
+        }
     }
 
-    // Özel örnek: sadece row=0 col=1 hücresine kalın border
+    // "Pazart." sütununa (günün ilk günü) özel vurgu
     if (row == 0 && col == 1) {
-        dsc->rect_dsc->border_color = lv_color_hex(0x8E4162);
+        dsc->rect_dsc->border_color = COLOR_PRIMARY; // Ana Mavi renk
         dsc->rect_dsc->border_width = 3;
     }
 }
@@ -403,15 +446,27 @@ lv_obj_t* create_details_screen(lv_obj_t* parent, lv_obj_t* qr, const char* json
     lv_obj_set_style_text_font(lbl_header, &turkish_better_21, 0);
     lv_obj_set_style_text_align(lbl_header, LV_TEXT_ALIGN_CENTER, 0);
 
-    // === Tek satır info bar ===
+    // === Tek satır info bar (Yeni Renkler) ===
     lv_obj_t* info_bar = lv_obj_create(container);
     lv_obj_set_size(info_bar, container_w - 20, 40);
     lv_obj_set_flex_flow(info_bar, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(info_bar, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_shadow_width(info_bar, 20, 0); // Gölge kalınlığı
-    lv_obj_set_style_shadow_spread(info_bar, 2, 0); // Gölge yayılımı
-    lv_obj_set_style_shadow_color(info_bar, lv_color_hex(0x8E4162), 0); // Gölge rengi
+    lv_obj_set_style_bg_color(info_bar, COLOR_WHITE, 0);
+    lv_obj_set_style_radius(info_bar, 8, 0);
+    lv_obj_set_style_shadow_width(info_bar, 10, 0); 
+    lv_obj_set_style_shadow_spread(info_bar, 1, 0); 
+    lv_obj_set_style_shadow_color(info_bar, COLOR_SECONDARY, 0); 
     lv_obj_set_scrollbar_mode(info_bar, LV_SCROLLBAR_MODE_OFF);
+
+    lv_obj_t* lbl_title = lv_label_create(info_bar);
+    lv_label_set_text_fmt(lbl_title, "%s", titleStr.c_str());
+    lv_obj_set_style_text_font(lbl_title, &turkish_better_21, 0); 
+    lv_obj_set_style_text_color(lbl_title, COLOR_TEXT_PRIMARY, 0);
+    
+    lv_obj_t* lbl_hour = lv_label_create(info_bar);
+    lv_label_set_text(lbl_hour, hourBuf);
+    lv_obj_set_style_text_font(lbl_hour, &turkish_better_21, 0);
+    lv_obj_set_style_text_color(lbl_hour, COLOR_TEXT_PRIMARY, 0);
 
     lv_obj_t* lbl_title = lv_label_create(info_bar);
     lv_label_set_text_fmt(lbl_title, "%s", titleStr.c_str());
@@ -421,19 +476,22 @@ lv_obj_t* create_details_screen(lv_obj_t* parent, lv_obj_t* qr, const char* json
     lv_label_set_text(lbl_hour, hourBuf);
     lv_obj_set_style_text_font(lbl_hour, &turkish_better_21, 0);
 
-    // === Mesaj alanı ===
-    lv_obj_t* msg_cont = lv_obj_create(container);
-    lv_obj_set_size(msg_cont, container_w - 20, container_h / 2 - 60);
-    lv_obj_t* lbl_msg = lv_label_create(msg_cont);
-    lv_label_set_text(lbl_msg, msgStr.c_str());
-    lv_label_set_long_mode(lbl_msg, LV_LABEL_LONG_WRAP);
-    lv_obj_set_width(lbl_msg, container_w - 40);
-    lv_obj_center(lbl_msg);
-    lv_obj_set_style_text_font(lbl_msg, &turkish_better_21, 0);
-    lv_obj_set_style_shadow_width(msg_cont, 20, 0); // Gölge kalınlığı
-    lv_obj_set_style_shadow_spread(msg_cont, 2, 0); // Gölge yayılımı
-    lv_obj_set_style_shadow_color(msg_cont, lv_color_hex(0x8E4162), 0); // Gölge rengi
-    lv_obj_set_scrollbar_mode(msg_cont, LV_SCROLLBAR_MODE_OFF);
+    // === Mesaj alanı (Yeni Renkler) ===
+    lv_obj_t* msg_cont = lv_obj_create(container);
+    lv_obj_set_size(msg_cont, container_w - 20, container_h / 2 - 60);
+    lv_obj_set_style_bg_color(msg_cont, COLOR_WHITE, 0);
+    lv_obj_set_style_radius(msg_cont, 8, 0);
+    lv_obj_t* lbl_msg = lv_label_create(msg_cont);
+    lv_label_set_text(lbl_msg, msgStr.c_str());
+    lv_label_set_long_mode(lbl_msg, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(lbl_msg, container_w - 40);
+    lv_obj_center(lbl_msg);
+    lv_obj_set_style_text_font(lbl_msg, &turkish_better_21, 0);
+    lv_obj_set_style_text_color(lbl_msg, COLOR_TEXT_PRIMARY, 0);
+    lv_obj_set_style_shadow_width(msg_cont, 10, 0); 
+    lv_obj_set_style_shadow_spread(msg_cont, 1, 0); 
+    lv_obj_set_style_shadow_color(msg_cont, COLOR_SECONDARY, 0); 
+    lv_obj_set_scrollbar_mode(msg_cont, LV_SCROLLBAR_MODE_OFF);
 
     // === Katılımcılar alanı ===
     lv_obj_t* member_cont = lv_obj_create(container);
@@ -445,46 +503,59 @@ lv_obj_t* create_details_screen(lv_obj_t* parent, lv_obj_t* qr, const char* json
     lv_obj_set_style_shadow_spread(member_cont, 2, 0); // Gölge yayılımı
     lv_obj_set_style_shadow_color(member_cont, lv_color_hex(0x8E4162), 0); // Gölge rengi
     lv_obj_set_scrollbar_mode(member_cont, LV_SCROLLBAR_MODE_OFF);
-    // Katılımcı ekleme
-    auto add_member = [&](const char* name) {
-        lv_obj_t* card = lv_obj_create(member_cont);
-        lv_obj_set_size(card, (container_w - 40) / 4, 100); // max 4 tane yan yana
-        lv_obj_set_style_radius(card, 12, 0);
-        lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_VER, 0);
-        lv_obj_set_style_bg_color(card, lv_color_hex(0x2F4858), 0);
-        lv_obj_set_style_bg_grad_color(card, lv_color_hex(0x576691), 0); // alt
-        lv_obj_set_scrollbar_mode(card, LV_SCROLLBAR_MODE_OFF);
-    
-        lv_obj_t* lbl = lv_label_create(card);
-        lv_label_set_text(lbl, name);
-    
-        // Font ve renk
-        lv_obj_set_style_text_font(lbl, &turkish_better_21, 0);
-        lv_obj_set_style_text_color(lbl, lv_color_hex(0xFFFFFF), 0);
-    
-        // Label genişliği kartın genişliğinden küçük olmalı
-        lv_obj_set_width(lbl, lv_obj_get_width(card) - 10);
-    
-        // Önce WRAP ile satıra sığdırmayı dene
-        lv_label_set_long_mode(lbl, LV_LABEL_LONG_WRAP);
-    
-        // Ortala
-        lv_obj_center(lbl);
-        lv_obj_set_style_text_align(card, LV_TEXT_ALIGN_CENTER, 0);
-        // WRAP sonrasında label yüksekliğini kontrol et
-        lv_obj_update_layout(lbl); // boyutları güncelle
-    
-        lv_coord_t lbl_h = lv_obj_get_height(lbl);
-        lv_coord_t card_h = lv_obj_get_height(card);
-    
-        if (lbl_h > card_h - 10) {
-            // Çok uzun -> ... ile kısalt
-            lv_label_set_long_mode(lbl, LV_LABEL_LONG_DOT);
-            lv_obj_set_width(lbl, lv_obj_get_width(card) - 10);
-            lv_obj_center(lbl);
-        }
-                
-    };
+    // === Katılımcılar alanı (Yeni Renkler) ===
+    lv_obj_t* member_cont = lv_obj_create(container);
+    lv_obj_set_size(member_cont, container_w - 20, container_h / 2 - 90);
+    lv_obj_set_flex_flow(member_cont, LV_FLEX_FLOW_ROW);
+    lv_obj_set_scroll_dir(member_cont, LV_DIR_HOR);
+    lv_obj_set_style_bg_color(member_cont, COLOR_WHITE, 0);
+    lv_obj_set_style_radius(member_cont, 8, 0);
+    lv_obj_set_style_shadow_width(member_cont, 10, 0); 
+    lv_obj_set_style_shadow_spread(member_cont, 1, 0); 
+    lv_obj_set_style_shadow_color(member_cont, COLOR_SECONDARY, 0); 
+    lv_obj_set_scrollbar_mode(member_cont, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_set_style_pad_all(member_cont, 5, 0); // Kartlar için iç boşluk
+
+    // Katılımcı ekleme
+    auto add_member = [&](const char* name) {
+        lv_obj_t* card = lv_obj_create(member_cont);
+        lv_obj_set_size(card, (container_w - 40) / 4, 100); // max 4 tane yan yana
+        lv_obj_set_style_radius(card, 12, 0);
+        lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_VER, 0);
+        lv_obj_set_style_bg_color(card, COLOR_INFO, 0); // Yeni Palet: Açık Mavi
+        lv_obj_set_style_bg_grad_color(card, COLOR_PRIMARY, 0); // Yeni Palet: Koyu Mavi
+        lv_obj_set_scrollbar_mode(card, LV_SCROLLBAR_MODE_OFF);
+    
+        lv_obj_t* lbl = lv_label_create(card);
+        lv_label_set_text(lbl, name);
+    
+        // Font ve renk
+        lv_obj_set_style_text_font(lbl, &turkish_better_21, 0);
+        lv_obj_set_style_text_color(lbl, COLOR_WHITE, 0); // Yeni Palet: Beyaz
+    
+        // Label genişliği kartın genişliğinden küçük olmalı
+        lv_obj_set_width(lbl, lv_obj_get_width(card) - 10);
+    
+        // Önce WRAP ile satıra sığdırmayı dene
+        lv_label_set_long_mode(lbl, LV_LABEL_LONG_WRAP);
+    
+        // Ortala
+        lv_obj_center(lbl);
+        lv_obj_set_style_text_align(card, LV_TEXT_ALIGN_CENTER, 0);
+        // WRAP sonrasında label yüksekliğini kontrol et
+        lv_obj_update_layout(lbl); // boyutları güncelle
+    
+        lv_coord_t lbl_h = lv_obj_get_height(lbl);
+        lv_coord_t card_h = lv_obj_get_height(card);
+    
+        if (lbl_h > card_h - 10) {
+            // Çok uzun -> ... ile kısalt
+            lv_label_set_long_mode(lbl, LV_LABEL_LONG_DOT);
+            lv_obj_set_width(lbl, lv_obj_get_width(card) - 10);
+            lv_obj_center(lbl);
+        }
+    }; // add_member lambdasının sonu
+
     add_member(fullName);
     if (isGroup && groupArr.size() > 0) {
     

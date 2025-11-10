@@ -14,7 +14,7 @@ IPAddress primaryDNS(10, 2, 2, 1);      // (Google DNS - çalışmalı)
 IPAddress secondaryDNS(1, 1, 1, 1);    // (Cloudflare DNS - opsiyonel)
 IPAddress ip_base(172, 23, 230, 0);
 
-int ip_start_octet = 0; // ÖRNEK: 100'den başla
+int ip_start_octet = 1; // ÖRNEK: 100'den başla
 int ip_end_octet = 200;
 
 // --- Ekran sınıfı ---
@@ -744,27 +744,77 @@ void setup() {
 
   lv_timer_handler();// To Update Spinner
 
-	s_ip_to_try = ip_start_octet; 
-	lastWifiCheck = millis(); // Denemeyi şimdi başlat
+	// --- YENİ BLOK: WiFi Bağlanana Kadar Bekle ---
+  Serial.println("WiFi bağlantısı kuruluyor...");
+  s_ip_to_try = ip_start_octet; // Taramaya baştan başla
+  lastWifiCheck = millis();     // Zamanlayıcıyı başlat
 
-	Serial.println("İlk Wi-Fi denemesi başlatılıyor...");
-	if(ssid == "eduroam")
-	{
-		// Sadece İLK IP'yi dene. loop() gerisini halledecek.
-		IPAddress current_ip(ip_base[0], ip_base[1], ip_base[2], s_ip_to_try);
-		if (!WiFi.config(current_ip, gateway, subnet, primaryDNS, secondaryDNS)) {
-			Serial.println("Static IP configuration FAILED");
-		} else {
-			WiFi.begin(ssid.c_str(), WPA2_AUTH_PEAP, EAP_ANOIDENTITY.c_str(), EAP_IDENTITY.c_str(), EAP_PASSWORD.c_str(), NULL);
-		}
-		// BİR SONRAKİ DENEME İÇİN IP'Yİ ARTIR
-		s_ip_to_try++; 
-	}
-	else{
-		WiFi.begin(ssid.c_str(), password.c_str());
-	}
-  
-  Serial.println("\nWiFi bağlı");
+  if(ssid == "eduroam")
+  {
+    Serial.println("Eduroam ağı (IP taramalı) seçildi.");
+    // İlk denemeyi hemen yap
+    IPAddress current_ip(ip_base[0], ip_base[1], ip_base[2], s_ip_to_try);
+    Serial.print("Deneyen IP: "); Serial.println(current_ip);
+    if (!WiFi.config(current_ip, gateway, subnet, primaryDNS, secondaryDNS)) {
+      Serial.println("Static IP configuration FAILED");
+    } else {
+      WiFi.begin(ssid.c_str(), WPA2_AUTH_PEAP, EAP_ANOIDENTITY.c_str(), EAP_IDENTITY.c_str(), EAP_PASSWORD.c_str(), NULL);
+    }
+    s_ip_to_try++; // Bir sonraki IP'yi hazırla
+  }
+  else
+  {
+    Serial.println("Normal WPA ağı seçildi.");
+    WiFi.begin(ssid.c_str(), password.c_str());
+  }
+
+  Serial.print("Bağlantı bekleniyor");
+
+  // WiFi bağlanana kadar BU DÖNGÜDE BEKLE
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    // Yükleme ekranı spinner'ını animasyonlu tut
+    lv_timer_handler();
+    delay(50); // CPU'yu yorma
+
+    // Her 500ms'de bir nokta koy
+    static unsigned long lastDot = 0;
+    if (millis() - lastDot > 500) {
+      Serial.print(".");
+      lastDot = millis();
+    }
+
+    // --- Eduroam IP Tarama Mantığı (loop'tan taşındı) ---
+    // Sadece "eduroam" ise ve 15 saniye geçtiyse
+    if (ssid == "eduroam" && (millis() - lastWifiCheck > wifiCheckInterval))
+    {
+      Serial.println("\nBağlantı başarısız, sonraki IP deneniyor...");
+      lastWifiCheck = millis(); // Zamanlayıcıyı sıfırla
+
+      if (s_ip_to_try > ip_end_octet) {
+        s_ip_to_try = ip_start_octet; // Aralığın sonuna geldiysek başa dön
+        Serial.println("Tüm IP aralığı denendi. Baştan başlanacak.");
+      }
+
+      IPAddress current_ip(ip_base[0], ip_base[1], ip_base[2], s_ip_to_try);
+      Serial.print("Deneyen IP: "); Serial.println(current_ip);
+
+      if (!WiFi.config(current_ip, gateway, subnet, primaryDNS, secondaryDNS)) {
+        Serial.println("Static IP configuration FAILED");
+      } else {
+        WiFi.begin(ssid.c_str(), WPA2_AUTH_PEAP, EAP_ANOIDENTITY.c_str(), EAP_IDENTITY.c_str(), EAP_PASSWORD.c_str(), NULL);
+      }
+
+      s_ip_to_try++; // Bir sonraki deneme için IP'yi artır
+    }
+    // --- Eduroam mantığının sonu ---
+  }
+
+  // Döngüden çıktıysak, WiFi bağlanmıştır.
+  Serial.println("\n✅ WiFi BAŞARIYLA BAĞLANDI!");
+  Serial.print("IP Adresi: ");
+  Serial.println(WiFi.localIP());
+  // --- YENİ BLOK SONU ---
 
   mqttClient.setServer(mqtt_server, mqtt_port);
   mqttClient.setCallback(mqttCallback);
@@ -773,7 +823,7 @@ void setup() {
 
   lv_timer_handler(); // To Update Spinner
 
-  configTime(+3*3600, 0, "0.tr.pool.ntp.org", "1.tr.pool.ntp.org", "2.tr.pool.ntp.org");
+  configTime(+3*3600, 0,  "1.tr.pool.ntp.org", "2.tr.pool.ntp.org","pool.ntp.org");
 
 
   lv_timer_handler();

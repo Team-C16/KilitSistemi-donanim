@@ -136,21 +136,6 @@ lv_obj_t* create_schedule_table(lv_obj_t* parent, lv_obj_t* qr) {
     lv_obj_add_style(table, &style_turkish_24, LV_PART_MAIN);
     lv_obj_add_style(table, &style_turkish_24, LV_PART_ITEMS);
 
-    // Font stili tanımla ve uygula
-    static lv_style_t style_turkish_24;
-    lv_style_init(&style_turkish_24);
-    lv_style_set_text_font(&style_turkish_24, &turkish_better_21);
-    lv_style_set_pad_top(&style_turkish_24, 8);
-    lv_style_set_pad_bottom(&style_turkish_24, 8);
-    lv_style_set_text_line_space(&style_turkish_24, 4);
-    lv_style_set_text_align(&style_turkish_24, LV_TEXT_ALIGN_CENTER);
-    lv_style_set_border_width(&style_turkish_24, 1);
-    lv_style_set_border_color(&style_turkish_24, lv_color_black());
-    lv_style_set_border_side(&style_turkish_24, LV_BORDER_SIDE_FULL);
-
-    lv_obj_add_style(table, &style_turkish_24, LV_PART_MAIN);
-    lv_obj_add_style(table, &style_turkish_24, LV_PART_ITEMS);
-
     const int row_count = (g_end_hour - g_start_hour) + 1;
     const int col_count = 6; // 5 gün + saat
 
@@ -468,93 +453,78 @@ lv_obj_t* create_details_screen(lv_obj_t* parent, lv_obj_t* qr, const char* json
     lv_obj_set_style_text_font(lbl_hour, &turkish_better_21, 0);
     lv_obj_set_style_text_color(lbl_hour, COLOR_TEXT_PRIMARY, 0);
 
-    lv_obj_t* lbl_title = lv_label_create(info_bar);
-    lv_label_set_text_fmt(lbl_title, "%s", titleStr.c_str());
-    lv_obj_set_style_text_font(lbl_title, &turkish_better_21, 0); 
-    
-    lv_obj_t* lbl_hour = lv_label_create(info_bar);
-    lv_label_set_text(lbl_hour, hourBuf);
-    lv_obj_set_style_text_font(lbl_hour, &turkish_better_21, 0);
+
 
     // === Mesaj alanı (Yeni Renkler) ===
-    lv_obj_t* msg_cont = lv_obj_create(container);
-    lv_obj_set_size(msg_cont, container_w - 20, container_h / 2 - 60);
+    lv_obj_t* msg_cont = lv_obj_create(container);
+    lv_obj_set_size(msg_cont, container_w - 20, container_h / 2 - 60);
     lv_obj_set_style_bg_color(msg_cont, COLOR_WHITE, 0);
     lv_obj_set_style_radius(msg_cont, 8, 0);
-    lv_obj_t* lbl_msg = lv_label_create(msg_cont);
-    lv_label_set_text(lbl_msg, msgStr.c_str());
-    lv_label_set_long_mode(lbl_msg, LV_LABEL_LONG_WRAP);
-    lv_obj_set_width(lbl_msg, container_w - 40);
-    lv_obj_center(lbl_msg);
-    lv_obj_set_style_text_font(lbl_msg, &turkish_better_21, 0);
+    lv_obj_t* lbl_msg = lv_label_create(msg_cont);
+    lv_label_set_text(lbl_msg, msgStr.c_str());
+    lv_label_set_long_mode(lbl_msg, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(lbl_msg, container_w - 40);
+    lv_obj_center(lbl_msg);
+    lv_obj_set_style_text_font(lbl_msg, &turkish_better_21, 0);
     lv_obj_set_style_text_color(lbl_msg, COLOR_TEXT_PRIMARY, 0);
-    lv_obj_set_style_shadow_width(msg_cont, 10, 0); 
-    lv_obj_set_style_shadow_spread(msg_cont, 1, 0); 
-    lv_obj_set_style_shadow_color(msg_cont, COLOR_SECONDARY, 0); 
-    lv_obj_set_scrollbar_mode(msg_cont, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_set_style_shadow_width(msg_cont, 10, 0); 
+    lv_obj_set_style_shadow_spread(msg_cont, 1, 0); 
+    lv_obj_set_style_shadow_color(msg_cont, COLOR_SECONDARY, 0); 
+    lv_obj_set_scrollbar_mode(msg_cont, LV_SCROLLBAR_MODE_OFF);
 
-    // === Katılımcılar alanı ===
+
+    // === Katılımcılar alanı (Yeni Renkler) ===
     lv_obj_t* member_cont = lv_obj_create(container);
     lv_obj_set_size(member_cont, container_w - 20, container_h / 2 - 90);
     lv_obj_set_flex_flow(member_cont, LV_FLEX_FLOW_ROW);
     lv_obj_set_scroll_dir(member_cont, LV_DIR_HOR);
-    lv_obj_set_scrollbar_mode(member_cont, LV_SCROLLBAR_MODE_OFF);
-    lv_obj_set_style_shadow_width(member_cont, 20, 0); // Gölge kalınlığı
-    lv_obj_set_style_shadow_spread(member_cont, 2, 0); // Gölge yayılımı
-    lv_obj_set_style_shadow_color(member_cont, lv_color_hex(0x8E4162), 0); // Gölge rengi
-    lv_obj_set_scrollbar_mode(member_cont, LV_SCROLLBAR_MODE_OFF);
-    // === Katılımcılar alanı (Yeni Renkler) ===
-    lv_obj_t* member_cont = lv_obj_create(container);
-    lv_obj_set_size(member_cont, container_w - 20, container_h / 2 - 90);
-    lv_obj_set_flex_flow(member_cont, LV_FLEX_FLOW_ROW);
-    lv_obj_set_scroll_dir(member_cont, LV_DIR_HOR);
     lv_obj_set_style_bg_color(member_cont, COLOR_WHITE, 0);
     lv_obj_set_style_radius(member_cont, 8, 0);
-    lv_obj_set_style_shadow_width(member_cont, 10, 0); 
-    lv_obj_set_style_shadow_spread(member_cont, 1, 0); 
-    lv_obj_set_style_shadow_color(member_cont, COLOR_SECONDARY, 0); 
-    lv_obj_set_scrollbar_mode(member_cont, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_set_style_shadow_width(member_cont, 10, 0); 
+    lv_obj_set_style_shadow_spread(member_cont, 1, 0); 
+    lv_obj_set_style_shadow_color(member_cont, COLOR_SECONDARY, 0); 
+    lv_obj_set_scrollbar_mode(member_cont, LV_SCROLLBAR_MODE_OFF);
     lv_obj_set_style_pad_all(member_cont, 5, 0); // Kartlar için iç boşluk
 
-    // Katılımcı ekleme
-    auto add_member = [&](const char* name) {
-        lv_obj_t* card = lv_obj_create(member_cont);
-        lv_obj_set_size(card, (container_w - 40) / 4, 100); // max 4 tane yan yana
-        lv_obj_set_style_radius(card, 12, 0);
-        lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_VER, 0);
-        lv_obj_set_style_bg_color(card, COLOR_INFO, 0); // Yeni Palet: Açık Mavi
-        lv_obj_set_style_bg_grad_color(card, COLOR_PRIMARY, 0); // Yeni Palet: Koyu Mavi
-        lv_obj_set_scrollbar_mode(card, LV_SCROLLBAR_MODE_OFF);
-    
-        lv_obj_t* lbl = lv_label_create(card);
-        lv_label_set_text(lbl, name);
-    
-        // Font ve renk
-        lv_obj_set_style_text_font(lbl, &turkish_better_21, 0);
-        lv_obj_set_style_text_color(lbl, COLOR_WHITE, 0); // Yeni Palet: Beyaz
-    
-        // Label genişliği kartın genişliğinden küçük olmalı
-        lv_obj_set_width(lbl, lv_obj_get_width(card) - 10);
-    
-        // Önce WRAP ile satıra sığdırmayı dene
-        lv_label_set_long_mode(lbl, LV_LABEL_LONG_WRAP);
-    
-        // Ortala
-        lv_obj_center(lbl);
-        lv_obj_set_style_text_align(card, LV_TEXT_ALIGN_CENTER, 0);
-        // WRAP sonrasında label yüksekliğini kontrol et
-        lv_obj_update_layout(lbl); // boyutları güncelle
-    
-        lv_coord_t lbl_h = lv_obj_get_height(lbl);
-        lv_coord_t card_h = lv_obj_get_height(card);
-    
-        if (lbl_h > card_h - 10) {
-            // Çok uzun -> ... ile kısalt
-            lv_label_set_long_mode(lbl, LV_LABEL_LONG_DOT);
-            lv_obj_set_width(lbl, lv_obj_get_width(card) - 10);
-            lv_obj_center(lbl);
-        }
-    }; // add_member lambdasının sonu
+    // Katılımcı ekleme
+    auto add_member = [&](const char* name) {
+        lv_obj_t* card = lv_obj_create(member_cont);
+        lv_obj_set_size(card, (container_w - 40) / 4, 100); // max 4 tane yan yana
+        lv_obj_set_style_radius(card, 12, 0);
+        lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_VER, 0);
+        lv_obj_set_style_bg_color(card, COLOR_INFO, 0); // Yeni Palet: Açık Mavi
+        lv_obj_set_style_bg_grad_color(card, COLOR_PRIMARY, 0); // Yeni Palet: Koyu Mavi
+        lv_obj_set_scrollbar_mode(card, LV_SCROLLBAR_MODE_OFF);
+    
+        lv_obj_t* lbl = lv_label_create(card);
+        lv_label_set_text(lbl, name);
+    
+        // Font ve renk
+        lv_obj_set_style_text_font(lbl, &turkish_better_21, 0);
+        lv_obj_set_style_text_color(lbl, COLOR_WHITE, 0); // Yeni Palet: Beyaz
+    
+        // Label genişliği kartın genişliğinden küçük olmalı
+        lv_obj_set_width(lbl, lv_obj_get_width(card) - 10);
+    
+        // Önce WRAP ile satıra sığdırmayı dene
+        lv_label_set_long_mode(lbl, LV_LABEL_LONG_WRAP);
+    
+        // Ortala
+        lv_obj_center(lbl);
+        lv_obj_set_style_text_align(card, LV_TEXT_ALIGN_CENTER, 0);
+        // WRAP sonrasında label yüksekliğini kontrol et
+        lv_obj_update_layout(lbl); // boyutları güncelle
+    
+        lv_coord_t lbl_h = lv_obj_get_height(lbl);
+        lv_coord_t card_h = lv_obj_get_height(card);
+    
+        if (lbl_h > card_h - 10) {
+            // Çok uzun -> ... ile kısalt
+            lv_label_set_long_mode(lbl, LV_LABEL_LONG_DOT);
+            lv_obj_set_width(lbl, lv_obj_get_width(card) - 10);
+            lv_obj_center(lbl);
+        }
+    }; // add_member lambdasının sonu
 
     add_member(fullName);
     if (isGroup && groupArr.size() > 0) {

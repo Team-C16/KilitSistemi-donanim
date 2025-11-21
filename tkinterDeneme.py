@@ -5,7 +5,7 @@ import tkinter as tk
 from tkinter import font
 import requests
 import qrcode
-from PIL import Image, ImageTk, ImageOps
+from PIL import Image, ImageTk
 import io
 import jwt
 import time
@@ -23,6 +23,7 @@ JWT_SECRET = "JWT_SECRET"
 RASPBERRY_NODE_IP = 'http://192.168.1.130:8001/kilitSistemi'
 ROOM_ID = 1
 ACCESS_TYPE = 1
+last_switch_time = datetime.now()
 
 # ----------------------------------------------------------------------
 # 2. API BAĞLANTI HATASI İÇİN SAHTE (FALLBACK) VERİLER
@@ -127,7 +128,7 @@ def check_if_slot_is_current(day_name, hour_str):
         start_time = now.replace(hour=start_hour, minute=start_minute, second=0, microsecond=0)
         end_time = now.replace(hour=start_hour + 1, minute=start_minute, second=0, microsecond=0)
         
-        return start_time <= now < end_time
+        return start_time <= now < end_time # start_time <= now < end_time
     except Exception as e:
         print(f"Zaman kontrol hatası: {e}")
         return False
@@ -311,8 +312,10 @@ class RoomScheduleApp(tk.Tk):
                     self.check_for_current_meeting() 
                 
                 elif task_name == "detail_data":
+                    print("DETAIL RECEIVED:", data)
                     self.current_meeting_data = data
-                    self.update_detail_widgets()
+                    self.update_detail_widgets(details=True)
+
                     
         except queue.Empty:
             pass # Sıra boş, sorun yok
@@ -632,41 +635,53 @@ class RoomScheduleApp(tk.Tk):
                 else:
                     cell["container"].config(highlightthickness=0, bd=1)
 
-    def update_detail_widgets(self):
-        """'self.current_meeting_data' verisine bakarak detay widget'larını günceller."""
-        if not self.current_meeting_data: return
-            
-        main_data = self.current_meeting_data.get("dataResult", [{}])[0]
-        group_members = self.current_meeting_data.get("groupResult", [])
-        
+    def update_detail_widgets(self, details = False):
+        if not self.current_meeting_data: 
+            return
+        # Your API returns a list, not a dict with "dataResult"
+        main_data = self.current_meeting_data[0]
+
         self.detail_title.config(text=main_data.get("title", "Başlıksız"))
         self.detail_time.config(text=f"Zaman: {main_data.get('hour', '00:00')}")
         self.detail_desc.config(text=main_data.get("message", "Açıklama yok."))
-        
+
+        # Temizle
         for widget in self.participants_frame.winfo_children():
-            if isinstance(widget, tk.Frame): widget.destroy()
+            if isinstance(widget, tk.Frame):
+                widget.destroy()
+
         self.participant_images.clear()
-        
-        participants = [{"fullName": main_data.get("fullName"), "picture": main_data.get("picture")}] + group_members
-        
+
+        # Your API has NO groupResult, only ONE person
+        participants = [main_data]
+
         participants_grid = tk.Frame(self.participants_frame, bg=self.colors["background"])
         participants_grid.pack(fill="x", expand=True, pady=10)
-        
+
         for i, person in enumerate(participants):
-            if not person or not person.get("fullName"): continue
-            if i > 4: break 
-            
+            if not person or not person.get("fullName"):
+                continue
+
             participants_grid.grid_columnconfigure(i, weight=1)
-            
+
             person_frame = tk.Frame(participants_grid, bg=self.colors["light"], relief="solid", bd=1)
             person_frame.grid(row=0, column=i, padx=10, sticky="n")
-            
+
             img_url = person.get("picture")
-            img = self.load_image_from_url_pil(img_url) if img_url and img_url.strip() != "null" else self.default_profile_image()
+            img = (self.load_image_from_url_pil(img_url) if img_url 
+                else self.default_profile_image())
+
             self.participant_images.append(img)
-            
+
             tk.Label(person_frame, image=img, bg=self.colors["primary"]).pack(pady=(10,0))
-            tk.Label(person_frame, text=person.get("fullName"), font=self.fonts["info"], bg=self.colors["light"], wraplength=120).pack(pady=10, padx=5)
+            tk.Label(
+                person_frame, 
+                text=person.get("fullName"), 
+                font=self.fonts["info"], 
+                bg=self.colors["light"], 
+                wraplength=120
+            ).pack(pady=10, padx=5)
+
 
     # ------------------------------------------------------------------
     # 4.4. GÖRÜNÜM DEĞİŞTİRME VE KONTROL
@@ -697,10 +712,12 @@ class RoomScheduleApp(tk.Tk):
                         current_id_obj = self.current_meeting_data.get("dataResult", [{}])[0]
                         current_id = current_id_obj.get("rendezvous_id")
 
-                    if self.display_mode == "grid" or str(current_id) != str(rendezvous_id):
-                        print(f"Yeni toplantı bulundu: {rendezvous_id}. Detaylar getiriliyor...")
+                    print((datetime.now() - last_switch_time).total_seconds().__floor__())
+                    if (self.display_mode == "grid" or str(current_id) != str(rendezvous_id)) and ((datetime.now() - last_switch_time).total_seconds() >= 10):
+                        print(f"Yeni toplantı bulundu: {rendezvous_id}. Detaylar getiriliyor...") 
                         self.show_detail_view(rendezvous_id)
                     break
+            
                 
         if not found_meeting and self.display_mode == "detail":
             print("Toplantı bitti, takvime dönülüyor.")

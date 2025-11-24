@@ -20,7 +20,7 @@ import sys
 # ----------------------------------------------------------------------
 
 JWT_SECRET = "JWT_SECRET"
-RASPBERRY_NODE_IP = 'http://192.168.1.130:8001/kilitSistemi'
+RASPBERRY_NODE_IP = 'https://pve.izu.edu.tr/randevu'
 ROOM_ID = 1
 ACCESS_TYPE = 1
 last_switch_time = datetime.now()
@@ -128,7 +128,7 @@ def check_if_slot_is_current(day_name, hour_str):
         start_time = now.replace(hour=start_hour, minute=start_minute, second=0, microsecond=0)
         end_time = now.replace(hour=start_hour + 1, minute=start_minute, second=0, microsecond=0)
         
-        return start_time <= now < end_time # start_time <= now < end_time
+        return True # start_time <= now < end_time
     except Exception as e:
         print(f"Zaman kontrol hatası: {e}")
         return False
@@ -573,6 +573,9 @@ class RoomScheduleApp(tk.Tk):
         self.clock_label.config(text=f"⏰ {date_str}  •  {time_str}")
         self.after(1000, self.update_footer_clock)
 
+        # bir meeting için kontrol eder
+        self.check_for_current_meeting()
+
     def update_schedule_widgets(self):
         """'self.ders_programi' verisine bakarak takvim widget'larını günceller."""
         if not self.ders_programi: return
@@ -692,6 +695,8 @@ class RoomScheduleApp(tk.Tk):
         Mevcut bir toplantı olup olmadığını kontrol eder ve görünümü değiştirir.
         'process_api_queue' tarafından tetiklenir.
         """
+        global last_switch_time
+        print((datetime.now() - last_switch_time).total_seconds().__floor__())
         if not self.ders_programi:
             return
 
@@ -708,16 +713,26 @@ class RoomScheduleApp(tk.Tk):
                     rendezvous_id = entry["rendezvous_id"]
                     
                     current_id = None
-                    if self.current_meeting_data:
-                        current_id_obj = self.current_meeting_data.get("dataResult", [{}])[0]
-                        current_id = current_id_obj.get("rendezvous_id")
 
-                    print((datetime.now() - last_switch_time).total_seconds().__floor__())
-                    if (self.display_mode == "grid" or str(current_id) != str(rendezvous_id)) and ((datetime.now() - last_switch_time).total_seconds() >= 10):
+                    # this is considering the two posibilities of self.current_meeting_data being a dictionary or a list
+                    if isinstance(self.current_meeting_data, dict):
+                        data_list = self.current_meeting_data.get("dataResult", [])
+                        if isinstance(data_list, list) and len(data_list) > 0:
+                            current_id = data_list[0].get("rendezvous_id")
+
+                    elif isinstance(self.current_meeting_data, list) and len(self.current_meeting_data) > 0:
+                        current_id = self.current_meeting_data[0].get("rendezvous_id")
+
+                    if (self.display_mode == "detail" and (datetime.now() - last_switch_time).total_seconds() >= 10):
+                        print("I'm here!!!!!!!")
+                        self.show_schedule_view()
+                        last_switch_time = datetime.now()
+
+                    if (self.display_mode == "grid" or str(current_id) != str(rendezvous_id)) and (datetime.now() - last_switch_time).total_seconds() >= 30:
                         print(f"Yeni toplantı bulundu: {rendezvous_id}. Detaylar getiriliyor...") 
                         self.show_detail_view(rendezvous_id)
+                        last_switch_time = datetime.now()
                     break
-            
                 
         if not found_meeting and self.display_mode == "detail":
             print("Toplantı bitti, takvime dönülüyor.")

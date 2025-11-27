@@ -16,14 +16,14 @@ import paho.mqtt.client as mqtt
 # BÖLÜM 1: Sabitler ve Ayarlar
 # =================================================================================
 
-SECRET_KEY = "JWT_SECRET"
-mqttbrokerip = "pve.izu.edu.tr"
-mqttbrokerport = 1883
-room_id = 1
+jwt_secret = os.getenv("jwt_secret")
+mqttbrokerip = os.getenv("mqttbrokerip")
+mqttbrokerport = int(os.getenv("mqttbrokerport", 1883))
+room_id = os.getenv("room_id")
 
 accessType = 1
 
-API_BASE = "https://pve.izu.edu.tr/randevu"
+nodeip = os.getenv("nodeip")
 
 kayitMenu = None
 
@@ -232,12 +232,12 @@ def api_tum_kullanicilari_al():
         {
             "exp": time.time() + 30
         },
-        SECRET_KEY,
+        jwt_secret,
         algorithm="HS256"
     )
     headers = {"Content-Type": "application/json"}
     data = f'{{"room_id": {room_id}, "token": "{encoded_jwt}"}}'
-    r = requests.get(f"{API_BASE}/getAllFingerprints",headers= headers, data=data)
+    r = requests.get(f"{nodeip}/getAllFingerprints",headers= headers, data=data)
     if r.status_code == 200:
         return r.json()
     else:
@@ -246,7 +246,7 @@ def api_tum_kullanicilari_al():
 
 def generate_mqtt_password():
     payload = {"exp": time.time() + 10}  # token 10 sn geçerli
-    token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+    token = jwt.encode(payload, jwt_secret, algorithm="HS256")
     if isinstance(token, bytes):
         token = token.decode("utf-8")
     return token
@@ -336,7 +336,7 @@ def open_door():
         # Token oluştur (30 saniye geçerli)
         token = jwt.encode(
             {"exp": datetime.datetime.utcnow() + datetime.timedelta(seconds=30)},
-            SECRET_KEY,
+            jwt_secret,
             algorithm="HS256"
         )
 
@@ -359,12 +359,12 @@ def logAccess(userID):
         # Token oluşturma (30 saniye geçerli)
         token = jwt.encode(
             {"exp": datetime.datetime.utcnow() + datetime.timedelta(seconds=30)},
-            SECRET_KEY,
+            jwt_secret,
             algorithm="HS256"
         )
 
         response = requests.post(
-            f"{API_BASE}/logFingerprintAccess",
+            f"{nodeip}/logFingerprintAccess",
             json={"token": token,"accessType":accessType,"userID":userID,"room_id": room_id},
             headers={"Content-Type": "application/json"}
         )
@@ -439,7 +439,7 @@ def api_kullanici_ekle(userID, sablon_verisi):
         {
             "exp": time.time() + 30
         },
-        SECRET_KEY,
+        jwt_secret,
         algorithm="HS256"
     )
     data = {
@@ -449,7 +449,7 @@ def api_kullanici_ekle(userID, sablon_verisi):
         "fingerprint": base64.b64encode(sablon_verisi).decode("utf-8")
     }
     headers = {"Content-Type": "application/json"}
-    r = requests.post(f"{API_BASE}/registerFingerprint",headers=headers, json=data)
+    r = requests.post(f"{nodeip}/registerFingerprint",headers=headers, json=data)
     return r.json()
 
 def menu_yeni_kayit(userID):
@@ -513,7 +513,7 @@ def menu_yeni_kayit(userID):
 def verify_jwt(token):
     try:
         # JWT'yi doğrula
-        decoded = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        decoded = jwt.decode(token, jwt_secret, algorithms=["HS256"])
         return decoded  # JWT geçerliyse, çözümlenmiş payload'ı döner
     except jwt.ExpiredSignatureError:
         print("time err")

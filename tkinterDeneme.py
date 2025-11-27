@@ -19,9 +19,9 @@ import sys
 # 1. SABİTLER VE API AYARLARI
 # ----------------------------------------------------------------------
 
-JWT_SECRET = "JWT_SECRET"
-RASPBERRY_NODE_IP = 'https://pve.izu.edu.tr/randevu'
-ROOM_ID = 1
+jwt_secret = os.getenv("jwt_secret")
+nodeip = os.getenv("nodeip")
+room_id = os.getenv("room_id")
 ACCESS_TYPE = 1
 last_switch_time = datetime.now()
 
@@ -329,10 +329,10 @@ class RoomScheduleApp(tk.Tk):
     def fetch_room_name(self):
         """Oda adını çeker ve kuyruğa atar."""
         try:
-            encoded_jwt = jwt.encode({"exp": time.time() + 30}, JWT_SECRET, algorithm="HS256")
-            url = f"{RASPBERRY_NODE_IP}/getQRCodeToken"
+            encoded_jwt = jwt.encode({"exp": time.time() + 30}, jwt_secret, algorithm="HS256")
+            url = f"{nodeip}/getQRCodeToken"
             headers = {"Content-Type": "application/json"}
-            data = f'{{"room_id": {ROOM_ID}, "token": "{encoded_jwt}", "room_name": 1, "accessType": "{ACCESS_TYPE}"}}'
+            data = f'{{"room_id": {room_id}, "token": "{encoded_jwt}", "room_name": 1, "accessType": "{ACCESS_TYPE}"}}'
             response = requests.post(url, headers=headers, data=data, timeout=5)
             
             if response.status_code == 200:
@@ -348,10 +348,10 @@ class RoomScheduleApp(tk.Tk):
     def fetch_qr_token(self):
         """QR token'ı çeker ve kuyruğa atar."""
         try:
-            encoded_jwt = jwt.encode({"exp": time.time() + 30}, JWT_SECRET, algorithm="HS256")
-            url = f"{RASPBERRY_NODE_IP}/getQRCodeToken"
+            encoded_jwt = jwt.encode({"exp": time.time() + 30}, jwt_secret, algorithm="HS256")
+            url = f"{nodeip}/getQRCodeToken"
             headers = {"Content-Type": "application/json"}
-            data = f'{{"room_id": {ROOM_ID}, "token": "{encoded_jwt}", "accessType": "{ACCESS_TYPE}"}}'
+            data = f'{{"room_id": {room_id}, "token": "{encoded_jwt}", "accessType": "{ACCESS_TYPE}"}}'
             response = requests.post(url, headers=headers, data=data, timeout=5)
             token = response.json().get("token") if response.status_code == 200 else None
             self.api_queue.put(("qr_token", token))
@@ -362,9 +362,9 @@ class RoomScheduleApp(tk.Tk):
     def update_data(self):
         """Takvim verisini çeker ve kuyruğa atar."""
         try:
-            encoded_jwt = jwt.encode({"exp": time.time() + 30}, JWT_SECRET, algorithm="HS256")
-            payload = {"room_id": ROOM_ID, "token": encoded_jwt}
-            response = requests.post(f"{RASPBERRY_NODE_IP}/getSchedule", json=payload, timeout=5)
+            encoded_jwt = jwt.encode({"exp": time.time() + 30}, jwt_secret, algorithm="HS256")
+            payload = {"room_id": room_id, "token": encoded_jwt}
+            response = requests.post(f"{nodeip}/getSchedule", json=payload, timeout=5)
             response.raise_for_status()
             api_response = response.json()
             new_data = api_response[0] if isinstance(api_response, list) and api_response else api_response
@@ -380,10 +380,10 @@ class RoomScheduleApp(tk.Tk):
     def fetch_details_data(self, rendezvous_id):
         """Toplantı detay verisini çeker ve kuyruğa atar."""
         try:
-            encoded_jwt = jwt.encode({"exp": time.time() + 30}, JWT_SECRET, algorithm="HS256")
-            url = f"{RASPBERRY_NODE_IP}/getScheduleDetails"
+            encoded_jwt = jwt.encode({"exp": time.time() + 30}, jwt_secret, algorithm="HS256")
+            url = f"{nodeip}/getScheduleDetails"
             headers = {"Content-Type": "application/json"}
-            payload = {"room_id": ROOM_ID, "token": encoded_jwt, "rendezvous_id": rendezvous_id}
+            payload = {"room_id": room_id, "token": encoded_jwt, "rendezvous_id": rendezvous_id}
             response = requests.post(url, headers=headers, data=json.dumps(payload), timeout=5)
             response.raise_for_status()
             self.api_queue.put(("detail_data", response.json()))
@@ -394,7 +394,7 @@ class RoomScheduleApp(tk.Tk):
     def load_image_from_url_pil(self, url, size=(100, 100)):
         """Bir URL'den resim yükler ve PhotoImage'e dönüştürür."""
         try:
-            full_url = f"{RASPBERRY_NODE_IP}{url}"
+            full_url = f"{nodeip}{url}"
             response = requests.get(full_url, timeout=3)
             response.raise_for_status()
             img_data = io.BytesIO(response.content)

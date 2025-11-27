@@ -5,10 +5,10 @@ import sys
 import subprocess
 import jwt
 import paho.mqtt.client as mqtt
-from dotenv import load_dotenv
+# from dotenv import load_dotenv
 
 # .env dosyasını yükle
-load_dotenv()
+# load_dotenv()
 
 # Değişkenleri al
 MQTT_IP = os.getenv("mqttbrokerip")

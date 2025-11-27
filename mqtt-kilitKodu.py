@@ -9,10 +9,10 @@ from tkinter import font as tkfont
 import paho.mqtt.client as mqtt
 from gpiozero import LED
 led = LED(12)
-SECRET_KEY = "DENEME"
-mqttbrokerip = "192.168.1.130"
-mqttbrokerport = 1883
-room_id = 2
+jwt_secret = os.getenv("jwt_secret")
+mqttbrokerip = os.getenv("mqttbrokerip")
+mqttbrokerport = int(os.getenv("mqttbrokerport", 1883))
+room_id = os.getenv("room_id")
 
 tkinter_root = None
 notification_window = None
@@ -56,14 +56,14 @@ def show_notification(message, duration=3, color="blue"):
 
 def verify_jwt(token):
     try:
-        decoded = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        decoded = jwt.decode(token, jwt_secret, algorithms=["HS256"])
         return decoded
     except Exception:
         return None
 
 def generate_mqtt_password():
     payload = {"exp": time.time() + 10}  # token 10 sn geçerli
-    token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+    token = jwt.encode(payload, jwt_secret, algorithm="HS256")
     if isinstance(token, bytes):
         token = token.decode("utf-8")
     return token

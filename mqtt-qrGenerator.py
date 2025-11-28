@@ -17,10 +17,10 @@ import json
 
 
 # JWT secret key
-jwt_secret = os.getenv("jwt_secret")
+jwtsecret = os.getenv("jwt_secret")
 
 # Raspberry Node IP
-nodeip = os.getenv("nodeip")
+raspberryNodeip = os.getenv("nodeip")
 mqttbrokerip = os.getenv("mqttbrokerip")
 mqttbrokerport = int(os.getenv("mqttbrokerport", 1883))
 room_id = os.getenv("room_id")
@@ -145,7 +145,7 @@ def generate_mqtt_password():
     payload = {
         "exp": time.time() + 30,   # 60 saniye geçerli olacak token
     }
-    return jwt.encode(payload, jwt_secret, algorithm="HS256")
+    return jwt.encode(payload, jwtsecret, algorithm="HS256")
 
 def on_disconnect(client, userdata, rc):
     print(f"[MQTT] Disconnect oldu, rc={rc}")
@@ -915,7 +915,7 @@ def draw_meeting_details(screen, fonts, current_meeting, qr_code_img, room_icon,
             picture_path = person.get("picture")
 
             if picture_path and picture_path.strip() and picture_path != "null":
-                full_url = nodeip + picture_path
+                full_url = raspberryNodeip + picture_path
                 img_surface = load_image_from_url(full_url)
             else:
                 img_surface = pygame.image.load("profil.jpg").convert_alpha()

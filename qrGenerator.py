@@ -14,10 +14,10 @@ import ast
 import json
 time_suffix = ":30"
 # JWT secret key
-jwt_secret = os.getenv("jwt_secret")
+jwtsecret = os.getenv("jwt_secret")
 
 # Raspberry Node IP
-nodeip = os.getenv("nodeip")
+raspberryNodeip = os.getenv("nodeip")
 
 room_id = os.getenv("room_id")
 
@@ -225,11 +225,11 @@ def fetch_room_name():
         {
            "exp": time.time() + 30
         },
-        jwt_secret,
+        jwtsecret,
         algorithm="HS256"
     )
     print(encoded_jwt)
-    url = f"{nodeip}/getQRCodeToken"
+    url = f"{raspberryNodeip}/getQRCodeToken"
     print(url)
     headers = {"Content-Type": "application/json"}
     data = f'{{"room_id": {room_id}, "token": "{encoded_jwt}", "room_name": 1, "accessType": "{accessType}"}}'
@@ -550,10 +550,10 @@ def fetch_qr_token():
         {
             "exp": time.time() + 30  # 300000 saniye içinde geçersiz olacak
         },
-        jwt_secret,
+        jwtsecret,
         algorithm="HS256"
     )
-    url = f"{nodeip}/getQRCodeToken"
+    url = f"{raspberryNodeip}/getQRCodeToken"
     headers = {"Content-Type": "application/json"}
     data = f'{{"room_id": {room_id}, "token": "{encoded_jwt}", "accessType": "{accessType}"}}'
     try:
@@ -589,7 +589,7 @@ def draw_text(screen, text, font, color, rect, align_x="left", align_y="top"):
     screen.blit(text_surface, text_rect)
 
 def fetch_details_data(rendezvous_id):
-    if not jwt_secret or not nodeip:
+    if not jwtsecret or not raspberryNodeip:
         print("Missing config")
         return None
 
@@ -636,11 +636,11 @@ def fetch_details_data(rendezvous_id):
     try:
         encoded_jwt = jwt.encode(
             {"exp": time.time() + 30},
-            jwt_secret,
+            jwtsecret,
             algorithm="HS256"
         )
 
-        url = f"{nodeip}/getScheduleDetails"
+        url = f"{raspberryNodeip}/getScheduleDetails"
         headers = {"Content-Type": "application/json"}
         payload = {
             "room_id": room_id,
@@ -670,7 +670,7 @@ def update_data():
         {
             "exp": time.time() + 30  # 300000 saniye içinde geçersiz olacak
         },
-        jwt_secret,
+        jwtsecret,
         algorithm="HS256"
         )
         payload = {
@@ -678,7 +678,7 @@ def update_data():
             "token": encoded_jwt
         }
 
-        response = requests.post(f"{nodeip}/getSchedule", json=payload,
+        response = requests.post(f"{raspberryNodeip}/getSchedule", json=payload,
                                timeout=3)
         response.raise_for_status()
 
@@ -986,7 +986,7 @@ def draw_meeting_details(screen, fonts, current_meeting, qr_code_img, room_icon,
             picture_path = person.get("picture")
 
             if picture_path and picture_path.strip() and picture_path != "null":
-                full_url = nodeip + picture_path
+                full_url = raspberryNodeip + picture_path
                 img_surface = load_image_from_url(full_url)
             else:
                 img_surface = pygame.image.load("profil.jpg").convert_alpha()

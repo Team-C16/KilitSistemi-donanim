@@ -23,9 +23,9 @@ from tkinter import font as tkfont
 app = Flask(__name__)
 
 # Secret key 
-jwt_secret = os.getenv("jwt_secret")
+SECRET_KEY = os.getenv("jwt_secret")
 
-nodeip = os.getenv("nodeip")
+raspberryNodeip = os.getenv("nodeip")
  
 room_id = os.getenv("room_id")
 
@@ -98,7 +98,7 @@ def hide_notification():
 def verify_jwt(token):
     try:
         # JWT'yi doğrula
-        decoded = jwt.decode(token, jwt_secret, algorithms=["HS256"])
+        decoded = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
         return decoded  # JWT geçerliyse, çözümlenmiş payload'ı döner
     except jwt.ExpiredSignatureError:
         return None  # JWT süresi dolmuş
@@ -111,14 +111,14 @@ def save_ip():
         {
             "exp": time.time() + 30  # 30 saniye içinde geçersiz olacak
         },
-        jwt_secret,
+        SECRET_KEY,
         algorithm="HS256"
     )
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.connect(("8.8.8.8", 80))
     local_ip = s.getsockname()[0]
     print(local_ip)
-    url = f"{nodeip}/saveIPForRaspberry"
+    url = f"{raspberryNodeip}/saveIPForRaspberry"
     headers = {"Content-Type": "application/json"}
     data = f'{{"room_id": {room_id}, "token": "{encoded_jwt}", "ip": "{local_ip}"}}'
     try:

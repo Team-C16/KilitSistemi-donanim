@@ -6,14 +6,13 @@ apt update -y
 apt install git -y
 apt install python3 -y
 apt install pip -y
-apt-get install xosd-bin -y
 apt install python3-rpi.gpio -y
 apt install python3-gpiozero -y
 apt install x11-xserver-utils -y
 apt install xinit -y
 
 # Python paketleri
-pip install requests qrcode qrcode[pil] pygame jwt time paho-mqtt python-dotenv --break-system-packages
+pip install requests qrcode qrcode[pil] pygame PyJWT time paho-mqtt gpiozero --break-system-packages
 
 DIRECTORY="/KilitSistemi-donanim"
 SECRETS_FILE="/etc/secrets.conf"

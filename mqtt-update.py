@@ -62,33 +62,81 @@ def on_disconnect(client, userdata, rc):
 
 def apply_update(commit_id):
     print(f"🚀 [SİSTEM] Versiyon değişimi başlatılıyor. Hedef: {commit_id}")
+
+    # --- Git Güncelleme İşlemleri ---
     try:
         print("[GIT] Sunucu ile senkronize olunuyor (Fetch)...")
         subprocess.run(
-            ["git", "fetch", "origin", BRANCH_NAME],
+            ["sudo", "git", "fetch", "origin", BRANCH_NAME],
             cwd=DESTINATION_DIR,
             check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
         )
+
         print(f"[GIT] Dosyalar {commit_id} sürümüne getiriliyor...")
         subprocess.run(
-            ["git", "reset", "--hard", commit_id],
+            ["sudo", "git", "reset", "--hard", commit_id],
             cwd=DESTINATION_DIR,
             check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
         )
         print("✅ Dosyalar başarıyla güncellendi.")
 
-        print(f"[SYSTEM] {SERVICE_QR} servisi yeniden başlatılıyor...")
-        subprocess.run(["sudo", "systemctl", "restart", SERVICE_QR], check=True)
-        print(f"[SYSTEM] {SERVICE_LOCK} yeniden başlatılıyor...")
-        subprocess.run(["sudo", "systemctl", "restart", SERVICE_LOCK], check=True)
     except subprocess.CalledProcessError as e:
-        print(f"❌ [GIT HATASI] İşlem başarısız: {e}")
+        print(f"❌ [KRİTİK GIT HATASI] Güncelleme çekilemedi: {e}")
         if e.stderr:
             print(f"Detay: {e.stderr.decode('utf-8')}")
+        return  # Dosyalar güncellenemediği için işlem iptal edilir.
+
     except Exception as e:
-        print(f"❌ [GENEL HATA] {e}")
+        print(f"❌ [GENEL GIT HATASI] Beklenmedik durum: {e}")
+        return
 
+    # --- Kütüphane (PIP) Kontrolü ---
+    req_file = os.path.join(DESTINATION_DIR, "requirements.txt")
+    
+    if os.path.exists(req_file):
+        try:
+            print("[PIP] Yeni kütüphaneler kontrol ediliyor ve yükleniyor...")
+            subprocess.run(
+                [sys.executable, "-m", "pip", "install", "-r", req_file, "--break-system-packages"],
+                cwd=DESTINATION_DIR,
+                check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            )
+            print("✅ Kütüphane kurulumu tamamlandı.")
 
+        except subprocess.CalledProcessError as e:
+            print(f"❌ [PIP HATASI] Kütüphaneler yüklenirken hata oluştu: {e}")
+            if e.stderr:
+                print(f"Detay: {e.stderr.decode('utf-8')}")
+            # Pip hatası olsa bile servisleri başlatmayı denemeye devam ediyoruz.
+    else:
+        print("[PIP] requirements.txt bulunamadı, bu adım atlanıyor.")
+
+    # --- QR Servisini Yeniden Başlatma ---
+    try:
+        print(f"[SYSTEM] {SERVICE_QR} servisi yeniden başlatılıyor...")
+        subprocess.run(
+            ["sudo", "systemctl", "restart", SERVICE_QR], 
+            check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+        print(f"✅ {SERVICE_QR} başarıyla yeniden başlatıldı.")
+
+    except subprocess.CalledProcessError as e:
+        print(f"❌ [SERVİS HATASI] {SERVICE_QR} başlatılamadı: {e}")
+        if e.stderr:
+             print(f"Detay: {e.stderr.decode('utf-8')}")
+
+    # --- Kilit Servisini (Kendini) Yeniden Başlatma ---
+    try:
+        print(f"[SYSTEM] {SERVICE_LOCK} (KENDİM) yeniden başlatılıyor...")
+        subprocess.run(
+            ["sudo", "systemctl", "restart", SERVICE_LOCK], 
+            check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+        
+    except subprocess.CalledProcessError as e:
+        print(f"❌ [SERVİS HATASI] Kendimi ({SERVICE_LOCK}) yeniden başlatamadım: {e}")
+        if e.stderr:
+             print(f"Detay: {e.stderr.decode('utf-8')}")
 
 def on_message(client, userdata, msg):
     # Sadece beklediğimiz topikten gelen mesajları işle

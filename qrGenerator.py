@@ -669,11 +669,9 @@ def update_data():
     try:
         encoded_jwt = jwt.encode(
         {
-            "exp": time.time() + 30  # 300000 saniye içinde geçersiz olacak
-        },
-        jwtsecret,
-        algorithm="HS256"
-        )
+            "exp": time.time() + 30  # 30 saniye içinde geçersiz olacak
+        }, jwtsecret,algorithm="HS256")
+        
         payload = {
             "room_id": room_id,
             "token": encoded_jwt

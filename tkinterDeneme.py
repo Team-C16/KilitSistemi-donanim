@@ -333,7 +333,7 @@ class RoomScheduleApp(tk.Tk):
             encoded_jwt = jwt.encode({"exp": time.time() + 30}, JWT_SECRET, algorithm="HS256")
             url = f"{RASPBERRY_NODE_IP}/getQRCodeToken"
             headers = {"Content-Type": "application/json"}
-            data = f'{{"ROOM_ID": {ROOM_ID}, "token": "{encoded_jwt}", "room_name": 1, "accessType": "{ACCESS_TYPE}"}}'
+            data = f'{{"room_id": {ROOM_ID}, "token": "{encoded_jwt}", "room_name": 1, "accessType": "{ACCESS_TYPE}"}}'
             response = requests.post(url, headers=headers, data=data, timeout=5)
             
             if response.status_code == 200:
@@ -352,7 +352,7 @@ class RoomScheduleApp(tk.Tk):
             encoded_jwt = jwt.encode({"exp": time.time() + 30}, JWT_SECRET, algorithm="HS256")
             url = f"{RASPBERRY_NODE_IP}/getQRCodeToken"
             headers = {"Content-Type": "application/json"}
-            data = f'{{"ROOM_ID": {ROOM_ID}, "token": "{encoded_jwt}", "accessType": "{ACCESS_TYPE}"}}'
+            data = f'{{"room_id": {ROOM_ID}, "token": "{encoded_jwt}", "accessType": "{ACCESS_TYPE}"}}'
             response = requests.post(url, headers=headers, data=data, timeout=5)
             token = response.json().get("token") if response.status_code == 200 else None
             self.api_queue.put(("qr_token", token))
@@ -364,7 +364,7 @@ class RoomScheduleApp(tk.Tk):
         """Takvim verisini çeker ve kuyruğa atar."""
         try:
             encoded_jwt = jwt.encode({"exp": time.time() + 30}, JWT_SECRET, algorithm="HS256")
-            payload = {"ROOM_ID": ROOM_ID, "token": encoded_jwt}
+            payload = {"room_id": ROOM_ID, "token": encoded_jwt}
             response = requests.post(f"{RASPBERRY_NODE_IP}/getSchedule", json=payload, timeout=5)
             response.raise_for_status()
             api_response = response.json()
@@ -384,7 +384,7 @@ class RoomScheduleApp(tk.Tk):
             encoded_jwt = jwt.encode({"exp": time.time() + 30}, JWT_SECRET, algorithm="HS256")
             url = f"{RASPBERRY_NODE_IP}/getScheduleDetails"
             headers = {"Content-Type": "application/json"}
-            payload = {"ROOM_ID": ROOM_ID, "token": encoded_jwt, "rendezvous_id": rendezvous_id}
+            payload = {"room_id": ROOM_ID, "token": encoded_jwt, "rendezvous_id": rendezvous_id}
             response = requests.post(url, headers=headers, data=json.dumps(payload), timeout=5)
             response.raise_for_status()
             self.api_queue.put(("detail_data", response.json()))

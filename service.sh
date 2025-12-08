@@ -114,15 +114,27 @@ select_file() {
 
 # --- 6. Script Seçimleri ---
 
+echo -e "Odada kilit bulunuyor mu? \n1-Evet \n0-Hayır"
+read IS_LOCK
+
+echo -e "Odada parmakizi okuyucu bulunuyor mu? \n1-Evet \n0-Hayır"
+read IS_FINGERPRINT
+
 # Değişken atamaları artık temiz olacak
 SELECTED_QR=$(select_file "*qrGenerator.py" "Kullanılacak QR Generator Scriptini Seçiniz:")
 echo "Seçilen QR Script: $SELECTED_QR"
 
-SELECTED_LOCK=$(select_file "*kilitKodu.py" "Kullanılacak Kilit Kodu Scriptini Seçiniz:")
-echo "Seçilen Kilit Script: $SELECTED_LOCK"
+if [ "$IS_LOCK" == "1" ]
+then
+    SELECTED_LOCK=$(select_file "*kilitKodu.py" "Kullanılacak Kilit Kodu Scriptini Seçiniz:")
+    echo "Seçilen Kilit Script: $SELECTED_LOCK"
+fi
 
-SELECTED_FINGERPRINT=$(select_file "*fingerprint.py" "Kullanılacak Parmak İzi Scriptini Seçiniz:")
-echo "Seçilen Parmak İzi Script: $SELECTED_FINGERPRINT"
+if [ "$IS_FINGERPRINT" == "1" ]
+then
+    SELECTED_FINGERPRINT=$(select_file "*fingerprint.py" "Kullanılacak Parmak İzi Scriptini Seçiniz:")
+    echo "Seçilen Parmak İzi Script: $SELECTED_FINGERPRINT"
+fi
 
 SELECTED_UPDATE="$DIRECTORY/mqtt-update.py"
 
@@ -150,55 +162,59 @@ StandardOutput=journal
 WantedBy=multi-user.target
 EOL
 
+if [ "$IS_LOCK" == "1" ]
+then
+    # --- LOCK SERVICE ---
+    LOCK_SERVICE_FILE="/etc/systemd/system/lock.service"
+    echo "Servis oluşturuluyor: $LOCK_SERVICE_FILE"
 
-# --- LOCK SERVICE ---
-LOCK_SERVICE_FILE="/etc/systemd/system/lock.service"
-echo "Servis oluşturuluyor: $LOCK_SERVICE_FILE"
+    cat > $LOCK_SERVICE_FILE <<EOL
+    [Unit]
+    Description=Lock Service
+    After=multi-user.target network-online.target qrGenerator.service
+    Requires=network-online.target qrGenerator.service
 
-cat > $LOCK_SERVICE_FILE <<EOL
-[Unit]
-Description=Lock Service
-After=multi-user.target network-online.target qrGenerator.service
-Requires=network-online.target qrGenerator.service
+    [Service]
+    Type=simple
+    User=root
+    EnvironmentFile=$SECRETS_FILE
+    Environment=DISPLAY=:0
+    Environment=XAUTHORITY=/home/pi/.Xauthority
+    ExecStart=/bin/bash -c "/usr/bin/python3 $SELECTED_LOCK"
+    Restart=always
+    RestartSec=5
 
-[Service]
-Type=simple
-User=root
-EnvironmentFile=$SECRETS_FILE
-Environment=DISPLAY=:0
-Environment=XAUTHORITY=/home/pi/.Xauthority
-ExecStart=/bin/bash -c "/usr/bin/python3 $SELECTED_LOCK"
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
+    [Install]
+    WantedBy=multi-user.target
 EOL
+fi
 
+if [ "$IS_FINGERPRINT" == "1" ]
+then
+    # --- FINGERPRINT SERVICE ---
+    FINGERPRINT_SERVICE_FILE="/etc/systemd/system/fingerprint.service"
+    echo "Servis oluşturuluyor: $FINGERPRINT_SERVICE_FILE"
 
-# --- FINGERPRINT SERVICE ---
-FINGERPRINT_SERVICE_FILE="/etc/systemd/system/fingerprint.service"
-echo "Servis oluşturuluyor: $FINGERPRINT_SERVICE_FILE"
+    cat > $FINGERPRINT_SERVICE_FILE <<EOL
+    [Unit]
+    Description=Fingerprint Reader Service
+    After=default.target
+    Requires=display-manager.service
 
-cat > $FINGERPRINT_SERVICE_FILE <<EOL
-[Unit]
-Description=Fingerprint Reader Service
-After=default.target
-Requires=display-manager.service
+    [Service]
+    Type=simple
+    User=root
+    EnvironmentFile=$SECRETS_FILE
+    Environment=DISPLAY=:0
+    Environment=XAUTHORITY=/home/pi/.Xauthority
+    ExecStartPre=/usr/bin/xhost +SI:localuser:root
+    ExecStart=/bin/bash -c "while ! xrandr; do sleep 1; done; /usr/bin/python3 $SELECTED_FINGERPRINT"
+    Restart=always
 
-[Service]
-Type=simple
-User=root
-EnvironmentFile=$SECRETS_FILE
-Environment=DISPLAY=:0
-Environment=XAUTHORITY=/home/pi/.Xauthority
-ExecStartPre=/usr/bin/xhost +SI:localuser:root
-ExecStart=/bin/bash -c "while ! xrandr; do sleep 1; done; /usr/bin/python3 $SELECTED_FINGERPRINT"
-Restart=always
-
-[Install]
-WantedBy=default.target
+    [Install]
+    WantedBy=default.target
 EOL
+fi
 
 
 # --- UPDATE LISTENER SERVICE ---
@@ -231,13 +247,19 @@ echo "Servisler yenileniyor ve başlatılıyor..."
 systemctl daemon-reload
 
 systemctl enable qrGenerator.service
-systemctl enable lock.service
-systemctl enable fingerprint.service
 systemctl enable updateListener.service
+if [ "$IS_LOCK" == "1" ]
+then
+    systemctl enable lock.service
+    systemctl restart lock.service
+fi
+if [ "$IS_FINGERPRINT" == "1" ]
+then
+    systemctl enable fingerprint.service
+    systemctl restart fingerprint.service
+fi
 
 systemctl restart qrGenerator.service
-systemctl restart lock.service
-systemctl restart fingerprint.service
 systemctl restart updateListener.service
 
 echo "----------------------------------------------------"

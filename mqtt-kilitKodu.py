@@ -1,3 +1,4 @@
+import os
 import jwt
 import time
 import threading
@@ -9,10 +10,10 @@ from tkinter import font as tkfont
 import paho.mqtt.client as mqtt
 from gpiozero import LED
 led = LED(12)
-SECRET_KEY = "DENEME"
-mqttbrokerip = "192.168.1.130"
-mqttbrokerport = 1883
-room_id = 2
+SECRET_KEY = os.getenv("jwt_secret")
+mqttbrokerip = os.getenv("mqttbrokerip")
+mqttbrokerport = int(os.getenv("mqttbrokerport", 1883))
+room_id = os.getenv("room_id")
 
 tkinter_root = None
 notification_window = None

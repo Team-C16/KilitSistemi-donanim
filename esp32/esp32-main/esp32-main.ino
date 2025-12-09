@@ -88,12 +88,12 @@ int s_ip_to_try = ip_start_octet; // (Önceki cevaptan) Denenecek 'static' IP ok
 unsigned long lastWifiCheck = 0;
 const unsigned long wifiCheckInterval = 15000;
 
-const String base_url = "https://pve.izu.edu.tr/randevu";
+const String base_url = "https://pve.izu.edu.tr/randevu/device";
 //AsyncWebServer server(80);
 
 // =================== OTA AYARLARI ===================
 // BU KODU HER DERLEDİĞİNİZDE SÜRÜMÜ ARTIRIN (örn: "1.0.1", "1.0.2")
-const char* FIRMWARE_VERSION = "1.0.2"; 
+const char* FIRMWARE_VERSION = "1.0.4"; 
 
 // Sunucunuzda "en son sürüm numarasını" döndüren API adresi
 const String OTA_VERSION_CHECK_URL = base_url + "/checkFirmwareVersion";
@@ -816,10 +816,7 @@ void setup() {
   Serial.println(WiFi.localIP());
   // --- YENİ BLOK SONU ---
 
-  mqttClient.setServer(mqtt_server, mqtt_port);
-  mqttClient.setCallback(mqttCallback);
-  mqttClient.setSocketTimeout(15);
-  mqttReconnect();
+
 
   lv_timer_handler(); // To Update Spinner
 
@@ -835,6 +832,10 @@ void setup() {
     lv_timer_handler();  // To Update Spinner
   }
   Serial.println("Zaman senkronize edildi.");
+	mqttClient.setServer(mqtt_server, mqtt_port);
+  mqttClient.setCallback(mqttCallback);
+  mqttClient.setSocketTimeout(15);
+  mqttReconnect();
   lv_timer_handler();// To Update Spinner
   fetchTimeConfig();
   lv_obj_clean(loading_screen);// To Delete Spinner
@@ -1147,6 +1148,10 @@ void loop() {
     lastJwt = now;
     {
       refresh_table_headers_if_date_changed(table);
+    }
+    
+    {// To Update time config 
+      fetchTimeConfig();
     }
     
     {

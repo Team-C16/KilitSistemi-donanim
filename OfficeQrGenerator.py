@@ -1,3 +1,4 @@
+import os
 import requests
 import qrcode
 import pygame
@@ -14,12 +15,12 @@ import ast
 import json
 
 # JWT secret key
-jwtsecret = "JWT_SECRET"
+jwtsecret = os.getenv("jwt_secret")
 
 # Raspberry Node IP
-raspberryNodeip = 'https://pve.izu.edu.tr/kilitSistemi'
+raspberryNodeip = os.getenv("nodeip")
 
-room_id = 2
+room_id = os.getenv("room_id")
 
 accessType = 1
 

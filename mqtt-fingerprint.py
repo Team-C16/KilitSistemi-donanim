@@ -16,14 +16,14 @@ import paho.mqtt.client as mqtt
 # BÖLÜM 1: Sabitler ve Ayarlar
 # =================================================================================
 
-SECRET_KEY = "JWT_SECRET"
-mqttbrokerip = "pve.izu.edu.tr"
-mqttbrokerport = 1883
-room_id = 1
+SECRET_KEY = os.getenv("jwt_secret")
+mqttbrokerip = os.getenv("mqttbrokerip")
+mqttbrokerport = int(os.getenv("mqttbrokerport", 1883))
+room_id = os.getenv("room_id")
 
 accessType = 1
 
-API_BASE = "https://pve.izu.edu.tr/randevu"
+API_BASE = os.getenv("nodeip")
 
 kayitMenu = None
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import os
 import tkinter as tk
 from tkinter import font
 import requests
@@ -19,9 +20,9 @@ import sys
 # 1. SABİTLER VE API AYARLARI
 # ----------------------------------------------------------------------
 
-JWT_SECRET = "JWT_SECRET"
-RASPBERRY_NODE_IP = 'https://pve.izu.edu.tr/randevu/device'
-ROOM_ID = 1
+JWT_SECRET = os.getenv("jwt_secret")
+RASPBERRY_NODE_IP = os.getenv("nodeip")
+ROOM_ID = os.getenv("room_id")
 ACCESS_TYPE = 1
 last_switch_time = datetime.now()
 

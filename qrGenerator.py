@@ -1,3 +1,4 @@
+import os
 import requests
 import qrcode
 import pygame
@@ -14,12 +15,12 @@ import ast
 import json
 time_suffix = ":30"
 # JWT secret key
-jwtsecret = "JWT_SECRET"
+jwtsecret = os.getenv("jwt_secret")
 
 # Raspberry Node IP
-raspberryNodeip = 'https://pve.izu.edu.tr/randevu'
+raspberryNodeip = os.getenv("nodeip")
 
-room_id = 1
+room_id = os.getenv("room_id")
 
 accessType = 1
 
@@ -668,11 +669,9 @@ def update_data():
     try:
         encoded_jwt = jwt.encode(
         {
-            "exp": time.time() + 30  # 300000 saniye içinde geçersiz olacak
-        },
-        jwtsecret,
-        algorithm="HS256"
-        )
+            "exp": time.time() + 30  # 30 saniye içinde geçersiz olacak
+        }, jwtsecret,algorithm="HS256")
+        
         payload = {
             "room_id": room_id,
             "token": encoded_jwt

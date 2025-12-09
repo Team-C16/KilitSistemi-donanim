@@ -1,5 +1,5 @@
 # encoding:utf-8
-
+import os
 from flask import Flask, request, jsonify
 import jwt
 import datetime
@@ -23,11 +23,11 @@ from tkinter import font as tkfont
 app = Flask(__name__)
 
 # Secret key 
-SECRET_KEY = "JWT_SECRET"
+SECRET_KEY = os.getenv("jwt_secret")
 
-raspberryNodeip = 'https://pve.izu.edu.tr/randevu'
+raspberryNodeip = os.getenv("nodeip")
  
-room_id = 1
+room_id = os.getenv("room_id")
 
 
 # Tkinter uygulama referansları

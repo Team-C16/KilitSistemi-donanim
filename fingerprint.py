@@ -16,13 +16,13 @@ from tkinter import font as tkfont
 # BÖLÜM 1: Sabitler ve Ayarlar
 # =================================================================================
 
-SECRET_KEY = "JWT_SECRET"
+SECRET_KEY = os.getenv("jwt_secret")
 
-room_id = 1
+room_id = os.getenv("room_id")
 
 accessType = 1
 
-API_BASE = "https://pve.izu.edu.tr/randevu"
+API_BASE = os.getenv("nodeip")
 
 kayitMenu = None
 

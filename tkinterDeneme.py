@@ -20,7 +20,7 @@ import sys
 # ----------------------------------------------------------------------
 
 JWT_SECRET = "JWT_SECRET"
-RASPBERRY_NODE_IP = 'https://pve.izu.edu.tr/randevu'
+RASPBERRY_NODE_IP = 'https://pve.izu.edu.tr/randevu/device'
 ROOM_ID = 1
 ACCESS_TYPE = 1
 last_switch_time = datetime.now()
@@ -66,46 +66,85 @@ FALLBACK_DETAILS_DATA = {
 # 3. VERİ İŞLEME YARDIMCI FONKSİYONLARI
 # ----------------------------------------------------------------------
 
-def transform_schedule(api_data, date_keys_to_show): # <-- DİKKAT: Parametre eklendi
+def transform_schedule(api_data, date_keys_to_show):
     """
     API'den gelen veriyi, YALNIZCA 'date_keys_to_show' listesindeki
     tarihlere göre 'ders_programi' sözlüğüne dönüştürür.
-    Bu, "geçen haftanın Pazartesisi" hatasını düzeltir.
+    Çalışma saatleri API'den alınır ve saatlik slotlar otomatik oluşturulur.
     """
-    hours = [f"{h:02}:00" for h in range(9, 19)]
+    
+    # API'den çalışma saatlerini al
+    hour_suffix = api_data.get("hour", ":00")  # CHANGED TO :30
+    start_hour = api_data.get("startHour", 9)
+    end_hour = api_data.get("endHour", 18)
+    
+    print("=" * 60)
+    print(f"🔍 hour_suffix: {hour_suffix}")
+    print(f"🔍 date_keys_to_show: {date_keys_to_show}")
+    print("=" * 60)
+    
+    # Saat listesini oluştur
+    hours = []
+    for h in range(start_hour, end_hour + 1):
+        hour_str = f"{h:02d}{hour_suffix}"
+        hours.append(hour_str)
+    
+    print(f"📋 Generated hours: {hours}")
 
     # 1. Adım: Programı YALNIZCA gösterilecek 5 tarih için "Boş" olarak doldur
     ders_programi = {}
-    for date_key in date_keys_to_show: # <-- Artık tarih anahtarlarını kullanıyor
+    for date_key in date_keys_to_show:
         ders_programi[date_key] = {}
         for hour in hours:
             ders_programi[date_key][hour] = {
-                "durum": "Boş", "aktivite": "", "düzenleyen": "", "rendezvous_id": ""
+                "durum": "Boş", 
+                "aktivite": "", 
+                "düzenleyen": "", 
+                "rendezvous_id": ""
             }
 
     # 2. Adım: API verisiyle "Dolu" olanları üzerine yaz
     schedule = api_data.get("schedule", [])
+    print(f"📅 Processing {len(schedule)} schedule entries...")
+    
     for entry in schedule:
         try:
             utc_time = datetime.strptime(entry["day"], "%Y-%m-%dT%H:%M:%S.%fZ")
-            local_time = utc_time + timedelta(days=1) # Orijinal +1 gün mantığı
+            local_time = utc_time + timedelta(days=1)
             
-            api_date_key = local_time.strftime("%Y-%m-%d") # <-- API'den gelen verinin tarih anahtarı
-            time_str = entry["hour"].split(":")[0]
-            hour_str = f"{int(time_str):02d}:00"
+            api_date_key = local_time.strftime("%Y-%m-%d")
+            
+            # API'den gelen saat formatını al ve hour_suffix ile birleştir
+            if "hour" in entry and isinstance(entry["hour"], str):
+                time_parts = entry["hour"].split(":")
+                hour_str = f"{int(time_parts[0]):02d}{hour_suffix}"
+            else:
+                hour_str = f"{local_time.hour:02d}{hour_suffix}"
 
-            # --- BU KONTROL HATAYI DÜZELTİYOR ---
-            # API'den gelen bu tarih, bizim göstermek istediğimiz 5 günden biri mi?
+            print(f"\n🔍 Entry: {entry.get('title', 'N/A')}")
+            print(f"   Original day: {entry['day']}")
+            print(f"   After +1 day: {api_date_key}")
+            print(f"   Hour: {hour_str}")
+            print(f"   In date_keys? {api_date_key in ders_programi}")
+            print(f"   In hours? {hour_str in (ders_programi.get(api_date_key, {}))}")
+
+            # Bu tarih ve saat bizim programımızda var mı?
             if api_date_key in ders_programi and hour_str in ders_programi[api_date_key]:
+                print(f"   ✅ MATCH - Filling cell!")
                 ders_programi[api_date_key][hour_str] = {
                     "durum": "Dolu",
                     "aktivite": entry["title"],
                     "düzenleyen": entry["fullName"],
                     "rendezvous_id": entry["rendezvous_id"],
                 }
+            else:
+                print(f"   ❌ NO MATCH - Cell remains empty")
+                
         except Exception as e:
-            print(f"⚠️ Zamanlama verisi işlenirken hata: {e}, Girdi: {entry}")
-    return ders_programi
+            print(f"⚠️ Error: {e}, Entry: {entry}")
+    
+    print("=" * 60)
+    return ders_programi, hours
 
 def check_if_slot_is_current(day_name, hour_str):
     """
@@ -128,7 +167,7 @@ def check_if_slot_is_current(day_name, hour_str):
         start_time = now.replace(hour=start_hour, minute=start_minute, second=0, microsecond=0)
         end_time = now.replace(hour=start_hour + 1, minute=start_minute, second=0, microsecond=0)
         
-        return True # start_time <= now < end_time
+        return start_time <= now < end_time
     except Exception as e:
         print(f"Zaman kontrol hatası: {e}")
         return False
@@ -369,13 +408,15 @@ class RoomScheduleApp(tk.Tk):
             api_response = response.json()
             new_data = api_response[0] if isinstance(api_response, list) and api_response else api_response
             
-            # transform_schedule'a self.date_keys'i yolla
-            ders_programi = transform_schedule(new_data, self.date_keys) 
-            self.api_queue.put(("schedule_data", ders_programi))
+            # Get BOTH ders_programi AND hours from transform_schedule
+            ders_programi, hours = transform_schedule(new_data, self.date_keys)
             
+            # Put BOTH in the queue
+            self.api_queue.put(("schedule_data", (ders_programi, hours)))
+        
         except Exception as e:
             print(f"⚠️ API (Takvim) bağlantı hatası, eski veri korunuyor. Hata: {e}")
-            pass # Hata durumunda eski veriyi koru
+            pass
             
     def fetch_details_data(self, rendezvous_id):
         """Toplantı detay verisini çeker ve kuyruğa atar."""
@@ -452,7 +493,10 @@ class RoomScheduleApp(tk.Tk):
         Sağ taraftaki Takvim Tablosunu oluşturur.
         (Gün/Tarih/Bugün etiketleri birleştirilmiş versiyon)
         """
-        self.hours = [f"{h:02}:00" for h in range(9, 19)]
+        # Get hours from API if available, otherwise use default :00
+        if not hasattr(self, 'hours') or not self.hours:
+            self.hours = [f"{h:02}:00" for h in range(9, 19)]
+        
         grid_frame = self.schedule_view_frame
         
         saat_sutunu_genisligi = int(self.app_width * 0.05)
@@ -513,11 +557,11 @@ class RoomScheduleApp(tk.Tk):
                 cell_frame.pack(expand=True, fill="both")
 
                 label1 = tk.Label(cell_frame, text="", font=self.fonts["cell_main"], bg=self.colors["available"], fg=self.colors["white"],
-                                  wraplength=self.wrap_limit, justify="center")
+                                wraplength=self.wrap_limit, justify="center")
                 label1.place(relx=0.5, rely=0.35, anchor="center")
                 
                 label2 = tk.Label(cell_frame, text="", font=self.fonts["cell_sub"], bg=self.colors["available"], fg=self.colors["white"],
-                                  wraplength=self.wrap_limit, justify="center")
+                                wraplength=self.wrap_limit, justify="center")
                 label2.place(relx=0.5, rely=0.65, anchor="center")
                 
                 self.schedule_cells[day] = self.schedule_cells.get(day, {})
@@ -581,7 +625,8 @@ class RoomScheduleApp(tk.Tk):
         if not self.ders_programi: return
             
         today_tr = self.days_tr_turkish[0]
-        current_hour_str = f"{datetime.now().hour:02d}:00"
+        hour_suffix = self.hours[0][-3:] if self.hours else ":00"  # Extract ":30" or ":00"
+        current_hour_str = f"{datetime.now().hour:02d}{hour_suffix}"
         
         # Gün Başlıklarını Güncelle
         for day in self.days_tr_turkish:
@@ -615,28 +660,66 @@ class RoomScheduleApp(tk.Tk):
             if date_key not in self.ders_programi: continue
             
             for hour in self.hours:
-                if hour not in self.ders_programi[date_key]: continue
-                
-                cell = self.schedule_cells[day_tr][hour]
-                data = self.ders_programi[date_key][hour] 
-                status = data["durum"]
-                
-                if status == "Boş":
-                    bg = self.colors["available"]; fg = self.colors["white"]
-                    label1_text = "⚪️ Randevuya"; label2_text = "Uygun"
-                else:
-                    bg = self.colors["unavailable"]; fg = self.colors["white"]
-                    label1_text = data.get("aktivite", "Dolu")
-                    label2_text = f"👤 {data.get('düzenleyen', '')}"
+                if hour not in self.ders_programi[date_key]:
+                    continue
 
+                cell = self.schedule_cells[day_tr][hour]
+                data = self.ders_programi[date_key][hour]
+                status = data["durum"]
+
+                # Unified Label Text
+                if status == "Boş":
+                    bg = self.colors["available"]
+                    fg = self.colors["white"]
+                    label_text = "🕒 Randevuya Uygun"
+                    # Center alignment for "Boş"
+                    cell["label1"].place(relx=0.5, rely=0.5, anchor="center")
+                    justify_align = "center"
+                else:
+                    bg = self.colors["unavailable"]
+                    fg = self.colors["white"]
+                    aktivite = data.get("aktivite", "Dolu")
+                    duzenleyen = data.get("düzenleyen", "")
+                    
+                    # Truncate duzenleyen to fit one line (adjust max_length as needed)
+                    max_length = 14  # Adjust based on your cell width
+                    if len(duzenleyen) > max_length:
+                        duzenleyen = duzenleyen[:max_length-3] + "..."
+                    
+                    label_text = f"{aktivite}\n👤 {duzenleyen}".strip()
+                    # Center alignment for multi-line text
+                    cell["label1"].place(relx=0.5, rely=0.5, anchor="center")
+                    justify_align = "center"
+
+                # Frame styling
                 cell["frame"].config(bg=bg)
-                cell["label1"].config(text=label1_text, bg=bg, fg=fg)
-                cell["label2"].config(text=label2_text, bg=bg, fg=fg)
-                
+
+                # Update label styling
+                cell["label1"].config(
+                    text=label_text, 
+                    bg=bg, 
+                    fg=fg,
+                    font=("Arial", 15),
+                    justify=justify_align,
+                    wraplength=self.wrap_limit  # This makes aktivite wrap nicely and center
+                )
+
+                # COMPLETELY hide label2
+                cell["label2"].config(text="", bg=bg)
+                cell["label2"].place_forget()
+                cell["label2"].pack_forget()
+                cell["label2"].grid_forget()
+
+                # Current hour highlight
                 if hour == current_hour_str and day_tr == today_tr:
-                    cell["container"].config(highlightbackground=self.colors["highlight"], highlightthickness=3, bd=0)
+                    cell["container"].config(
+                        highlightbackground=self.colors["highlight"],
+                        highlightthickness=3, 
+                        bd=0
+                    )
                 else:
                     cell["container"].config(highlightthickness=0, bd=1)
+
 
     def update_detail_widgets(self, details = False):
         if not self.current_meeting_data: 
@@ -696,7 +779,6 @@ class RoomScheduleApp(tk.Tk):
         'process_api_queue' tarafından tetiklenir.
         """
         global last_switch_time
-        print((datetime.now() - last_switch_time).total_seconds().__floor__())
         if not self.ders_programi:
             return
 
@@ -724,7 +806,6 @@ class RoomScheduleApp(tk.Tk):
                         current_id = self.current_meeting_data[0].get("rendezvous_id")
 
                     if (self.display_mode == "detail" and (datetime.now() - last_switch_time).total_seconds() >= 10):
-                        print("I'm here!!!!!!!")
                         self.show_schedule_view()
                         last_switch_time = datetime.now()
 

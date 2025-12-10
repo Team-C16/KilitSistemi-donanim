@@ -67,85 +67,46 @@ FALLBACK_DETAILS_DATA = {
 # 3. VERİ İŞLEME YARDIMCI FONKSİYONLARI
 # ----------------------------------------------------------------------
 
-def transform_schedule(api_data, date_keys_to_show):
+def transform_schedule(api_data, date_keys_to_show): # <-- DİKKAT: Parametre eklendi
     """
     API'den gelen veriyi, YALNIZCA 'date_keys_to_show' listesindeki
     tarihlere göre 'ders_programi' sözlüğüne dönüştürür.
-    Çalışma saatleri API'den alınır ve saatlik slotlar otomatik oluşturulur.
+    Bu, "geçen haftanın Pazartesisi" hatasını düzeltir.
     """
-    
-    # API'den çalışma saatlerini al
-    hour_suffix = api_data.get("hour", ":00")  # CHANGED TO :30
-    start_hour = api_data.get("startHour", 9)
-    end_hour = api_data.get("endHour", 18)
-    
-    print("=" * 60)
-    print(f"🔍 hour_suffix: {hour_suffix}")
-    print(f"🔍 date_keys_to_show: {date_keys_to_show}")
-    print("=" * 60)
-    
-    # Saat listesini oluştur
-    hours = []
-    for h in range(start_hour, end_hour + 1):
-        hour_str = f"{h:02d}{hour_suffix}"
-        hours.append(hour_str)
-    
-    print(f"📋 Generated hours: {hours}")
+    hours = [f"{h:02}:00" for h in range(9, 19)]
 
     # 1. Adım: Programı YALNIZCA gösterilecek 5 tarih için "Boş" olarak doldur
     ders_programi = {}
-    for date_key in date_keys_to_show:
+    for date_key in date_keys_to_show: # <-- Artık tarih anahtarlarını kullanıyor
         ders_programi[date_key] = {}
         for hour in hours:
             ders_programi[date_key][hour] = {
-                "durum": "Boş", 
-                "aktivite": "", 
-                "düzenleyen": "", 
-                "rendezvous_id": ""
+                "durum": "Boş", "aktivite": "", "düzenleyen": "", "rendezvous_id": ""
             }
 
     # 2. Adım: API verisiyle "Dolu" olanları üzerine yaz
     schedule = api_data.get("schedule", [])
-    print(f"📅 Processing {len(schedule)} schedule entries...")
-    
     for entry in schedule:
         try:
             utc_time = datetime.strptime(entry["day"], "%Y-%m-%dT%H:%M:%S.%fZ")
-            local_time = utc_time + timedelta(days=1)
-            
-            api_date_key = local_time.strftime("%Y-%m-%d")
-            
-            # API'den gelen saat formatını al ve hour_suffix ile birleştir
-            if "hour" in entry and isinstance(entry["hour"], str):
-                time_parts = entry["hour"].split(":")
-                hour_str = f"{int(time_parts[0]):02d}{hour_suffix}"
-            else:
-                hour_str = f"{local_time.hour:02d}{hour_suffix}"
+            local_time = utc_time + timedelta(days=1) # Orijinal +1 gün mantığı
 
-            print(f"\n🔍 Entry: {entry.get('title', 'N/A')}")
-            print(f"   Original day: {entry['day']}")
-            print(f"   After +1 day: {api_date_key}")
-            print(f"   Hour: {hour_str}")
-            print(f"   In date_keys? {api_date_key in ders_programi}")
-            print(f"   In hours? {hour_str in (ders_programi.get(api_date_key, {}))}")
+            api_date_key = local_time.strftime("%Y-%m-%d") # <-- API'den gelen verinin tarih anahtarı
+            time_str = entry["hour"].split(":")[0]
+            hour_str = f"{int(time_str):02d}:00"
 
-            # Bu tarih ve saat bizim programımızda var mı?
+            # --- BU KONTROL HATAYI DÜZELTİYOR ---
+            # API'den gelen bu tarih, bizim göstermek istediğimiz 5 günden biri mi?
             if api_date_key in ders_programi and hour_str in ders_programi[api_date_key]:
-                print(f"   ✅ MATCH - Filling cell!")
                 ders_programi[api_date_key][hour_str] = {
                     "durum": "Dolu",
                     "aktivite": entry["title"],
                     "düzenleyen": entry["fullName"],
                     "rendezvous_id": entry["rendezvous_id"],
                 }
-            else:
-                print(f"   ❌ NO MATCH - Cell remains empty")
-                
         except Exception as e:
-            print(f"⚠️ Error: {e}, Entry: {entry}")
-    
-    print("=" * 60)
-    return ders_programi, hours
+            print(f"⚠️ Zamanlama verisi işlenirken hata: {e}, Girdi: {entry}")
+    return ders_programi
 
 def check_if_slot_is_current(day_name, hour_str):
     """
@@ -356,7 +317,7 @@ class RoomScheduleApp(tk.Tk):
                     self.current_meeting_data = data
                     self.update_detail_widgets(details=True)
 
-                    
+
         except queue.Empty:
             pass # Sıra boş, sorun yok
         finally:

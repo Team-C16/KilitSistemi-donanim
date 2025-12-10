@@ -603,7 +603,7 @@ class RoomScheduleApp(tk.Tk):
             qr.add_data(qr_data)
             qr.make(fit=True)
             img = qr.make_image(fill_color="black", back_color="white").convert('RGB')
-            qr_size = int(self.app_width * 0.20)
+            qr_size = int(self.app_width * 0.27)
             img = img.resize((qr_size, qr_size), Image.Resampling.LANCZOS)
             self.qr_image = ImageTk.PhotoImage(img)
             self.qr_label.config(image=self.qr_image)
@@ -843,22 +843,6 @@ class RoomScheduleApp(tk.Tk):
 # 5. UYGULAMAYI BAŞLAT
 # ----------------------------------------------------------------------
 if __name__ == "__main__":
-    
-    # Gerekli importları en başa taşı
-    import tkinter as tk
-    from tkinter import font
-    import requests
-    import qrcode
-    from PIL import Image, ImageTk, ImageOps
-    import io
-    import jwt
-    import time
-    import json
-    from datetime import datetime, timedelta
-    import threading
-    import queue
-    import sys
-    
     try:
         app = RoomScheduleApp()
         app.mainloop()

@@ -362,10 +362,10 @@ def generate_qr_code_surface(qr_data, screen_width, screen_height):
 
 def fetch_room_name():
     global room_name
-    # JWT oluşturma (300000 saniye içinde geçersiz olacak şekilde ayarlanır)
+    # JWT oluşturma (30 saniye içinde geçersiz olacak şekilde ayarlanır)
     encoded_jwt = jwt.encode(
         {
-           "exp": time.time() + 300000
+           "exp": time.time() + 30
         },
         jwtsecret,
         algorithm="HS256"
@@ -398,7 +398,7 @@ def fetch_time_format_config():
     global time_suffix
     try:
         encoded_jwt = jwt.encode(
-            {"exp": time.time() + 300000000},
+            {"exp": time.time() + 30},
             jwtsecret,
             algorithm="HS256"
         )
@@ -699,7 +699,7 @@ def lighten_color(color, factor=0.3):
 def fetch_qr_token():
     encoded_jwt = jwt.encode(
         {
-            "exp": time.time() + 300000  # 300000 saniye içinde geçersiz olacak
+            "exp": time.time() + 30  # 30 saniye içinde geçersiz olacak
         },
         jwtsecret,
         algorithm="HS256"
@@ -786,7 +786,7 @@ def fetch_details_data(rendezvous_id):
 
     try:
         encoded_jwt = jwt.encode(
-            {"exp": time.time() + 3000000},
+            {"exp": time.time() + 30},
             jwtsecret,
             algorithm="HS256"
         )

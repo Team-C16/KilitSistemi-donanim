@@ -221,7 +221,7 @@ def generate_qr_code_surface(qr_data, screen_width, screen_height):
 
 def fetch_room_name():
     global room_name
-    # JWT oluşturma (300000 saniye içinde geçersiz olacak şekilde ayarlanır)
+    # JWT oluşturma (30 saniye içinde geçersiz olacak şekilde ayarlanır)
     encoded_jwt = jwt.encode(
         {
            "exp": time.time() + 30

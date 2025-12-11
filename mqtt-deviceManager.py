@@ -6,7 +6,7 @@ import subprocess
 import jwt
 import paho.mqtt.client as mqtt
 
-MQTT_IP = os.getenv("mqttbrokerip")
+MQTT_IP = os.getenv("mqttbrokerip", "pve.izu.edu.tr")
 MQTT_PORT = int(os.getenv("mqttbrokerport", 1883))
 ROOM_ID = os.getenv("room_id")
 SECRET_KEY = os.getenv("SECRET_KEY")
@@ -61,6 +61,77 @@ def on_disconnect(client, userdata, rc):
     if rc != 0:
         print("[MQTT] Tekrar bağlanılıyor...")
         reconnect()
+
+# Cihazın bilgilerini ve durumunu çekme.
+
+def get_cpu_temp():
+    """
+    CPU sıcaklığını sistem dosyasından okur.
+    Dönen değer derece cinsindendir (float).
+    """
+    try:
+        # Raspberry Pi ve Linux sistemlerde standart termal dosya yolu
+        with open("/sys/class/thermal/thermal_zone0/temp", "r") as f:
+            raw_temp = f.read().strip()
+        
+        # Değer milisantigrat gelir (örn: 42345), 1000'e bölmeliyiz.
+        temp_c = int(raw_temp) / 1000.0
+        return round(temp_c, 1) # Tek haneli hassasiyet yeterli (örn: 42.3)
+    except FileNotFoundError:
+        return "N/A (Sensor file not found)"
+    except Exception as e:
+        return f"Temp Error: {str(e)}"
+
+def get_device_ip():
+    """Cihazın IP adresini 'hostname -I' komutu ile alır."""
+    try:
+        res = subprocess.run(["hostname", "-I"], capture_output=True, text=True)
+        return res.stdout.strip()
+    except Exception as e:
+        return f"IP Error: {str(e)}"
+
+def get_device_model():
+    """Cihaz modelini /sys/firmware/devicetree/base/model dosyasından okur."""
+    try:
+        with open("/sys/firmware/devicetree/base/model", "r") as f:
+            # Sondaki null byte (\x00) veya boşlukları temizle
+            return f.read().strip().strip('\x00')
+    except FileNotFoundError:
+        return "Unknown Device (Model file not found)"
+    except Exception as e:
+        return f"Model Error: {str(e)}"
+
+def get_ram_usage():
+    """
+    /proc/meminfo dosyasını okuyarak RAM kullanımını hesaplar.
+    """
+    try:
+        mem_info = {}
+        with open("/proc/meminfo", "r") as f:
+            for line in f:
+                parts = line.split()
+                key = parts[0].rstrip(':')
+                value = int(parts[1]) # KB cinsinden
+                mem_info[key] = value
+        
+        total_mem = mem_info.get("MemTotal", 0)
+        available_mem = mem_info.get("MemAvailable", 0)
+        
+        if total_mem == 0:
+            return {"error": "Total memory 0"}
+
+        used_mem = total_mem - available_mem
+        percent = (used_mem / total_mem) * 100
+        
+        return {
+            "total_mb": round(total_mem / 1024, 2),
+            "used_mb": round(used_mem / 1024, 2),
+            "percent": round(percent, 2)
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+# Servis durumlarını çekme
 
 def get_single_service_info(service_name):
     info = {
@@ -121,6 +192,10 @@ def on_message(client, userdata, msg):
         if msg.topic == TOPIC_GET_STATUS:
             print("[STATUS] Durum sorgusu isteği alındı...")
             services_report = check_all_services()
+            device_ip = get_device_ip()
+            device_model = get_device_model()
+            ram_info = get_ram_usage()
+            cpu_temp = get_cpu_temp()
             
             try:
                 commit_hash = subprocess.check_output(
@@ -134,6 +209,12 @@ def on_message(client, userdata, msg):
                 "room_id": ROOM_ID,
                 "current_commit": commit_hash,
                 "timestamp": time.time(),
+                "device_info": {
+                    "ip": device_ip,
+                    "model": device_model,
+                    "cpu_temp": cpu_temp, # JSON'a eklendi
+                    "ram": ram_info
+                },
                 "services": services_report
             }
             client.publish(TOPIC_STATUS_RESPONSE, json.dumps(response))

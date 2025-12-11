@@ -31,7 +31,11 @@ TOPIC_UPDATE = f"v1/{ROOM_ID}/update"
 TOPIC_GET_STATUS = f"v1/{ROOM_ID}/getStatus"
 TOPIC_STATUS_RESPONSE = f"v1/{ROOM_ID}/getStatus/response"
 
+# Client oluşturma
+client = mqtt.Client()
+
 # --- Yardımcı Fonksiyonlar ---
+
 
 def generate_mqtt_password():
     """
@@ -48,6 +52,18 @@ def generate_mqtt_password():
 
 # --- MQTT Callback Fonksiyonları ---
 
+def reconnect():
+    while True:
+        try:
+            token = generate_mqtt_password()
+            client.username_pw_set(f"{room_id}", token)
+            client.reconnect()  # reconnect
+            print(f"[MQTT] Reconnect başarılı, yeni token: {token}")
+            break
+        except Exception as e:
+            print(f"[MQTT] Reconnect başarısız: {e}, 3 sn sonra tekrar denenecek...")
+            time.sleep(3)
+
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
         print(f"[MQTT] Bağlandı! (Room ID: {ROOM_ID})")
@@ -59,12 +75,10 @@ def on_connect(client, userdata, flags, rc):
         print(f"[MQTT] Bağlantı reddedildi, kod: {rc}")
 
 def on_disconnect(client, userdata, rc):
-    print(f"[MQTT] Bağlantı koptu (rc={rc})")
+    print(f"[MQTT] Disconnect oldu, rc={rc}")
     if rc != 0:
-        print("[MQTT] Beklenmedik kopuş, tekrar bağlanılacak...")
-        # Paho-MQTT loop_start kullanıldığında otomatik reconnect dener,
-        # ancak token süresi dolduysa manuel müdahale gerekebilir.
-        # Aşağıdaki reconnect fonksiyonu bunu halledecek.
+        print("[MQTT] Tekrar bağlanılıyor...")
+        reconnect()
 
 def get_single_service_info(service_name):
     info = {
@@ -236,7 +250,6 @@ def on_message(client, userdata, msg):
 # --- Ana Bağlantı Döngüsü ---
 
 def run_mqtt_client():
-    client = mqtt.Client()
     
     # Callbackleri ata
     client.on_connect = on_connect

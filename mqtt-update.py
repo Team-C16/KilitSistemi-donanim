@@ -28,8 +28,6 @@ SERVICE_UPDATE = os.getenv("SERVICE_UPDATE")
 
 # Dinlenecek Topic
 TOPIC_UPDATE = f"v1/{ROOM_ID}/update"
-TOPIC_GET_STATUS = f"v1/{ROOM_ID}/getStatus"
-TOPIC_STATUS_RESPONSE = f"v1/{ROOM_ID}/getStatus/response"
 
 # Client oluşturma
 client = mqtt.Client()
@@ -68,9 +66,8 @@ def on_connect(client, userdata, flags, rc):
     if rc == 0:
         print(f"[MQTT] Bağlandı! (Room ID: {ROOM_ID})")
         # Bağlanınca hemen abone ol
-        client.subscribe([(TOPIC_UPDATE, 0), (TOPIC_GET_STATUS, 0)])
+        client.subscribe(f"v1/{ROOM_ID}/update")
         print(f"[MQTT] Abone olundu: {TOPIC_UPDATE}")
-        print(f"[MQTT] Abone olundu: {TOPIC_GET_STATUS}")
     else:
         print(f"[MQTT] Bağlantı reddedildi, kod: {rc}")
 
@@ -79,60 +76,6 @@ def on_disconnect(client, userdata, rc):
     if rc != 0:
         print("[MQTT] Tekrar bağlanılıyor...")
         reconnect()
-
-def get_single_service_info(service_name):
-    info = {
-        "active": "unknown",
-        "enabled": "unknown",
-        "details": ""
-    }
-
-    try:
-        res_active = subprocess.run(
-            ["systemctl", "is-active", service_name], 
-            capture_output=True, text=True
-        )
-        info["active"] = res_active.stdout.strip()
-    except Exception as e:
-        info["active"] = f"Error: {str(e)}"
-
-    # 2. Enabled Durumu Sorgusu
-    try:
-        res_enabled = subprocess.run(
-            ["systemctl", "is-enabled", service_name], 
-            capture_output=True, text=True
-        )
-        info["enabled"] = res_enabled.stdout.strip()
-    except Exception as e:
-        info["enabled"] = f"Error: {str(e)}"
-
-    # 3. Detaylı Log Sorgusu
-    try:
-        res_status = subprocess.run(
-            ["systemctl", "status", service_name, "-n", "20", "--no-pager", "-l"], 
-            capture_output=True, text=True
-        )
-        full_output = res_status.stdout
-        if res_status.stderr:
-            full_output += "\n[STDERR]\n" + res_status.stderr
-        info["details"] = full_output
-    except Exception as e:
-        info["details"] = f"Log okuma hatası: {str(e)}"
-    
-    return info
-
-def check_all_services():
-    services_map = {
-        "lock_service": SERVICE_LOCK,
-        "qr_service": SERVICE_QR,
-        "fingerprint_service": SERVICE_FINGER,
-        "update_listener": SERVICE_UPDATE
-    }
-    report = {}
-    for key, service_name in services_map.items():
-        report[key] = get_single_service_info(service_name)
-    return report
-
 
 def apply_update(commit_id):
     print(f"🚀 [SİSTEM] Versiyon değişimi başlatılıyor. Hedef: {commit_id}")
@@ -222,28 +165,6 @@ def on_message(client, userdata, msg):
                 apply_update(commit_id)
             else:
                 print("CommitID bulunamadı.")
-
-        elif msg.topic == TOPIC_GET_STATUS:
-            print("[STATUS] Durum sorgusu alındı...")
-            services_report = check_all_services()
-            
-            try:
-                commit_hash = subprocess.check_output(
-                    ["git", "rev-parse", "--short", "HEAD"], 
-                    cwd=DESTINATION_DIR, text=True
-                ).strip()
-            except:
-                commit_hash = "unknown"
-
-            response = {
-                "room_id": ROOM_ID,
-                "current_commit": commit_hash,
-                "timestamp": time.time(),
-                "services": services_report
-            }
-            client.publish(TOPIC_STATUS_RESPONSE, json.dumps(response))
-            print("[STATUS] Rapor gönderildi.")
-
     except Exception as e:
         print(f"[HATA] Mesaj işleme: {e}")
 

@@ -22,7 +22,7 @@ import sys
 
 JWT_SECRET = os.getenv("jwt_secret")
 RASPBERRY_NODE_IP = os.getenv("nodeip")
-ROOM_ID = os.getenv("room_id")
+room_id = os.getenv("room_id")
 ACCESS_TYPE = 1
 last_switch_time = datetime.now()
 
@@ -90,7 +90,7 @@ def transform_schedule(api_data, date_keys_to_show): # <-- DİKKAT: Parametre ek
         try:
             utc_time = datetime.strptime(entry["day"], "%Y-%m-%dT%H:%M:%S.%fZ")
             local_time = utc_time + timedelta(days=1) # Orijinal +1 gün mantığı
-
+            
             api_date_key = local_time.strftime("%Y-%m-%d") # <-- API'den gelen verinin tarih anahtarı
             time_str = entry["hour"].split(":")[0]
             hour_str = f"{int(time_str):02d}:00"
@@ -129,7 +129,7 @@ def check_if_slot_is_current(day_name, hour_str):
         start_time = now.replace(hour=start_hour, minute=start_minute, second=0, microsecond=0)
         end_time = now.replace(hour=start_hour + 1, minute=start_minute, second=0, microsecond=0)
         
-        return start_time <= now < end_time
+        return True # start_time <= now < end_time
     except Exception as e:
         print(f"Zaman kontrol hatası: {e}")
         return False
@@ -317,7 +317,7 @@ class RoomScheduleApp(tk.Tk):
                     self.current_meeting_data = data
                     self.update_detail_widgets(details=True)
 
-
+                    
         except queue.Empty:
             pass # Sıra boş, sorun yok
         finally:
@@ -333,7 +333,7 @@ class RoomScheduleApp(tk.Tk):
             encoded_jwt = jwt.encode({"exp": time.time() + 30}, JWT_SECRET, algorithm="HS256")
             url = f"{RASPBERRY_NODE_IP}/getQRCodeToken"
             headers = {"Content-Type": "application/json"}
-            data = f'{{"room_id": {ROOM_ID}, "token": "{encoded_jwt}", "room_name": 1, "accessType": "{ACCESS_TYPE}"}}'
+            data = f'{{"room_id": {room_id}, "token": "{encoded_jwt}", "room_name": 1, "accessType": "{ACCESS_TYPE}"}}'
             response = requests.post(url, headers=headers, data=data, timeout=5)
             
             if response.status_code == 200:
@@ -352,7 +352,7 @@ class RoomScheduleApp(tk.Tk):
             encoded_jwt = jwt.encode({"exp": time.time() + 30}, JWT_SECRET, algorithm="HS256")
             url = f"{RASPBERRY_NODE_IP}/getQRCodeToken"
             headers = {"Content-Type": "application/json"}
-            data = f'{{"room_id": {ROOM_ID}, "token": "{encoded_jwt}", "accessType": "{ACCESS_TYPE}"}}'
+            data = f'{{"room_id": {room_id}, "token": "{encoded_jwt}", "accessType": "{ACCESS_TYPE}"}}'
             response = requests.post(url, headers=headers, data=data, timeout=5)
             token = response.json().get("token") if response.status_code == 200 else None
             self.api_queue.put(("qr_token", token))
@@ -364,21 +364,19 @@ class RoomScheduleApp(tk.Tk):
         """Takvim verisini çeker ve kuyruğa atar."""
         try:
             encoded_jwt = jwt.encode({"exp": time.time() + 30}, JWT_SECRET, algorithm="HS256")
-            payload = {"room_id": ROOM_ID, "token": encoded_jwt}
+            payload = {"room_id": room_id, "token": encoded_jwt}
             response = requests.post(f"{RASPBERRY_NODE_IP}/getSchedule", json=payload, timeout=5)
             response.raise_for_status()
             api_response = response.json()
             new_data = api_response[0] if isinstance(api_response, list) and api_response else api_response
             
-            # Get BOTH ders_programi AND hours from transform_schedule
-            ders_programi, hours = transform_schedule(new_data, self.date_keys)
+            # transform_schedule'a self.date_keys'i yolla
+            ders_programi = transform_schedule(new_data, self.date_keys) 
+            self.api_queue.put(("schedule_data", ders_programi))
             
-            # Put BOTH in the queue
-            self.api_queue.put(("schedule_data", (ders_programi, hours)))
-        
         except Exception as e:
             print(f"⚠️ API (Takvim) bağlantı hatası, eski veri korunuyor. Hata: {e}")
-            pass
+            pass # Hata durumunda eski veriyi koru
             
     def fetch_details_data(self, rendezvous_id):
         """Toplantı detay verisini çeker ve kuyruğa atar."""
@@ -386,7 +384,7 @@ class RoomScheduleApp(tk.Tk):
             encoded_jwt = jwt.encode({"exp": time.time() + 30}, JWT_SECRET, algorithm="HS256")
             url = f"{RASPBERRY_NODE_IP}/getScheduleDetails"
             headers = {"Content-Type": "application/json"}
-            payload = {"room_id": ROOM_ID, "token": encoded_jwt, "rendezvous_id": rendezvous_id}
+            payload = {"room_id": room_id, "token": encoded_jwt, "rendezvous_id": rendezvous_id}
             response = requests.post(url, headers=headers, data=json.dumps(payload), timeout=5)
             response.raise_for_status()
             self.api_queue.put(("detail_data", response.json()))
@@ -455,10 +453,7 @@ class RoomScheduleApp(tk.Tk):
         Sağ taraftaki Takvim Tablosunu oluşturur.
         (Gün/Tarih/Bugün etiketleri birleştirilmiş versiyon)
         """
-        # Get hours from API if available, otherwise use default :00
-        if not hasattr(self, 'hours') or not self.hours:
-            self.hours = [f"{h:02}:00" for h in range(9, 19)]
-        
+        self.hours = [f"{h:02}:00" for h in range(9, 19)]
         grid_frame = self.schedule_view_frame
         
         saat_sutunu_genisligi = int(self.app_width * 0.05)
@@ -519,11 +514,11 @@ class RoomScheduleApp(tk.Tk):
                 cell_frame.pack(expand=True, fill="both")
 
                 label1 = tk.Label(cell_frame, text="", font=self.fonts["cell_main"], bg=self.colors["available"], fg=self.colors["white"],
-                                wraplength=self.wrap_limit, justify="center")
+                                  wraplength=self.wrap_limit, justify="center")
                 label1.place(relx=0.5, rely=0.35, anchor="center")
                 
                 label2 = tk.Label(cell_frame, text="", font=self.fonts["cell_sub"], bg=self.colors["available"], fg=self.colors["white"],
-                                wraplength=self.wrap_limit, justify="center")
+                                  wraplength=self.wrap_limit, justify="center")
                 label2.place(relx=0.5, rely=0.65, anchor="center")
                 
                 self.schedule_cells[day] = self.schedule_cells.get(day, {})
@@ -564,7 +559,7 @@ class RoomScheduleApp(tk.Tk):
             qr.add_data(qr_data)
             qr.make(fit=True)
             img = qr.make_image(fill_color="black", back_color="white").convert('RGB')
-            qr_size = int(self.app_width * 0.27)
+            qr_size = int(self.app_width * 0.26)
             img = img.resize((qr_size, qr_size), Image.Resampling.LANCZOS)
             self.qr_image = ImageTk.PhotoImage(img)
             self.qr_label.config(image=self.qr_image)
@@ -587,8 +582,7 @@ class RoomScheduleApp(tk.Tk):
         if not self.ders_programi: return
             
         today_tr = self.days_tr_turkish[0]
-        hour_suffix = self.hours[0][-3:] if self.hours else ":00"  # Extract ":30" or ":00"
-        current_hour_str = f"{datetime.now().hour:02d}{hour_suffix}"
+        current_hour_str = f"{datetime.now().hour:02d}:00"
         
         # Gün Başlıklarını Güncelle
         for day in self.days_tr_turkish:
@@ -622,66 +616,28 @@ class RoomScheduleApp(tk.Tk):
             if date_key not in self.ders_programi: continue
             
             for hour in self.hours:
-                if hour not in self.ders_programi[date_key]:
-                    continue
-
+                if hour not in self.ders_programi[date_key]: continue
+                
                 cell = self.schedule_cells[day_tr][hour]
-                data = self.ders_programi[date_key][hour]
+                data = self.ders_programi[date_key][hour] 
                 status = data["durum"]
-
-                # Unified Label Text
+                
                 if status == "Boş":
-                    bg = self.colors["available"]
-                    fg = self.colors["white"]
-                    label_text = "🕒 Randevuya Uygun"
-                    # Center alignment for "Boş"
-                    cell["label1"].place(relx=0.5, rely=0.5, anchor="center")
-                    justify_align = "center"
+                    bg = self.colors["available"]; fg = self.colors["white"]
+                    label1_text = "⚪️ Randevuya"; label2_text = "Uygun"
                 else:
-                    bg = self.colors["unavailable"]
-                    fg = self.colors["white"]
-                    aktivite = data.get("aktivite", "Dolu")
-                    duzenleyen = data.get("düzenleyen", "")
-                    
-                    # Truncate duzenleyen to fit one line (adjust max_length as needed)
-                    max_length = 14  # Adjust based on your cell width
-                    if len(duzenleyen) > max_length:
-                        duzenleyen = duzenleyen[:max_length-3] + "..."
-                    
-                    label_text = f"{aktivite}\n👤 {duzenleyen}".strip()
-                    # Center alignment for multi-line text
-                    cell["label1"].place(relx=0.5, rely=0.5, anchor="center")
-                    justify_align = "center"
+                    bg = self.colors["unavailable"]; fg = self.colors["white"]
+                    label1_text = data.get("aktivite", "Dolu")
+                    label2_text = f"👤 {data.get('düzenleyen', '')}"
 
-                # Frame styling
                 cell["frame"].config(bg=bg)
-
-                # Update label styling
-                cell["label1"].config(
-                    text=label_text, 
-                    bg=bg, 
-                    fg=fg,
-                    font=("Arial", 15),
-                    justify=justify_align,
-                    wraplength=self.wrap_limit  # This makes aktivite wrap nicely and center
-                )
-
-                # COMPLETELY hide label2
-                cell["label2"].config(text="", bg=bg)
-                cell["label2"].place_forget()
-                cell["label2"].pack_forget()
-                cell["label2"].grid_forget()
-
-                # Current hour highlight
+                cell["label1"].config(text=label1_text, bg=bg, fg=fg)
+                cell["label2"].config(text=label2_text, bg=bg, fg=fg)
+                
                 if hour == current_hour_str and day_tr == today_tr:
-                    cell["container"].config(
-                        highlightbackground=self.colors["highlight"],
-                        highlightthickness=3, 
-                        bd=0
-                    )
+                    cell["container"].config(highlightbackground=self.colors["highlight"], highlightthickness=3, bd=0)
                 else:
                     cell["container"].config(highlightthickness=0, bd=1)
-
 
     def update_detail_widgets(self, details = False):
         if not self.current_meeting_data: 
@@ -741,6 +697,7 @@ class RoomScheduleApp(tk.Tk):
         'process_api_queue' tarafından tetiklenir.
         """
         global last_switch_time
+        print((datetime.now() - last_switch_time).total_seconds().__floor__())
         if not self.ders_programi:
             return
 
@@ -768,6 +725,7 @@ class RoomScheduleApp(tk.Tk):
                         current_id = self.current_meeting_data[0].get("rendezvous_id")
 
                     if (self.display_mode == "detail" and (datetime.now() - last_switch_time).total_seconds() >= 10):
+                        print("I'm here!!!!!!!")
                         self.show_schedule_view()
                         last_switch_time = datetime.now()
 
@@ -804,6 +762,22 @@ class RoomScheduleApp(tk.Tk):
 # 5. UYGULAMAYI BAŞLAT
 # ----------------------------------------------------------------------
 if __name__ == "__main__":
+    
+    # Gerekli importları en başa taşı
+    import tkinter as tk
+    from tkinter import font
+    import requests
+    import qrcode
+    from PIL import Image, ImageTk, ImageOps
+    import io
+    import jwt
+    import time
+    import json
+    from datetime import datetime, timedelta
+    import threading
+    import queue
+    import sys
+    
     try:
         app = RoomScheduleApp()
         app.mainloop()

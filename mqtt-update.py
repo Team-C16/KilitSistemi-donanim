@@ -19,6 +19,9 @@ DESTINATION_DIR = os.getenv("DESTINATION_DIR")
 BRANCH_NAME = os.getenv("BRANCH_NAME")
 SERVICE_QR = os.getenv("SERVICE_QR")
 SERVICE_LOCK = os.getenv("SERVICE_LOCK")
+SERVICE_FINGER = os.getenv("SERVICE_FINGER")
+SERVICE_UPDATE = os.getenv("SERVICE_UPDATE")
+
 
 
 
@@ -26,7 +29,11 @@ SERVICE_LOCK = os.getenv("SERVICE_LOCK")
 # Dinlenecek Topic
 TOPIC_UPDATE = f"v1/{ROOM_ID}/update"
 
+# Client oluşturma
+client = mqtt.Client()
+
 # --- Yardımcı Fonksiyonlar ---
+
 
 def generate_mqtt_password():
     """
@@ -43,22 +50,32 @@ def generate_mqtt_password():
 
 # --- MQTT Callback Fonksiyonları ---
 
+def reconnect():
+    while True:
+        try:
+            token = generate_mqtt_password()
+            client.username_pw_set(f"{room_id}", token)
+            client.reconnect()  # reconnect
+            print(f"[MQTT] Reconnect başarılı, yeni token: {token}")
+            break
+        except Exception as e:
+            print(f"[MQTT] Reconnect başarısız: {e}, 3 sn sonra tekrar denenecek...")
+            time.sleep(3)
+
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
         print(f"[MQTT] Bağlandı! (Room ID: {ROOM_ID})")
         # Bağlanınca hemen abone ol
-        client.subscribe(TOPIC_UPDATE)
+        client.subscribe(f"v1/{ROOM_ID}/update")
         print(f"[MQTT] Abone olundu: {TOPIC_UPDATE}")
     else:
         print(f"[MQTT] Bağlantı reddedildi, kod: {rc}")
 
 def on_disconnect(client, userdata, rc):
-    print(f"[MQTT] Bağlantı koptu (rc={rc})")
+    print(f"[MQTT] Disconnect oldu, rc={rc}")
     if rc != 0:
-        print("[MQTT] Beklenmedik kopuş, tekrar bağlanılacak...")
-        # Paho-MQTT loop_start kullanıldığında otomatik reconnect dener,
-        # ancak token süresi dolduysa manuel müdahale gerekebilir.
-        # Aşağıdaki reconnect fonksiyonu bunu halledecek.
+        print("[MQTT] Tekrar bağlanılıyor...")
+        reconnect()
 
 def apply_update(commit_id):
     print(f"🚀 [SİSTEM] Versiyon değişimi başlatılıyor. Hedef: {commit_id}")
@@ -140,28 +157,20 @@ def apply_update(commit_id):
 
 def on_message(client, userdata, msg):
     # Sadece beklediğimiz topikten gelen mesajları işle
-    if msg.topic == TOPIC_UPDATE:
-        try:
-            payload_str = msg.payload.decode("utf-8")
-            data = json.loads(payload_str)
-            
-            # commitID'yi çek
-            commit_id = data.get("commitID")
-            
+    try:
+        if msg.topic == TOPIC_UPDATE:
+            payload = json.loads(msg.payload.decode("utf-8"))
+            commit_id = payload.get("commitID")
             if commit_id:
                 apply_update(commit_id)
             else:
-                print("[UYARI] Mesajda 'commitID' bulunamadı.")
-
-        except json.JSONDecodeError:
-            print("[HATA] Gelen mesaj JSON formatında değil.")
-        except Exception as e:
-            print(f"[HATA] Mesaj işlenirken hata oluştu: {e}")
+                print("CommitID bulunamadı.")
+    except Exception as e:
+        print(f"[HATA] Mesaj işleme: {e}")
 
 # --- Ana Bağlantı Döngüsü ---
 
 def run_mqtt_client():
-    client = mqtt.Client()
     
     # Callbackleri ata
     client.on_connect = on_connect

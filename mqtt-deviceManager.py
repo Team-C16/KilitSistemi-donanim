@@ -134,12 +134,20 @@ def get_ram_usage():
 # Servis durumlarını çekme
 
 def get_single_service_info(service_name):
+    # Eğer servis ismi None veya boş ise işlem yapma
+    if not service_name:
+        return {
+            "active": "Not Configured",
+            "enabled": "Not Configured",
+            "details": "Environment variable for this service is missing."
+        }
+
     info = {
         "active": "unknown",
         "enabled": "unknown",
         "details": ""
     }
-
+    # 1. Active Durumu
     try:
         res_active = subprocess.run(
             ["systemctl", "is-active", service_name], 
@@ -149,7 +157,7 @@ def get_single_service_info(service_name):
     except Exception as e:
         info["active"] = f"Error: {str(e)}"
 
-    # 2. Enabled Durumu Sorgusu
+    # 2. Enabled Durumu
     try:
         res_enabled = subprocess.run(
             ["systemctl", "is-enabled", service_name], 
@@ -159,7 +167,7 @@ def get_single_service_info(service_name):
     except Exception as e:
         info["enabled"] = f"Error: {str(e)}"
 
-    # 3. Detaylı Log Sorgusu
+    # 3. Log Detayı
     try:
         res_status = subprocess.run(
             ["systemctl", "status", service_name, "-n", "20", "--no-pager", "-l"], 

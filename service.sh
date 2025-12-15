@@ -68,6 +68,7 @@ BRANCH_NAME=main
 DESTINATION_DIR=$DIRECTORY
 SERVICE_QR=qrGenerator
 SERVICE_LOCK=lock
+SERVICE_UPDATE=updateListener
 EOL
 
 mv secrets_temp.conf "$SECRETS_FILE"

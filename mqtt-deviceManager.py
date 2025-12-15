@@ -15,6 +15,7 @@ SERVICE_QR = os.getenv("SERVICE_QR")
 SERVICE_LOCK = os.getenv("SERVICE_LOCK")
 SERVICE_FINGER = os.getenv("SERVICE_FINGER")
 SERVICE_UPDATE = os.getenv("SERVICE_UPDATE")
+SERVICE_DEVICEMANAGER = os.getenv("SERVICE_DEVICEMANAGER")
 
 TOPIC_GET_STATUS = f"v1/{ROOM_ID}/getStatus"
 TOPIC_STATUS_RESPONSE = f"v1/{ROOM_ID}/getStatus/response"
@@ -179,7 +180,8 @@ def check_all_services():
         "lock_service": SERVICE_LOCK,
         "qr_service": SERVICE_QR,
         "fingerprint_service": SERVICE_FINGER,
-        "update_listener": SERVICE_UPDATE
+        "update_listener": SERVICE_UPDATE,
+        "device_manager": SERVICE_DEVICEMANAGER
     }
     report = {}
     for key, service_name in services_map.items():

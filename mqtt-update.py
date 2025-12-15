@@ -36,11 +36,7 @@ client = mqtt.Client()
 
 
 def generate_mqtt_password():
-    """
-    Secret Key ile 10 saniye geçerli bir JWT token üretir.
-    Bu token MQTT şifresi olarak kullanılır.
-    """
-    payload = {"exp": time.time() + 10}
+    payload = {"exp": time.time() + 30}
     token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
     
     # PyJWT sürümüne göre bytes dönerse string'e çevir
@@ -54,7 +50,7 @@ def reconnect():
     while True:
         try:
             token = generate_mqtt_password()
-            client.username_pw_set(f"{room_id}", token)
+            client.username_pw_set(f"{ROOM_ID}", token)
             client.reconnect()  # reconnect
             print(f"[MQTT] Reconnect başarılı, yeni token: {token}")
             break

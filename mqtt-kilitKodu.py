@@ -63,7 +63,7 @@ def verify_jwt(token):
         return None
 
 def generate_mqtt_password():
-    payload = {"exp": time.time() + 10}  # token 10 sn geçerli
+    payload = {"exp": time.time() + 30}  # token 10 sn geçerli
     token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
     if isinstance(token, bytes):
         token = token.decode("utf-8")

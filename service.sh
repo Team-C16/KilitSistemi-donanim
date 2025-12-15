@@ -68,6 +68,9 @@ BRANCH_NAME=master
 DESTINATION_DIR=$DIRECTORY
 SERVICE_QR=qrGenerator
 SERVICE_LOCK=lock
+SERVICE_UPDATE=updateListener
+SERVICE_FINGER=fingerprint
+SERVICE_DEVICEMANAGER=deviceManager
 EOL
 
 mv secrets_temp.conf "$SECRETS_FILE"
@@ -241,6 +244,29 @@ RestartSec=5
 WantedBy=multi-user.target
 EOL
 
+DEVICEMANAGER_SERVICE_FILE="/etc/systemd/system/deviceManager.service"
+echo "Servis oluşturuluyor: $DEVICEMANAGER_SERVICE_FILE"
+
+cat > $DEVICEMANAGER_SERVICE_FILE <<EOL
+[Unit]
+Description=MQTT Device Manager Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=$DIRECTORY
+EnvironmentFile=$SECRETS_FILE
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 $DIRECTORY/mqtt-deviceManager.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOL
+
 # --- 8. Servisleri Başlatma ---
 
 echo "Servisler yenileniyor ve başlatılıyor..."
@@ -248,6 +274,7 @@ systemctl daemon-reload
 
 systemctl enable qrGenerator.service
 systemctl enable updateListener.service
+systemctl enable deviceManager.service
 if [ "$IS_LOCK" == "1" ]
 then
     systemctl enable lock.service
@@ -259,6 +286,7 @@ then
     systemctl restart fingerprint.service
 fi
 
+systemctl restart deviceManager.service
 systemctl restart qrGenerator.service
 systemctl restart updateListener.service
 

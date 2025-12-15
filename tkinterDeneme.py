@@ -27,90 +27,67 @@ ACCESS_TYPE = 1
 last_switch_time = datetime.now()
 
 # ----------------------------------------------------------------------
-# 2. API BAĞLANTI HATASI İÇİN SAHTE (FALLBACK) VERİLER
-# ----------------------------------------------------------------------
-# (Not: API hatasında eski veriyi koru mantığı eklendiği için
-# bu veriler artık sadece ilk açılışta veya ciddi bir
-# 'transform_schedule' hatasında kullanılır.)
-
-FALLBACK_DATA = {
-    "schedule": [
-        {
-            "title": "BIM 229 - G1 (YM)", 
-            "hour": "14:00", 
-            "day": datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%fZ"), 
-            "fullName": "Hakan Gençoğlu", 
-            "rendezvous_id": "3"
-        },
-        {
-            "title": "BIM 229 - G1 (BM)", 
-            "hour": "15:00", 
-            "day": datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%fZ"), 
-            "fullName": "Hakan Gençoğlu", 
-            "rendezvous_id": "6"
-        }
-    ]
-}
-
-FALLBACK_DETAILS_DATA = {
-    "3": {
-        "dataResult": [{"title": "BIM 229 - G1 (YM)", "message": "API hatası, sahte veri gösteriliyor.", "hour": "14:00", "fullName": "Hakan Gençoğlu", "isGroup": 1}],
-        "groupResult": [{"fullName": "Kerem Yavuz"}]
-    },
-    "6": {
-        "dataResult": [{"title": "BIM 229 - G1 (BM)", "message": "API hatası, sahte veri gösteriliyor.", "hour": "15:00", "fullName": "Hakan Gençoğlu", "isGroup": 1}],
-        "groupResult": [{"fullName": "Hasan Ari"}]
-    }
-}
-
-# ----------------------------------------------------------------------
-# 3. VERİ İŞLEME YARDIMCI FONKSİYONLARI
+# 2. DATA DÖNÜŞÜM VE KONTROL FONKSİYONLARI
 # ----------------------------------------------------------------------
 
-def transform_schedule(api_data, date_keys_to_show): # <-- DİKKAT: Parametre eklendi
+def transform_schedule(api_data, date_keys_to_show, time_suffix, start_hour,end_hour): 
     """
-    API'den gelen veriyi, YALNIZCA 'date_keys_to_show' listesindeki
-    tarihlere göre 'ders_programi' sözlüğüne dönüştürür.
-    Bu, "geçen haftanın Pazartesisi" hatasını düzeltir.
+    API'den gelen veriyi işler.
+    GÜNCELLEME: time_suffix parametresi eklendi.
+    Anahtarlar artık örn: "14:00" yerine "14:30" formatında olabilir.
     """
-    hours = [f"{h:02}:00" for h in range(9, 19)]
+    # Dinamik saat listesi (örn: 09:30, 10:30...)
+    hours = [f"{h:02}{time_suffix}" for h in range(start_hour,end_hour)]
 
-    # 1. Adım: Programı YALNIZCA gösterilecek 5 tarih için "Boş" olarak doldur
+    # 1. Adım: Programı boş olarak başlat
     ders_programi = {}
-    for date_key in date_keys_to_show: # <-- Artık tarih anahtarlarını kullanıyor
+    for date_key in date_keys_to_show:
         ders_programi[date_key] = {}
         for hour in hours:
             ders_programi[date_key][hour] = {
                 "durum": "Boş", "aktivite": "", "düzenleyen": "", "rendezvous_id": ""
             }
 
-    # 2. Adım: API verisiyle "Dolu" olanları üzerine yaz
+    # 2. Adım: API verisiyle doldur
     schedule = api_data.get("schedule", [])
     for entry in schedule:
         try:
-            utc_time = datetime.strptime(entry["day"], "%Y-%m-%dT%H:%M:%S.%fZ")
-            local_time = utc_time + timedelta(days=1) # Orijinal +1 gün mantığı
+            # Tarih parse etme
+            day_str = entry.get("day", "")
+            # (Varsa .000Z gibi kısımları temizle)
+            if "." in day_str:
+                day_str = day_str.split(".")[0]
             
-            api_date_key = local_time.strftime("%Y-%m-%d") # <-- API'den gelen verinin tarih anahtarı
-            time_str = entry["hour"].split(":")[0]
-            hour_str = f"{int(time_str):02d}:00"
+            utc_time = datetime.strptime(day_str, "%Y-%m-%dT%H:%M:%S")
+            # +1 Gün mantığı (Orijinal kodunuzdaki mantık korundu)
+            local_time = utc_time + timedelta(days=1)
+            
+            api_date_key = local_time.strftime("%Y-%m-%d")
 
-            # --- BU KONTROL HATAYI DÜZELTİYOR ---
-            # API'den gelen bu tarih, bizim göstermek istediğimiz 5 günden biri mi?
+            # Saat parse etme ve suffix uygulama
+            # API "14:00" veya "14:30" gönderebilir, biz sadece saat kısmını alıp kendi suffix'imizi ekliyoruz.
+            raw_hour = entry.get("hour", "00:00")
+            hour_part = raw_hour.split(":")[0]
+            
+            # Anahtar oluşturma: "14" + ":30" -> "14:30"
+            hour_str = f"{int(hour_part):02d}{time_suffix}"
+
             if api_date_key in ders_programi and hour_str in ders_programi[api_date_key]:
                 ders_programi[api_date_key][hour_str] = {
                     "durum": "Dolu",
-                    "aktivite": entry["title"],
-                    "düzenleyen": entry["fullName"],
-                    "rendezvous_id": entry["rendezvous_id"],
+                    "aktivite": entry.get("title", ""),
+                    "düzenleyen": entry.get("fullName", ""),
+                    "rendezvous_id": entry.get("rendezvous_id", ""),
                 }
         except Exception as e:
             print(f"⚠️ Zamanlama verisi işlenirken hata: {e}, Girdi: {entry}")
+    
     return ders_programi
 
-def check_if_slot_is_current(day_name, hour_str):
+def check_if_slot_is_current(day_name, hour_str, time_suffix):
     """
-    Verilen gün adı ve saatin şu an olup olmadığını kontrol eder.
+    GÜNCELLENDİ: Suffix'i dikkate alarak şu an o aralıkta mıyız kontrol eder.
+    
     """
     try:
         now = datetime.now()
@@ -124,35 +101,26 @@ def check_if_slot_is_current(day_name, hour_str):
         if english_day_name != today_name:
             return False
         
+        # hour_str örn: "14:30"
         start_hour = int(hour_str.split(':')[0])
-        start_minute = int(hour_str.split(':')[1])
-        start_time = now.replace(hour=start_hour, minute=start_minute, second=0, microsecond=0)
-        end_time = now.replace(hour=start_hour + 1, minute=start_minute, second=0, microsecond=0)
         
-        return True # start_time <= now < end_time
+        # Dakikayı suffix'ten al (":30" -> 30)
+        suffix_minute = int(time_suffix.replace(":", ""))
+
+        # Başlangıç ve Bitiş zamanlarını oluştur
+        start_time = now.replace(hour=start_hour, minute=suffix_minute, second=0, microsecond=0)
+        end_time = start_time + timedelta(hours=1) # 1 saatlik blok varsayımı
+        
+        return start_time <= now < end_time
     except Exception as e:
         print(f"Zaman kontrol hatası: {e}")
         return False
 
 def create_shadowed_frame(parent, bg="white", shadow_color="#AAAAAA", shadow_x=5, shadow_y=5, bd=1, relief="solid"):
-    """
-    İçine widget yerleştirilebilen, sahte gölgeli bir çerçeve oluşturur.
-    """
-    # 1. Dış Çerçeve (Gölge)
     shadow_frame = tk.Frame(parent, bg=shadow_color)
-    
-    # 2. İç Çerçeve (Asıl İçerik)
     content_frame = tk.Frame(shadow_frame, bg=bg, relief=relief, bd=bd)
-    
-    # 3. İçeriği, gölgeyi gösterecek şekilde 'pack' ile yerleştir
-    content_frame.pack(expand=True, fill="both", 
-                       padx=(0, shadow_x), 
-                       pady=(0, shadow_y))
-    
-    # 4. İçerik çerçevesini ana çerçevenin bir özelliği olarak ata
+    content_frame.pack(expand=True, fill="both", padx=(0, shadow_x), pady=(0, shadow_y))
     shadow_frame.content_frame = content_frame
-    
-    # 5. Ekrana yerleştirilmesi gereken ana konteyneri (gölgeyi) döndür
     return shadow_frame
 
 # ----------------------------------------------------------------------
@@ -165,25 +133,30 @@ class RoomScheduleApp(tk.Tk):
         super().__init__()
         self.title("Oda Rezervasyon Sistemi")
 
-        # --- MANUEL TAM EKRAN AYARI ('xinit' için) ---
+        # Varsayılan Suffix (API'den gelene kadar)
+        self.time_suffix = ":30"
+        self.start_hour = 9 
+        self.end_hour = 19
+
+        # --- MANUEL TAM EKRAN AYARI ---
         self.app_width = self.winfo_screenwidth()
         self.app_height = self.winfo_screenheight()
         self.geometry(f"{self.app_width}x{self.app_height}+0+0")
-        self.overrideredirect(True) # Pencere kenarlıklarını kaldır
-        self.config(cursor="none")  # Fare imlecini gizle
+        self.overrideredirect(True) 
+        self.config(cursor="none")
         self.bind("<Escape>", lambda e: self.quit_app())
         
         print(f"Ekran Boyutu: {self.app_width}x{self.app_height}")
 
         # --- RENK VE FONT AYARLARI ---
         self.colors = {
-            "background": "#F0F0F0", # Arka plan (açık gri)
-            "primary": "#33648A",    # Koyu Mavi (Lapis-Lazuli)
-            "available": "#86BBD8",  # Açık Mavi (Carolina-blue)
-            "unavailable": "#8E4162",# Kırmızı/Magenta
-            "highlight": "#F1C40F",  # Sarı (Mevcut Saat)
-            "light": "#FFFFFF",      # Beyaz (Kartlar)
-            "dark": "#2C3E50",       # Koyu Gri (Yazı)
+            "background": "#F0F0F0",
+            "primary": "#33648A",    # Lapis-Lazuli
+            "available": "#86BBD8",  # Carolina-blue
+            "unavailable": "#8E4162",# Magenta
+            "highlight": "#F1C40F",  # Sarı
+            "light": "#FFFFFF",
+            "dark": "#2C3E50",
             "text_primary": "#000000",
             "white": "#FFFFFF",
         }
@@ -204,30 +177,32 @@ class RoomScheduleApp(tk.Tk):
             "Monday": "Pazartesi", "Tuesday": "Salı", "Wednesday": "Çarşamba",
             "Thursday": "Perşembe", "Friday": "Cuma", "Saturday": "Cumartesi", "Sunday": "Pazar"
         }
-        start_date = datetime.now()
-        self.days_to_display = [(start_date + timedelta(days=i)) for i in range(5)]
-        self.days_tr_turkish = [self.dict_tr[d.strftime("%A")] for d in self.days_to_display]
-        self.date_keys = [d.strftime("%Y-%m-%d") for d in self.days_to_display]
-        
+        self.days_to_display = []
+        self.days_tr_turkish = []
+        self.date_keys = []
+        self.refresh_dates()
+
         # --- GUI DURUM DEĞİŞKENLERİ ---
+        self.day_header_widgets = [] 
+        self.schedule_cell_widgets = []
         self.room_name = "Oda Yükleniyor..."
         self.ders_programi = {}
         self.display_mode = "grid"
         self.current_meeting_data = None
         self.qr_image = None
-        self.participant_images = [] # Resim referanslarını saklamak için
-        self.api_queue = queue.Queue() # Thread-safe GUI güncelleme sırası
+        self.participant_images = [] 
+        self.api_queue = queue.Queue() 
 
-        # --- ANA ARAYÜZ DÜZENİ (LAYOUT) ---
+        # --- ANA ARAYÜZ DÜZENİ ---
         self.configure(bg=self.colors["background"])
-        self.grid_rowconfigure(0, weight=1) # Ana içerik
-        self.grid_rowconfigure(1, weight=0, minsize=int(self.app_height * 0.07)) # Footer
+        self.grid_rowconfigure(0, weight=1) 
+        self.grid_rowconfigure(1, weight=0, minsize=int(self.app_height * 0.07)) 
         self.grid_columnconfigure(0, weight=1)
         
         self.main_frame = tk.Frame(self, bg=self.colors["background"])
         self.main_frame.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
-        self.main_frame.grid_columnconfigure(0, weight=3, minsize=int(self.app_width*0.28)) # Sol: QR
-        self.main_frame.grid_columnconfigure(1, weight=7) # Sağ: Takvim
+        self.main_frame.grid_columnconfigure(0, weight=3, minsize=int(self.app_width*0.28)) 
+        self.main_frame.grid_columnconfigure(1, weight=7) 
         self.main_frame.grid_rowconfigure(0, weight=1)
         
         self.footer_frame = tk.Frame(self, bg=self.colors["primary"])
@@ -254,81 +229,98 @@ class RoomScheduleApp(tk.Tk):
         self.schedule_cells = {}
         self.day_header_labels = {}
         self.hour_labels = {}
+        
+        # ÖNCE SUFFIX ÇEKMEYE ÇALIŞ, SONRA ARAYÜZÜ KUR
+        self.fetch_time_format_config()
         self.build_schedule_view()
         
-        # Detay Görünümü (Başlangıçta gizli)
+        # Detay Görünümü
         self.detail_view_frame = tk.Frame(self.content_frame, bg=self.colors["background"])
         self.detail_view_frame.grid(row=0, column=0, sticky="nsew")
         self.build_detail_view()
         self.detail_view_frame.grid_remove()
 
         # --- PERİYODİK GÖREVLERİ BAŞLAT ---
-        self.after(100, self.start_periodic_updates) # 100ms sonra başlat
+        self.after(100, self.start_periodic_updates) 
         self.after(100, self.process_api_queue)
 
+    def refresh_dates(self):
+        """Tarih listelerini bugüne göre yeniler."""
+        start_date = datetime.now()
+        self.days_to_display = [(start_date + timedelta(days=i)) for i in range(5)]
+        self.days_tr_turkish = [self.dict_tr[d.strftime("%A")] for d in self.days_to_display]
+        self.date_keys = [d.strftime("%Y-%m-%d") for d in self.days_to_display]
+
     def start_periodic_updates(self):
-        """Tüm periyodik görevleri başlatan ana fonksiyon."""
-        self.update_footer_clock()       # Bağımsız saat döngüsü (Her saniye)
-        self.master_update_loop()        # Ana döngümüz (Her 30 saniye)
+        self.update_footer_clock()       
+        self.master_update_loop()        
 
     def master_update_loop(self):
-        """
-        Ana güncelleme döngüsü. Her 30 saniyede bir tüm API verilerini
-        (QR, Oda Adı, Takvim) çekmek için thread'leri başlatır.
-        """
-        print(f"[{datetime.now()}] Ana güncelleme döngüsü başladı...")
-        
+        """Her 30 saniyede bir veri güncelle."""
+        print(f"[{datetime.now()}] Veriler güncelleniyor...")
         self.run_in_thread(self.fetch_qr_token)
         self.run_in_thread(self.fetch_room_name)
         self.run_in_thread(self.update_data)
-        
         self.after(30000, self.master_update_loop)
 
     def run_in_thread(self, target_func, *args):
-        """Verilen fonksiyonu GUI'yi dondurmamak için bir thread'de çalıştırır."""
         thread = threading.Thread(target=target_func, args=args, daemon=True)
         thread.start()
 
     def process_api_queue(self):
-        """
-        API thread'lerinden gelen sonuçları işler ve GUI'yi günceller.
-        """
         try:
             while not self.api_queue.empty():
                 task_name, data = self.api_queue.get_nowait()
                 
                 if task_name == "qr_token":
                     self.update_qr_image(data)
-                
                 elif task_name == "room_name":
                     self.room_name = data or "Oda Yok"
                     self.qr_room_name_label.config(text=f"➡️ {self.room_name}")
-
                 elif task_name == "schedule_data":
                     self.ders_programi = data
                     self.update_schedule_widgets()
-                    
-                    # Veri güncellendi, ŞİMDİ toplantı var mı diye kontrol et.
-                    print("Takvim verisi işlendi, mevcut toplantı kontrol ediliyor...")
                     self.check_for_current_meeting() 
-                
                 elif task_name == "detail_data":
-                    print("DETAIL RECEIVED:", data)
                     self.current_meeting_data = data
                     self.update_detail_widgets(details=True)
 
-                    
         except queue.Empty:
-            pass # Sıra boş, sorun yok
+            pass
         finally:
-            self.after(100, self.process_api_queue) # 100ms'de bir sırayı kontrol et
+            self.after(100, self.process_api_queue)
 
     # ------------------------------------------------------------------
-    # 4.1. API ÇAĞRI FONKSİYONLARI (Thread'lerde çalışır)
+    # API ÇAĞRI FONKSİYONLARI
     # ------------------------------------------------------------------
     
+    def fetch_time_format_config(self):
+        """
+        GÜNCELLENDİ: API'den time_suffix (örn: :30) bilgisini çeker.
+        (Uygulama açılışında senkron çalışır, sonraki güncellemeler gerekirse asenkron yapılabilir)
+        """
+        try:
+            encoded_jwt = jwt.encode({"exp": time.time() + 30}, JWT_SECRET, algorithm="HS256")
+            url = f"{RASPBERRY_NODE_IP}/getIndexesRasp"
+            payload = {"room_id": room_id, "token": encoded_jwt}
+            
+            response = requests.post(url, json=payload, timeout=3)
+            if response.status_code == 200:
+                config_data = response.json()
+                for item in config_data:
+                    if item.get("indexName") == "hour":
+                        self.time_suffix = item.get("indexValue", ":30")
+                        print(f"✅ Suffix ayarlandı: {self.time_suffix}")
+                        return
+                    elif item.get("indexName") == "startHour":
+                        self.start_hour = int(item.get("indexValue", "9"))
+                    elif item.get("indexName") == "endHour":
+                        self.end_hour = int(item.get("indexValue", "19"))
+            print(f"⚠️ Suffix bulunamadı, varsayılan kullanılıyor: {self.time_suffix}")
+        except Exception as e:
+            print(f"⚠️ Suffix API hatası: {e}. Varsayılan: {self.time_suffix}")
+
     def fetch_room_name(self):
-        """Oda adını çeker ve kuyruğa atar."""
         try:
             encoded_jwt = jwt.encode({"exp": time.time() + 30}, JWT_SECRET, algorithm="HS256")
             url = f"{RASPBERRY_NODE_IP}/getQRCodeToken"
@@ -339,15 +331,10 @@ class RoomScheduleApp(tk.Tk):
             if response.status_code == 200:
                 name = response.json().get("room_name")
                 self.api_queue.put(("room_name", name))
-            else:
-                print(f"Oda Adı hatası: {response.status_code}")
-                pass # Hata durumunda eski veriyi koru
         except Exception as e:
-            print(f"API (Oda Adı) bağlantı hatası: {e}")
-            pass # Bağlantı hatasında da eski veriyi koru
+            pass
 
     def fetch_qr_token(self):
-        """QR token'ı çeker ve kuyruğa atar."""
         try:
             encoded_jwt = jwt.encode({"exp": time.time() + 30}, JWT_SECRET, algorithm="HS256")
             url = f"{RASPBERRY_NODE_IP}/getQRCodeToken"
@@ -357,12 +344,11 @@ class RoomScheduleApp(tk.Tk):
             token = response.json().get("token") if response.status_code == 200 else None
             self.api_queue.put(("qr_token", token))
         except Exception as e:
-            print(f"API (QR Token) bağlantı hatası: {e}")
-            pass # Hata durumunda eski veriyi koru
+            pass
 
     def update_data(self):
-        """Takvim verisini çeker ve kuyruğa atar."""
         try:
+            self.refresh_dates()
             encoded_jwt = jwt.encode({"exp": time.time() + 30}, JWT_SECRET, algorithm="HS256")
             payload = {"room_id": room_id, "token": encoded_jwt}
             response = requests.post(f"{RASPBERRY_NODE_IP}/getSchedule", json=payload, timeout=5)
@@ -370,16 +356,15 @@ class RoomScheduleApp(tk.Tk):
             api_response = response.json()
             new_data = api_response[0] if isinstance(api_response, list) and api_response else api_response
             
-            # transform_schedule'a self.date_keys'i yolla
-            ders_programi = transform_schedule(new_data, self.date_keys) 
+            # GÜNCELLENDİ: self.time_suffix gönderiliyor
+            ders_programi = transform_schedule(new_data, self.date_keys, self.time_suffix, self.start_hour,self.end_hour) 
             self.api_queue.put(("schedule_data", ders_programi))
             
         except Exception as e:
-            print(f"⚠️ API (Takvim) bağlantı hatası, eski veri korunuyor. Hata: {e}")
-            pass # Hata durumunda eski veriyi koru
+            print(f"⚠️ Takvim güncelleme hatası: {e}")
+            pass
             
     def fetch_details_data(self, rendezvous_id):
-        """Toplantı detay verisini çeker ve kuyruğa atar."""
         try:
             encoded_jwt = jwt.encode({"exp": time.time() + 30}, JWT_SECRET, algorithm="HS256")
             url = f"{RASPBERRY_NODE_IP}/getScheduleDetails"
@@ -389,11 +374,10 @@ class RoomScheduleApp(tk.Tk):
             response.raise_for_status()
             self.api_queue.put(("detail_data", response.json()))
         except Exception as e:
-            print(f"⚠️ API (Detay) hatası: {e}")
-            pass # Hata durumunda (muhtemelen) eski detayda kalır
+            print(f"⚠️ Detay hatası: {e}")
+            pass
 
     def load_image_from_url_pil(self, url, size=(100, 100)):
-        """Bir URL'den resim yükler ve PhotoImage'e dönüştürür."""
         try:
             full_url = f"{RASPBERRY_NODE_IP}{url}"
             response = requests.get(full_url, timeout=3)
@@ -405,16 +389,14 @@ class RoomScheduleApp(tk.Tk):
             return self.default_profile_image(size)
 
     def default_profile_image(self, size=(100, 100)):
-        """Varsayılan bir profil resmi oluşturur."""
         img = Image.new('RGB', size, color=self.colors["primary"])
         return ImageTk.PhotoImage(img)
 
     # ------------------------------------------------------------------
-    # 4.2. GUI İNŞA FONKSİYONLARI (Widget oluşturma)
+    # GUI İNŞA FONKSİYONLARI
     # ------------------------------------------------------------------
 
     def build_qr_card(self):
-        """Sol taraftaki QR Kod Kartını oluşturan widget'lar."""
         shadow_card = create_shadowed_frame(
             parent=self.qr_card_frame, bg=self.colors["light"], 
             shadow_color="#AAAAAA", shadow_x=5, shadow_y=5, bd=1
@@ -435,12 +417,10 @@ class RoomScheduleApp(tk.Tk):
         self.qr_room_name_label.pack(pady=(5, 20))
 
     def build_footer(self):
-        """Alt taraftaki Footer barını oluşturur."""
         self.footer_frame.grid_columnconfigure(0, weight=1)
         self.footer_frame.grid_columnconfigure(1, weight=1)
         self.footer_frame.grid_rowconfigure(0, weight=1) 
-        
-        dikey_padding = int(self.app_height * 0.015) # Yüksekliği artırdık
+        dikey_padding = int(self.app_height * 0.015)
 
         info_label = tk.Label(self.footer_frame, text="pve.izu.edu.tr/randevu ← Randevu İçin", font=self.fonts["footer"], bg=self.colors["primary"], fg=self.colors["light"])
         info_label.grid(row=0, column=0, sticky="w", padx=20, pady=dikey_padding)
@@ -451,61 +431,63 @@ class RoomScheduleApp(tk.Tk):
     def build_schedule_view(self):
         """
         Sağ taraftaki Takvim Tablosunu oluşturur.
-        (Gün/Tarih/Bugün etiketleri birleştirilmiş versiyon)
+        GÜNCELLENDİ: self.time_suffix kullanılarak saatler oluşturuluyor.
         """
-        self.hours = [f"{h:02}:00" for h in range(9, 19)]
+        self.day_header_widgets = []
+        self.schedule_cell_widgets = []
+        for _ in range(5):
+            self.schedule_cell_widgets.append({})
+
+        # GÜNCELLENDİ: Suffix'i dinamik kullan
+        self.hours = [f"{h:02}{self.time_suffix}" for h in range(9, 19)]
+        
         grid_frame = self.schedule_view_frame
         
+        # Boyut Hesaplamaları
         saat_sutunu_genisligi = int(self.app_width * 0.05)
         icerik_cercevesi_genisligi = (self.app_width * 0.72) - saat_sutunu_genisligi 
-        hucre_genisligi = int(icerik_cercevesi_genisligi / 5) - 9 # 5 gün
-        self.wrap_limit = int(hucre_genisligi * 0.9)
-        
+        hucre_genisligi = int(icerik_cercevesi_genisligi / 5) - 9 
         toplam_icerik_yuksekligi = int(self.app_height * 0.92) 
         baslik_yuksekligi = int(toplam_icerik_yuksekligi * 0.10)
         kalan_yukseklik = toplam_icerik_yuksekligi - baslik_yuksekligi
         hucre_yuksekligi = int(kalan_yukseklik / len(self.hours))
         
-        grid_frame.grid_rowconfigure(0, weight=0, minsize=baslik_yuksekligi) # Gün Başlıkları
+        # Grid Yapılandırması
+        grid_frame.grid_rowconfigure(0, weight=0, minsize=baslik_yuksekligi)
         for i in range(len(self.hours)):
-            grid_frame.grid_rowconfigure(i + 1, weight=0, minsize=hucre_yuksekligi) # İçerik
+            grid_frame.grid_rowconfigure(i + 1, weight=0, minsize=hucre_yuksekligi)
+        grid_frame.grid_columnconfigure(0, weight=0, minsize=saat_sutunu_genisligi)
+        for i in range(5):
+            grid_frame.grid_columnconfigure(i + 1, weight=0, minsize=hucre_genisligi)
             
-        grid_frame.grid_columnconfigure(0, weight=0, minsize=saat_sutunu_genisligi) # Saat
-        for i in range(len(self.days_tr_turkish)):
-            grid_frame.grid_columnconfigure(i + 1, weight=0, minsize=hucre_genisligi) # Günler
-            
-        tk.Label(grid_frame, text="Saat", font=self.fonts["day"], bg=self.colors["primary"], fg=self.colors["white"], relief="solid", bd=1).grid(
-            row=0, column=0, sticky="nsew"
-        )
+        # Saat Başlığı
+        tk.Label(grid_frame, text="Saat", font=self.fonts["day"], bg=self.colors["primary"], fg=self.colors["white"], relief="solid", bd=1).grid(row=0, column=0, sticky="nsew")
         
-        for i, day_tr in enumerate(self.days_tr_turkish):
-            date_str = self.days_to_display[i].strftime("%d.%m")
-            
+        # Gün Başlıkları
+        for i in range(5):
             header_cell_frame = tk.Frame(grid_frame, bg=self.colors["primary"], relief="solid", bd=1)
             header_cell_frame.grid(row=0, column=i+1, sticky="nsew")
             header_cell_frame.pack_propagate(False) 
 
-            day_name_label = tk.Label(header_cell_frame, text=day_tr, font=self.fonts["day"], bg=self.colors["primary"], fg=self.colors["white"])
+            day_name_label = tk.Label(header_cell_frame, text="", font=self.fonts["day"], bg=self.colors["primary"], fg=self.colors["white"])
             day_name_label.pack(side="top", pady=(5,0))
             
-            date_label = tk.Label(header_cell_frame, text=date_str, font=self.fonts["info"], bg=self.colors["primary"], fg=self.colors["white"])
+            date_label = tk.Label(header_cell_frame, text="", font=self.fonts["info"], bg=self.colors["primary"], fg=self.colors["white"])
             date_label.pack(side="top")
             
             today_label = tk.Label(header_cell_frame, text="Bugün", font=self.fonts["info"], bg=self.colors["primary"], fg=self.colors["white"])
             
-            self.day_header_labels[day_tr] = {
-                "frame": header_cell_frame,
-                "day_name": day_name_label,
-                "date": date_label,
-                "today": today_label
-            }
+            self.day_header_widgets.append({
+                "frame": header_cell_frame, "day_name": day_name_label, "date": date_label, "today": today_label
+            })
 
+        # Saatler ve Hücreler
         for j, hour in enumerate(self.hours):
             hour_label = tk.Label(grid_frame, text=hour, font=self.fonts["hour"], bg=self.colors["light"], fg=self.colors["text_primary"], relief="solid", bd=1)
             hour_label.grid(row=j+1, column=0, sticky="nsew")
             self.hour_labels[hour] = hour_label
             
-            for i, day in enumerate(self.days_tr_turkish):
+            for i in range(5):
                 cell_frame_container = tk.Frame(grid_frame, relief="solid", bd=1)
                 cell_frame_container.grid(row=j+1, column=i+1, sticky="nsew")
                 cell_frame_container.grid_propagate(False) 
@@ -513,19 +495,17 @@ class RoomScheduleApp(tk.Tk):
                 cell_frame = tk.Frame(cell_frame_container, bg=self.colors["available"])
                 cell_frame.pack(expand=True, fill="both")
 
-                label1 = tk.Label(cell_frame, text="", font=self.fonts["cell_main"], bg=self.colors["available"], fg=self.colors["white"],
-                                  wraplength=self.wrap_limit, justify="center")
+                label1 = tk.Label(cell_frame, text="", font=self.fonts["cell_main"], bg=self.colors["available"], fg=self.colors["white"], justify="center")
                 label1.place(relx=0.5, rely=0.35, anchor="center")
                 
-                label2 = tk.Label(cell_frame, text="", font=self.fonts["cell_sub"], bg=self.colors["available"], fg=self.colors["white"],
-                                  wraplength=self.wrap_limit, justify="center")
+                label2 = tk.Label(cell_frame, text="", font=self.fonts["cell_sub"], bg=self.colors["available"], fg=self.colors["white"], justify="center")
                 label2.place(relx=0.5, rely=0.65, anchor="center")
                 
-                self.schedule_cells[day] = self.schedule_cells.get(day, {})
-                self.schedule_cells[day][hour] = {"container": cell_frame_container, "frame": cell_frame, "label1": label1, "label2": label2}
-                
+                self.schedule_cell_widgets[i][hour] = {
+                    "container": cell_frame_container, "frame": cell_frame, "label1": label1, "label2": label2
+                }
+            
     def build_detail_view(self):
-        """Toplantı Detay görünümünü oluşturur (görseldeki gibi değil, tahmini)."""
         frame = self.detail_view_frame
         frame.grid_columnconfigure(0, weight=1)
         
@@ -548,11 +528,10 @@ class RoomScheduleApp(tk.Tk):
         tk.Label(self.participants_frame, text="Katılımcılar", font=self.fonts["subtitle"], bg=self.colors["background"]).pack()
 
     # ------------------------------------------------------------------
-    # 4.3. GUI GÜNCELLEME FONKSİYONLARI (Queue'dan tetiklenir)
+    # GÜNCELLEME VE KONTROL
     # ------------------------------------------------------------------
 
     def update_qr_image(self, qr_data):
-        """QR kod etiketini yeni veriyle günceller."""
         if not qr_data: qr_data = "API_ERROR"
         try:
             qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_H, box_size=10, border=4)
@@ -563,33 +542,43 @@ class RoomScheduleApp(tk.Tk):
             img = img.resize((qr_size, qr_size), Image.Resampling.LANCZOS)
             self.qr_image = ImageTk.PhotoImage(img)
             self.qr_label.config(image=self.qr_image)
-        except Exception as e:
-            print(f"QR oluşturma hatası: {e}")
+        except Exception:
+            pass
 
     def update_footer_clock(self):
-        """Saati her saniye günceller."""
         now = datetime.now()
         date_str = now.strftime("%d.%m.%Y")
         time_str = now.strftime("%H:%M:%S")
         self.clock_label.config(text=f"⏰ {date_str}  •  {time_str}")
         self.after(1000, self.update_footer_clock)
-
-        # bir meeting için kontrol eder
         self.check_for_current_meeting()
 
     def update_schedule_widgets(self):
-        """'self.ders_programi' verisine bakarak takvim widget'larını günceller."""
         if not self.ders_programi: return
             
-        today_tr = self.days_tr_turkish[0]
-        current_hour_str = f"{datetime.now().hour:02d}:00"
+        today_tr = self.days_tr_turkish[0] 
+        # GÜNCELLENDİ: Şu anki saati suffix'e göre oluştur (Vurgulamak için)
+        suffix_minute = int(self.time_suffix.replace(":", ""))
+        now = datetime.now()
         
-        # Gün Başlıklarını Güncelle
-        for day in self.days_tr_turkish:
-            if day not in self.day_header_labels: continue
-            widgets = self.day_header_labels[day]
+        # Eğer şu anki dakika suffix'ten küçükse bir önceki saati highlight et, değilse şu anı.
+        # Örnek: Suffix :30. Saat 14:10 -> 13:30 bloğuna (teknik olarak) denk gelebilir ama
+        # burada basitçe "o anki blok" mantığı için:
+        target_hour = now.hour
+        if now.minute < suffix_minute:
+            target_hour -= 1
             
-            if day == today_tr:
+        current_hour_str = f"{target_hour:02d}{self.time_suffix}"
+        
+        for i in range(5):
+            day_tr = self.days_tr_turkish[i]
+            date_str = self.days_to_display[i].strftime("%d.%m")
+            widgets = self.day_header_widgets[i]
+
+            widgets["day_name"].config(text=day_tr)
+            widgets["date"].config(text=date_str)
+
+            if i == 0:
                 widgets["frame"].config(bg=self.colors["available"])
                 widgets["day_name"].config(bg=self.colors["available"], fg=self.colors["dark"])
                 widgets["date"].config(bg=self.colors["available"], fg=self.colors["dark"])
@@ -602,39 +591,44 @@ class RoomScheduleApp(tk.Tk):
                 widgets["today"].config(bg=self.colors["primary"], fg=self.colors["white"])
                 widgets["today"].pack_forget()
 
-        # Saat Etiketlerini Güncelle
         for hour, label in self.hour_labels.items():
-            if hour == current_hour_str and today_tr in self.ders_programi:
-                label.config(bg=self.colors["highlight"], fg=self.colors["dark"])
+            if hour == current_hour_str: 
+                 label.config(bg=self.colors["highlight"], fg=self.colors["dark"])
             else:
-                label.config(bg=self.colors["light"], fg=self.colors["text_primary"])
+                 label.config(bg=self.colors["light"], fg=self.colors["text_primary"])
 
-        # Hücre İçeriklerini Güncelle (Tarih Anahtarı ile)
-        for i, day_tr in enumerate(self.days_tr_turkish):
-            date_key = self.date_keys[i] # "2025-11-15"
-            
-            if date_key not in self.ders_programi: continue
+        for i in range(5): 
+            date_key = self.date_keys[i]
+            day_widgets = self.schedule_cell_widgets[i]
+
+            if date_key not in self.ders_programi: 
+                continue
             
             for hour in self.hours:
                 if hour not in self.ders_programi[date_key]: continue
                 
-                cell = self.schedule_cells[day_tr][hour]
+                cell = day_widgets[hour]
                 data = self.ders_programi[date_key][hour] 
                 status = data["durum"]
                 
                 if status == "Boş":
                     bg = self.colors["available"]; fg = self.colors["white"]
-                    label1_text = "⚪️ Randevuya"; label2_text = "Uygun"
+                    label1_text = "Randevuya"
+                    label2_text = "Uygun"
                 else:
                     bg = self.colors["unavailable"]; fg = self.colors["white"]
-                    label1_text = data.get("aktivite", "Dolu")
-                    label2_text = f"👤 {data.get('düzenleyen', '')}"
+                    raw_activity = data.get("aktivite", "Dolu")
+                    raw_person = data.get("düzenleyen", "")
+
+                    MAX_LEN = 14 
+                    label1_text = raw_activity[:MAX_LEN] + "..." if len(raw_activity) > MAX_LEN else raw_activity
+                    label2_text = f"{raw_person[:MAX_LEN] + '...' if len(raw_person) > MAX_LEN else raw_person}"
 
                 cell["frame"].config(bg=bg)
                 cell["label1"].config(text=label1_text, bg=bg, fg=fg)
                 cell["label2"].config(text=label2_text, bg=bg, fg=fg)
                 
-                if hour == current_hour_str and day_tr == today_tr:
+                if hour == current_hour_str and i == 0:
                     cell["container"].config(highlightbackground=self.colors["highlight"], highlightthickness=3, bd=0)
                 else:
                     cell["container"].config(highlightthickness=0, bd=1)
@@ -642,21 +636,28 @@ class RoomScheduleApp(tk.Tk):
     def update_detail_widgets(self, details = False):
         if not self.current_meeting_data: 
             return
-        # Your API returns a list, not a dict with "dataResult"
         main_data = self.current_meeting_data[0]
 
         self.detail_title.config(text=main_data.get("title", "Başlıksız"))
-        self.detail_time.config(text=f"Zaman: {main_data.get('hour', '00:00')}")
+        
+        # GÜNCELLENDİ: Detayda saat aralığını doğru göster (Örn: 14:30 - 15:30)
+        start_time_str = main_data.get('hour', '00:00')
+        # Sadece saat kısmını alıp +1 ekleyerek aralık oluşturuyoruz
+        try:
+            s_hour = int(start_time_str.split(':')[0])
+            e_hour = s_hour + 1
+            time_display = f"{s_hour:02d}{self.time_suffix} - {e_hour:02d}{self.time_suffix}"
+        except:
+            time_display = start_time_str
+
+        self.detail_time.config(text=f"Zaman: {time_display}")
         self.detail_desc.config(text=main_data.get("message", "Açıklama yok."))
 
-        # Temizle
         for widget in self.participants_frame.winfo_children():
             if isinstance(widget, tk.Frame):
                 widget.destroy()
 
         self.participant_images.clear()
-
-        # Your API has NO groupResult, only ONE person
         participants = [main_data]
 
         participants_grid = tk.Frame(self.participants_frame, bg=self.colors["background"])
@@ -686,36 +687,26 @@ class RoomScheduleApp(tk.Tk):
                 wraplength=120
             ).pack(pady=10, padx=5)
 
-
-    # ------------------------------------------------------------------
-    # 4.4. GÖRÜNÜM DEĞİŞTİRME VE KONTROL
-    # ------------------------------------------------------------------
-    
     def check_for_current_meeting(self):
-        """
-        Mevcut bir toplantı olup olmadığını kontrol eder ve görünümü değiştirir.
-        'process_api_queue' tarafından tetiklenir.
-        """
         global last_switch_time
-        print((datetime.now() - last_switch_time).total_seconds().__floor__())
+        
         if not self.ders_programi:
             return
 
         found_meeting = False
-        today_tr = self.days_tr_turkish[0]   # "Cumartesi"
-        today_date_key = self.date_keys[0]   # "2025-11-15"
+        today_tr = self.days_tr_turkish[0] 
+        today_date_key = self.date_keys[0] 
         
         if today_date_key in self.ders_programi:
             for hour, entry in self.ders_programi[today_date_key].items():
                 
-                if entry["durum"] == "Dolu" and check_if_slot_is_current(today_tr, hour):
+                # GÜNCELLENDİ: self.time_suffix gönderiliyor
+                if entry["durum"] == "Dolu" and check_if_slot_is_current(today_tr, hour, self.time_suffix):
                     
                     found_meeting = True
                     rendezvous_id = entry["rendezvous_id"]
-                    
                     current_id = None
 
-                    # this is considering the two posibilities of self.current_meeting_data being a dictionary or a list
                     if isinstance(self.current_meeting_data, dict):
                         data_list = self.current_meeting_data.get("dataResult", [])
                         if isinstance(data_list, list) and len(data_list) > 0:
@@ -725,7 +716,6 @@ class RoomScheduleApp(tk.Tk):
                         current_id = self.current_meeting_data[0].get("rendezvous_id")
 
                     if (self.display_mode == "detail" and (datetime.now() - last_switch_time).total_seconds() >= 10):
-                        print("I'm here!!!!!!!")
                         self.show_schedule_view()
                         last_switch_time = datetime.now()
 
@@ -736,48 +726,25 @@ class RoomScheduleApp(tk.Tk):
                     break
                 
         if not found_meeting and self.display_mode == "detail":
-            print("Toplantı bitti, takvime dönülüyor.")
             self.show_schedule_view()
 
     def show_schedule_view(self):
-        """Sadece Takvim görünümüne geçer."""
         self.detail_view_frame.grid_remove()
         self.schedule_view_frame.grid(row=0, column=0, sticky="nsew")
         self.display_mode = "grid"
         self.current_meeting_data = None
 
     def show_detail_view(self, rendezvous_id):
-        """Sadece Detay görünümüne geçer ve veriyi ister."""
         self.schedule_view_frame.grid_remove()
         self.detail_view_frame.grid(row=0, column=0, sticky="nsew")
         self.display_mode = "detail"
         self.run_in_thread(self.fetch_details_data, rendezvous_id)
 
     def quit_app(self):
-        """Uygulamayı güvenle kapatır."""
         print("Çıkış yapılıyor...")
         self.destroy()
 
-# ----------------------------------------------------------------------
-# 5. UYGULAMAYI BAŞLAT
-# ----------------------------------------------------------------------
-if __name__ == "__main__":
-    
-    # Gerekli importları en başa taşı
-    import tkinter as tk
-    from tkinter import font
-    import requests
-    import qrcode
-    from PIL import Image, ImageTk, ImageOps
-    import io
-    import jwt
-    import time
-    import json
-    from datetime import datetime, timedelta
-    import threading
-    import queue
-    import sys
-    
+if __name__ == "__main__": 
     try:
         app = RoomScheduleApp()
         app.mainloop()

@@ -6,6 +6,7 @@ from tkinter import font
 import threading
 import queue
 from datetime import datetime
+import jwt
 import time
 import requests
 import json
@@ -16,8 +17,8 @@ import json
 
 # API AYARLARI
 API_BASE_URL = "http://localhost:3000"
-DEVICE_ROOM_ID = 1  
-API_TOKEN = "token"
+DEVICE_BUILDING_ID = 1
+JWT_SECRET = ""
 
 class RoomScheduleApp(tk.Tk):
 
@@ -120,7 +121,7 @@ class RoomScheduleApp(tk.Tk):
         self.room_map = {} 
         self.building_name = ""
         
-        self.visible_columns = 4   
+        self.visible_columns = 4
         self.info_mode_active = False 
         self.announcement_data = None 
         
@@ -153,42 +154,47 @@ class RoomScheduleApp(tk.Tk):
         """Uygulama açılırken ilk önce odaları öğrenir."""
         print("API: Bina ve oda bilgileri çekiliyor...")
         self.run_in_thread(self.fetch_building_details)
-
+        
+    def generate_token(self):
+        """Her istek öncesi 30 saniye geçerli taze bir token üretir."""
+        try:
+            payload = {
+                "exp": int(time.time()) + 30
+            }
+            token = jwt.encode(payload, JWT_SECRET, algorithm="HS256")
+            return token
+        except Exception as e:
+            print(f"Token Üretme Hatası: {e}")
+            return None
+    
     def fetch_building_details(self):
         """API /getBuildingDetails çağrısı"""
         try:
-            headers = {'x-hardware-token': API_TOKEN, 'Content-Type': 'application/json'}
-            payload = {'room_id': DEVICE_ROOM_ID}
+            token = self.generate_token()
+            payload = {
+                "building_id": DEVICE_BUILDING_ID,
+                "token": token
+            }
             
-            response = requests.post(f"{API_BASE_URL}/getBuildingDetails", json=payload, headers=headers, timeout=10)
+            response = requests.post(f"{API_BASE_URL}/getBuildingDetails", json=payload, timeout=10)
             
             if response.status_code == 200:
                 data = response.json()
                 rooms_data = data.get("rooms", [])
-                
                 b_details = data.get("buildingDetails", [])
-                fetched_building_name = "BİLİNMEYEN BİNA"
-                if b_details and len(b_details) > 0:
-                    fetched_building_name = b_details[0].get("building_name", "")
+                fetched_building_name = b_details[0].get("building_name", "") if b_details else "BİLİNMEYEN BİNA"
 
                 new_room_list = []
                 new_room_extensions = []
                 new_room_map = {}
                 
                 for r in rooms_data:
-                    r_name = r.get("room_name", "Bilinmeyen Oda")
-                    r_id = r.get("room_id")
-                    r_desc = r.get("roomDesc", "") 
-                    
-                    new_room_list.append(r_name)
-                    new_room_extensions.append(r_desc)
-                    if r_id:
-                        new_room_map[r_id] = r_name
+                    new_room_list.append(r.get("room_name", "Bilinmeyen Oda"))
+                    new_room_extensions.append(r.get("roomDesc", ""))
+                    if r.get("room_id"):
+                        new_room_map[r.get("room_id")] = r.get("room_name")
                 
                 self.api_queue.put(("setup_rooms", (new_room_list, new_room_extensions, new_room_map, fetched_building_name)))
-            else:
-                print(f"API Hatası: {response.status_code} - {response.text}")
-                
         except Exception as e:
             print(f"Bağlantı Hatası (Details): {e}")
 
@@ -302,61 +308,69 @@ class RoomScheduleApp(tk.Tk):
         self.slider_frame.place(x=self.current_x, y=0)
         self.after(20, self.animate_slide)
 
-    def update_data(self):
-        """API /getBuildingSchedule çağrısı"""
-        try:
-            headers = {'x-hardware-token': API_TOKEN, 'Content-Type': 'application/json'}
-            payload = {'room_id': DEVICE_ROOM_ID}
-            
-            response = requests.post(f"{API_BASE_URL}/getBuildingSchedule", json=payload, headers=headers, timeout=10)
-            
-            real_schedule = {}
-            
-            for room in self.room_list:
-                real_schedule[room] = {}
-                for hour in self.hours:
-                    real_schedule[room][hour] = {"durum": "Boş", "aktivite": "", "düzenleyen": "", "rendezvous_id": ""}
+    import requests
 
+    def update_data(self):
+        try:
+            token = self.generate_token()
+            # Node.js tarafında 'building_id' req.body içinden okunuyor, bu kısım doğru.
+            payload = {
+                "building_id": DEVICE_BUILDING_ID,
+                "token": token
+            }
+            
+            # Timeout süresini biraz esnetmek veritabanı yoğunluğunda iyi olabilir
+            response = requests.post(f"{API_BASE_URL}/getBuildingSchedule", json=payload, timeout=15)
+            print(response)
             if response.status_code == 200:
                 data = response.json()
                 schedule_list = data.get("schedule", [])
+                print(schedule_list)
+                # Boş şablonu oluştur
+                real_schedule = {room: {hour: {"durum": "Boş", "aktivite": "", "düzenleyen": "", "rendezvous_id": ""} 
+                                    for hour in self.hours} for room in self.room_list}
                 
                 for item in schedule_list:
+                    # SQL Sütun: room_id
                     r_id = item.get("room_id")
+                    # SQL Sütun: hour (Genelde "09:00:00" formatında gelir)
                     hour_raw = item.get("hour")
                     
-                    if hour_raw:
-                        hour_fmt = str(hour_raw)[:5] 
-                    else:
-                        continue
-                        
-                    activity = item.get("title", "Dolu")
-                    organizer = item.get("fullName", "")
-                    rendezvous_id = item.get("rendezvous_id")
+                    if not hour_raw: continue
                     
+                    # "09:00:00" -> "09:00" çevirimi
+                    hour_fmt = str(hour_raw)[:5]
+                    
+                    # Room ID'yi yerel oda ismine çevir (Örn: 1 -> "Toplantı Odası A")
                     room_name = self.room_map.get(r_id)
                     
-                    if room_name and room_name in real_schedule:
-                        if hour_fmt in real_schedule[room_name]:
-                            real_schedule[room_name][hour_fmt] = {
-                                "durum": "Dolu",
-                                "aktivite": activity,
-                                "düzenleyen": organizer,
-                                "rendezvous_id": rendezvous_id
-                            }
+                    if room_name and room_name in real_schedule and hour_fmt in real_schedule[room_name]:
+                        # SQL'den NULL gelirse (None) hata vermemesi için 'or' kullanıyoruz.
+                        # SQL Sütunları: title, fullName, rendezvous_id
+                        
+                        title_val = item.get("title")
+                        if not title_val: title_val = "Dolu" # Eğer başlık boşsa varsayılan ata
+                        
+                        fullname_val = item.get("fullName") or "" # NULL ise boş string yap
+                        rid_val = item.get("rendezvous_id") or ""
+
+                        real_schedule[room_name][hour_fmt] = {
+                            "durum": "Dolu",
+                            "aktivite": title_val,
+                            "düzenleyen": fullname_val,
+                            "rendezvous_id": rid_val
+                        }
 
                 self.api_queue.put(("schedule_data", real_schedule))
                 
-                veri_var_mi = True
-                if veri_var_mi:
-                    fake_announcement = {"title": "Test Duyurusu", "desc": "İçerik..."}
-                    self.api_queue.put(("announcement_data", fake_announcement))
-                else:
-                    self.api_queue.put(("announcement_data", None))
-                    
+                # Duyuru verisi (Eğer backend'de duyuru endpointi yoksa manuel kalabilir)
+                self.api_queue.put(("announcement_data", {"title": "Sistem", "desc": "Veriler Güncel"}))
+                
             else:
-                print(f"Schedule API Hatası: {response.status_code}")
+                print(f"API Yanıt Hatası: {response.status_code}")
 
+        except requests.exceptions.Timeout:
+            print("Schedule Bağlantı Hatası: Zaman aşımı (Timeout)")
         except Exception as e:
             print(f"Schedule Bağlantı Hatası: {e}")
 

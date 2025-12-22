@@ -17,7 +17,7 @@ import json
 
 # API AYARLARI
 API_BASE_URL = "http://localhost:3000"
-DEVICE_ROOM_ID = 1
+DEVICE_BUILDING_ID = 1
 JWT_SECRET = ""
 
 class RoomScheduleApp(tk.Tk):
@@ -172,7 +172,7 @@ class RoomScheduleApp(tk.Tk):
         try:
             token = self.generate_token()
             payload = {
-                "room_id": DEVICE_ROOM_ID,
+                "building_id": DEVICE_BUILDING_ID,
                 "token": token
             }
             
@@ -308,42 +308,69 @@ class RoomScheduleApp(tk.Tk):
         self.slider_frame.place(x=self.current_x, y=0)
         self.after(20, self.animate_slide)
 
+    import requests
+
     def update_data(self):
         try:
             token = self.generate_token()
+            # Node.js tarafında 'building_id' req.body içinden okunuyor, bu kısım doğru.
             payload = {
-                "room_id": DEVICE_ROOM_ID,
+                "building_id": DEVICE_BUILDING_ID,
                 "token": token
             }
             
-            response = requests.post(f"{API_BASE_URL}/getSchedule", json=payload, timeout=10)
-            
+            # Timeout süresini biraz esnetmek veritabanı yoğunluğunda iyi olabilir
+            response = requests.post(f"{API_BASE_URL}/getBuildingSchedule", json=payload, timeout=15)
+            print(response)
             if response.status_code == 200:
                 data = response.json()
                 schedule_list = data.get("schedule", [])
-                
+                print(schedule_list)
+                # Boş şablonu oluştur
                 real_schedule = {room: {hour: {"durum": "Boş", "aktivite": "", "düzenleyen": "", "rendezvous_id": ""} 
-                                 for hour in self.hours} for room in self.room_list}
+                                    for hour in self.hours} for room in self.room_list}
                 
                 for item in schedule_list:
+                    # SQL Sütun: room_id
                     r_id = item.get("room_id")
+                    # SQL Sütun: hour (Genelde "09:00:00" formatında gelir)
                     hour_raw = item.get("hour")
+                    
                     if not hour_raw: continue
                     
+                    # "09:00:00" -> "09:00" çevirimi
                     hour_fmt = str(hour_raw)[:5]
+                    
+                    # Room ID'yi yerel oda ismine çevir (Örn: 1 -> "Toplantı Odası A")
                     room_name = self.room_map.get(r_id)
                     
                     if room_name and room_name in real_schedule and hour_fmt in real_schedule[room_name]:
+                        # SQL'den NULL gelirse (None) hata vermemesi için 'or' kullanıyoruz.
+                        # SQL Sütunları: title, fullName, rendezvous_id
+                        
+                        title_val = item.get("title")
+                        if not title_val: title_val = "Dolu" # Eğer başlık boşsa varsayılan ata
+                        
+                        fullname_val = item.get("fullName") or "" # NULL ise boş string yap
+                        rid_val = item.get("rendezvous_id") or ""
+
                         real_schedule[room_name][hour_fmt] = {
                             "durum": "Dolu",
-                            "aktivite": item.get("title", "Dolu"),
-                            "düzenleyen": item.get("fullName", ""),
-                            "rendezvous_id": item.get("rendezvous_id")
+                            "aktivite": title_val,
+                            "düzenleyen": fullname_val,
+                            "rendezvous_id": rid_val
                         }
 
                 self.api_queue.put(("schedule_data", real_schedule))
-                # Duyuru verisi simülasyonu
-                self.api_queue.put(("announcement_data", {"title": "Test Duyurusu", "desc": "İçerik..."}))
+                
+                # Duyuru verisi (Eğer backend'de duyuru endpointi yoksa manuel kalabilir)
+                self.api_queue.put(("announcement_data", {"title": "Sistem", "desc": "Veriler Güncel"}))
+                
+            else:
+                print(f"API Yanıt Hatası: {response.status_code}")
+
+        except requests.exceptions.Timeout:
+            print("Schedule Bağlantı Hatası: Zaman aşımı (Timeout)")
         except Exception as e:
             print(f"Schedule Bağlantı Hatası: {e}")
 

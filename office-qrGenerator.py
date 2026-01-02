@@ -346,13 +346,19 @@ class RoomScheduleApp(tk.Tk):
 
     def load_image_from_url_pil(self, url, size=(100, 100)):
         try:
-            full_url = f"{RASPBERRY_NODE_IP}{url}"
+            if url.startswith(('http://', 'https://')):
+                full_url = url
+            else:
+                # Başlamıyorsa (route ise) IP adresini başına ekle
+                full_url = f"{RASPBERRY_NODE_IP}{url}"
+            
             response = requests.get(full_url, timeout=3)
             response.raise_for_status()
             img_data = io.BytesIO(response.content)
             img = Image.open(img_data).resize(size, Image.Resampling.LANCZOS)
             return ImageTk.PhotoImage(img)
-        except Exception:
+        except Exception as e:
+            print(f"Hata oluştu: {e}")
             return self.default_profile_image(size)
 
     def default_profile_image(self, size=(100, 100)):

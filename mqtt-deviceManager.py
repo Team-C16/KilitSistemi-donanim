@@ -19,6 +19,16 @@ SERVICE_DEVICEMANAGER = os.getenv("SERVICE_DEVICEMANAGER")
 
 TOPIC_GET_STATUS = f"v1/{ROOM_ID}/getStatus"
 TOPIC_STATUS_RESPONSE = f"v1/{ROOM_ID}/getStatus/response"
+TOPIC_SERVICE_RESTART = f"v1/{ROOM_ID}/restartService"
+TOPIC_RESTART_RESPONSE = f"v1/{ROOM_ID}/restartService/response"
+
+services_map = {
+        "lock_service": SERVICE_LOCK,
+        "qr_service": SERVICE_QR,
+        "fingerprint_service": SERVICE_FINGER,
+        "update_listener": SERVICE_UPDATE,
+        "device_manager": SERVICE_DEVICEMANAGER
+    }
 
 client = mqtt.Client()
 
@@ -52,8 +62,10 @@ def on_connect(client, userdata, flags, rc):
     if rc == 0:
         print(f"[MQTT] Bağlandı! (Room ID: {ROOM_ID})")
         # Bağlanınca hemen abone ol
-        client.subscribe(f"v1/{ROOM_ID}/getStatus")
+        client.subscribe(TOPIC_GET_STATUS)
         print(f"[MQTT] Abone olundu: {TOPIC_GET_STATUS}")
+        client.subscribe(TOPIC_SERVICE_RESTART);
+        print(f"[MQTT] Abone olundu: {TOPIC_SERVICE_RESTART}")
     else:
         print(f"[MQTT] Bağlantı reddedildi, kod: {rc}")
 
@@ -176,20 +188,14 @@ def get_single_service_info(service_name):
     return info
 
 def check_all_services():
-    services_map = {
-        "lock_service": SERVICE_LOCK,
-        "qr_service": SERVICE_QR,
-        "fingerprint_service": SERVICE_FINGER,
-        "update_listener": SERVICE_UPDATE,
-        "device_manager": SERVICE_DEVICEMANAGER
-    }
+    
     report = {}
     for key, service_name in services_map.items():
         report[key] = get_single_service_info(service_name)
     return report
 
 def on_message(client, userdata, msg):
-    # Sadece beklediğimiz topikten gelen mesajları işle
+    payload = json.loads(msg.payload.decode()) if msg.payload else {}
     try:
         if msg.topic == TOPIC_GET_STATUS:
             print("[STATUS] Durum sorgusu isteği alındı...")
@@ -224,6 +230,35 @@ def on_message(client, userdata, msg):
 
     except Exception as e:
         print(f"[HATA] Mesaj işleme: {e}")
+    
+    if msg.topic == TOPIC_SERVICE_RESTART:
+        service_key = payload.get("service")
+        print(f"[RESTART] İstek alındı: {service_key}")
+        
+        system_service_name = services_map.get(service_key)
+        
+        if system_service_name:
+            try:
+                # Servisi restartla
+                subprocess.run(["sudo", "systemctl", "restart", system_service_name], check=True)
+                res_status = "success"
+                msg_text = f"Service {system_service_name} restarted successfully."
+            except Exception as e:
+                res_status = "error"
+                msg_text = str(e)
+        else:
+            res_status = "error"
+            msg_text = f"Service key '{service_key}' not found in map."
+
+        restart_response = {
+            "room_id": ROOM_ID,
+            "requested_service": service_key,
+            "status": res_status,
+            "message": msg_text,
+            "timestamp": time.time()
+        }
+        client.publish(TOPIC_RESTART_RESPONSE, json.dumps(restart_response))
+        print(f"[RESTART] Yanıt gönderildi: {res_status}")
 
 def run_mqtt_client():
     

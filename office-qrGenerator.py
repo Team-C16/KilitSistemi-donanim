@@ -226,13 +226,20 @@ class RoomScheduleApp(tk.Tk):
         """
         GÜNCELLENDİ: Slayt yok. Pazartesi-Cuma sabit hafta görünümü.
         Bulunulan haftanın Pazartesi gününü bulup, 5 gün (Cuma'ya kadar) listeler.
+        Hafta sonu (Cumartesi/Pazar) ise gelecek haftayı gösterir.
         """
         today = datetime.now()
         # Haftanın hangi günü? (Pazartesi=0, Pazar=6)
         current_weekday = today.weekday()
         
-        # Bu haftanın Pazartesi günü
-        start_date = today - timedelta(days=current_weekday)
+        # Hafta sonu kontrolü: Cumartesi (5) veya Pazar (6) ise gelecek haftayı göster
+        if current_weekday >= 5:
+            # Gelecek Pazartesi'ye kadar kaç gün var?
+            days_until_monday = 7 - current_weekday
+            start_date = today + timedelta(days=days_until_monday)
+        else:
+            # Bu haftanın Pazartesi günü
+            start_date = today - timedelta(days=current_weekday)
         
         self.days_to_display = [(start_date + timedelta(days=i)) for i in range(5)]
         self.days_tr_turkish = [self.dict_tr[d.strftime("%A")] for d in self.days_to_display]

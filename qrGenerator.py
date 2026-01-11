@@ -6,7 +6,16 @@ import tkinter as tk
 from tkinter import font
 import requests
 import qrcode
-from PIL import Image, ImageTk
+try:
+    from qrcode.image.styledpil import StyledPilImage
+    from qrcode.image.styles.moduledrawers import RoundedModuleDrawer
+    from qrcode.image.styles.colormasks import SolidFillColorMask
+except ImportError:
+    # Standard path fallback
+    from qrcode.image.styled.pil import StyledPilImage
+    from qrcode.image.styles.moduledrawers import RoundedModuleDrawer
+    from qrcode.image.styles.colormasks import SolidFillColorMask
+from PIL import Image, ImageTk, ImageFilter, ImageDraw
 import io
 import jwt
 import time
@@ -542,12 +551,68 @@ class RoomScheduleApp(tk.Tk):
             qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_H, box_size=10, border=4)
             qr.add_data(qr_data)
             qr.make(fit=True)
-            img = qr.make_image(fill_color="black", back_color="white").convert('RGB')
+
+            # --- Stylish QR Generation (Rounded + Color + Logo) ---
+            try:
+                # 1. Base Image with Rounded Drawers and Color
+                img = qr.make_image(
+                    image_factory=StyledPilImage,
+                    module_drawer=RoundedModuleDrawer(),
+                    color_mask=SolidFillColorMask(front_color=(51, 100, 138), back_color=(255, 255, 255))
+                ).convert('RGB')
+                
+                # 2. Logo Embedding (Manual with Contour Padding)
+                logo_path = "logo.png"
+                if os.path.exists(logo_path):
+                    try:
+                        logo = Image.open(logo_path).convert("RGBA")
+                        qr_width = img.size[0]
+                        
+                        # 25% size for balanced look
+                        logo_size = int(qr_width * 0.25)
+                        logo = logo.resize((logo_size, logo_size), Image.Resampling.LANCZOS)
+                        
+                        # Calculate positions
+                        pos = ((qr_width - logo_size) // 2, (qr_width - logo_size) // 2)
+                        
+                        # -- Contour Padding Logic --
+                        # 1. Extract Alpha Channel
+                        alpha = logo.split()[-1]
+                        
+                        # 2. Dilate (Expand) the Alpha Channel to create padding
+                        # MaxFilter expands white areas (opacity)
+                        padding_px = int(logo_size * 0.05) # 5% padding
+                        # Need odd number for filter size, min 3
+                        filter_size = (padding_px * 2) + 1
+                        mask_expanded = alpha.filter(ImageFilter.MaxFilter(filter_size))
+                        
+                        # 3. Create a white image for the "stroke"
+                        white_bg = Image.new("RGBA", logo.size, (255, 255, 255, 255))
+                        
+                        # 4. Paste the white image using the expanded mask onto the QR code
+                        # This clears the dots exactly in the shape of the logo + padding
+                        img.paste(white_bg, pos, mask=mask_expanded)
+                        
+                        # 5. Paste the actual logo on top
+                        img.paste(logo, pos, mask=logo)
+                    except Exception as logo_e:
+                        print(f"Logo embedding failed: {logo_e}")
+
+            except Exception as e:
+                 print(f"Styling failed: {e}")
+                 # Fallback to just basic color if styled drawers fail hard
+                 try:
+                    img = qr.make_image(fill_color=(51, 100, 138), back_color="white").convert('RGB')
+                 except:
+                    img = qr.make_image(fill_color="black", back_color="white").convert('RGB')
+            # -----------------------------
+
             qr_size = int(self.app_width * 0.26)
             img = img.resize((qr_size, qr_size), Image.Resampling.LANCZOS)
             self.qr_image = ImageTk.PhotoImage(img)
             self.qr_label.config(image=self.qr_image)
-        except Exception:
+        except Exception as e:
+            print(f"QR Error: {e}")
             pass
 
     def update_footer_clock(self):

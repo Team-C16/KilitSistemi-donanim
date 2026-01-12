@@ -54,8 +54,8 @@ func (c *Client) Connect() error {
 
 	opts := paho.NewClientOptions().
 		AddBroker(brokerURL).
-		SetClientID(fmt.Sprintf("kiosk-%s-%d", c.cfg.RoomID, time.Now().Unix())).
-		SetUsername(c.cfg.RoomID).
+		SetClientID(fmt.Sprintf("kiosk-%s-%d", c.cfg.GetMQTTID(), time.Now().Unix())).
+		SetUsername(c.cfg.GetMQTTID()).
 		SetPassword(c.generateToken()).
 		SetAutoReconnect(false). // We handle reconnection manually for token refresh
 		SetOnConnectHandler(c.onConnect).
@@ -113,21 +113,38 @@ func (c *Client) reconnect() {
 
 // subscribe subscribes to a topic
 func (c *Client) subscribe(topic string) {
-	token := c.client.Subscribe(topic, 1, func(client paho.Client, msg paho.Message) {
-		c.handlersMu.RLock()
-		handler, exists := c.handlers[topic]
-		c.handlersMu.RUnlock()
+	// Async wait with retries to prevent blocking/deadlock and handle transient failures
+	go func() {
+		for i := 0; i < 5; i++ {
+			if i > 0 {
+				time.Sleep(1 * time.Second)
+			}
 
-		if exists && handler != nil {
-			handler(msg.Topic(), msg.Payload())
+			// If we think we are disconnected, we might want to trigger reconnect?
+			// But for now, just retry the subscribe call.
+			token := c.client.Subscribe(topic, 1, func(client paho.Client, msg paho.Message) {
+				c.handlersMu.RLock()
+				handler, exists := c.handlers[topic]
+				c.handlersMu.RUnlock()
+
+				if exists && handler != nil {
+					handler(msg.Topic(), msg.Payload())
+				}
+			})
+
+			if token.Wait() && token.Error() != nil {
+				log.Printf("MQTT: Subscribe to %s failed (attempt %d/5): %v", topic, i+1, token.Error())
+				if token.Error().Error() == "not Connected" && i == 0 {
+					// Check connection state
+					log.Printf("MQTT: Client status: connected=%v", c.client.IsConnected())
+				}
+			} else {
+				log.Printf("MQTT: Subscribed to %s", topic)
+				return
+			}
 		}
-	})
-
-	if token.Wait() && token.Error() != nil {
-		log.Printf("MQTT: Subscribe to %s failed: %v", topic, token.Error())
-	} else {
-		log.Printf("MQTT: Subscribed to %s", topic)
-	}
+		log.Printf("MQTT: Gave up subscribing to %s after 5 attempts", topic)
+	}()
 }
 
 // Subscribe registers a handler for a topic
@@ -136,9 +153,9 @@ func (c *Client) Subscribe(topic string, handler MessageHandler) {
 	c.handlers[topic] = handler
 	c.handlersMu.Unlock()
 
-	if c.connected {
-		c.subscribe(topic)
-	}
+	// Always attempt to subscribe, even if we think we aren't connected
+	// Paho might queue it, or if it fails, onConnect will retry later
+	c.subscribe(topic)
 }
 
 // Publish sends a message to a topic

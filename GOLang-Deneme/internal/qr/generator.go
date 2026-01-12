@@ -7,7 +7,6 @@ import (
 	"image/color"
 	"image/draw"
 	"image/png"
-	"os"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -17,14 +16,14 @@ import (
 // Generator handles QR code creation
 type Generator struct {
 	primaryColor color.Color
-	logoPath     string
+	logoData     []byte
 }
 
 // NewGenerator creates a new QR generator with the specified primary color
-func NewGenerator(primaryColor color.Color, logoPath string) *Generator {
+func NewGenerator(primaryColor color.Color, logoData []byte) *Generator {
 	return &Generator{
 		primaryColor: primaryColor,
-		logoPath:     logoPath,
+		logoData:     logoData,
 	}
 }
 
@@ -75,7 +74,7 @@ func (g *Generator) Generate(data string, size int) (fyne.Resource, error) {
 	}
 
 	// 2. Overlay Logo with Contour Padding
-	if g.logoPath != "" {
+	if len(g.logoData) > 0 {
 		g.overlayLogo(rgba, size)
 	}
 
@@ -110,14 +109,11 @@ func (g *Generator) drawCircle(img *image.RGBA, cx, cy, r float64, c color.Color
 
 // overlayLogo places the logo in the center of the QR code with contour padding
 func (g *Generator) overlayLogo(img *image.RGBA, qrSize int) {
-	// Try to load logo file
-	logoFile, err := os.Open(g.logoPath)
-	if err != nil {
+	if len(g.logoData) == 0 {
 		return
 	}
-	defer logoFile.Close()
 
-	srcLogo, _, err := image.Decode(logoFile)
+	srcLogo, _, err := image.Decode(bytes.NewReader(g.logoData))
 	if err != nil {
 		return
 	}

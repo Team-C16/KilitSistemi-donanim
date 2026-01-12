@@ -31,13 +31,16 @@ func NewNotificationManager(window fyne.Window) *NotificationManager {
 }
 
 // createOverlay initializes the notification overlay
+// Note: Uses default sizes as overlay is created before window is shown
 func (nm *NotificationManager) createOverlay() {
 	nm.currentText = canvas.NewText("", ColorText)
+	// Default size - will be updated based on window size when shown
 	nm.currentText.TextSize = 40
 	nm.currentText.TextStyle = fyne.TextStyle{Bold: true}
 	nm.currentText.Alignment = fyne.TextAlignCenter
 
 	bg := canvas.NewRectangle(ColorLight)
+	// Default min size - notification will scale with content
 	bg.SetMinSize(fyne.NewSize(400, 100))
 
 	nm.overlay = container.NewStack(
@@ -57,6 +60,8 @@ func (nm *NotificationManager) Show(message string, textColor string, duration t
 	}
 
 	// Set text and color
+	sizes := CalculateResponsiveSizes(nm.window.Canvas().Size())
+	nm.currentText.TextSize = sizes.FontNotify
 	nm.currentText.Text = message
 	switch textColor {
 	case "green":
@@ -159,8 +164,9 @@ func (w *NotificationWidget) CreateRenderer() fyne.WidgetRenderer {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
+	// Use default font size (will be responsive based on parent container)
 	text := canvas.NewText(w.message, ColorText)
-	text.TextSize = 40
+	text.TextSize = 40 // Default, scales with parent
 	text.TextStyle = fyne.TextStyle{Bold: true}
 
 	bg := canvas.NewRectangle(ColorLight)
@@ -184,6 +190,7 @@ func (r *notificationRenderer) Layout(size fyne.Size) {
 }
 
 func (r *notificationRenderer) MinSize() fyne.Size {
+	// Use proportional min size (roughly 15% width, 7% height of a 1920x1080 screen)
 	return fyne.NewSize(300, 80)
 }
 

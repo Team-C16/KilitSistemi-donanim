@@ -30,7 +30,10 @@ func main() {
 
 	// Load configuration
 	cfg := config.Load()
-	log.Printf("Mode: %s, Room ID: %s", cfg.Mode, cfg.RoomID)
+	log.Printf("Mode: %s, Room ID: %s, Building ID: %s", cfg.Mode, cfg.RoomID, cfg.BuildingID)
+	log.Printf("MQTT Config: Broker=%s:%d, ID_Prefix=%s", cfg.MQTTBrokerIP, cfg.MQTTBrokerPort, cfg.GetMQTTID())
+	log.Printf("Services Enabled: Lock=%v, DeviceManager=%v, Update=%v",
+		cfg.EnableLockMQTT, cfg.EnableDeviceManager, cfg.EnableUpdateService)
 
 	// Create UI application first (needed for notification callback)
 	app := ui.NewApp(cfg)
@@ -44,7 +47,10 @@ func main() {
 			log.Printf("MQTT connection failed: %v", err)
 		} else {
 			defer mqttClient.Disconnect()
+			log.Println("MQTT client connected successfully")
 		}
+	} else {
+		log.Println("No MQTT services enabled, skipping MQTT client initialization")
 	}
 
 	// Initialize GPIO for lock control

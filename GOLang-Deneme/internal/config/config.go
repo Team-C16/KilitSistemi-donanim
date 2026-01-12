@@ -141,3 +141,13 @@ func getEnvBool(key string, defaultValue bool) bool {
 	}
 	return defaultValue
 }
+
+// GetMQTTID returns the ID to use for MQTT topics
+// In Building mode, it returns "b" + BuildingID
+// In other modes, it returns RoomID
+func (c *Config) GetMQTTID() string {
+	if c.Mode == ModeBuilding {
+		return "b" + c.BuildingID
+	}
+	return c.RoomID
+}

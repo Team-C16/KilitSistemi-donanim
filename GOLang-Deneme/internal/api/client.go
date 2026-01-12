@@ -21,6 +21,7 @@ type Client struct {
 	jwtSecret  string
 	roomID     string
 	buildingID string
+	mode       config.Mode
 	httpClient *http.Client
 }
 
@@ -31,6 +32,7 @@ func NewClient(cfg *config.Config) *Client {
 		jwtSecret:  cfg.JWTSecret,
 		roomID:     cfg.RoomID,
 		buildingID: cfg.BuildingID,
+		mode:       cfg.Mode,
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},
@@ -220,8 +222,12 @@ func (c *Client) GetScheduleDetails(rendezvousID string) ([]ScheduleEntry, error
 
 // GetIndexesRasp fetches room configuration (time suffix, hours)
 func (c *Client) GetIndexesRasp() ([]IndexConfig, error) {
-	payload := map[string]interface{}{
-		"room_id": c.roomID,
+	payload := map[string]interface{}{}
+
+	if c.mode == config.ModeBuilding && c.buildingID != "" {
+		payload["building_id"] = c.buildingID
+	} else {
+		payload["room_id"] = c.roomID
 	}
 
 	body, err := c.post("/getIndexesRasp", payload)

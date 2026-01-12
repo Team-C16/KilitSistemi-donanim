@@ -92,3 +92,21 @@ sudo cp kiosk.service /etc/systemd/system/
 sudo systemctl enable kiosk
 sudo systemctl start kiosk
 ```
+
+
+## Current Benchmarks
+
+```
+
+  140MB~ Go Build
+  
+  Pythons:
+  qrGenerator 61MB
+
+  lock 38MB
+
+  deviceManager 24MB
+
+  updateListener 24MB
+
+```

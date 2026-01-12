@@ -12,6 +12,7 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 
+	"kiosk-go/assets"
 	"kiosk-go/internal/api"
 	"kiosk-go/internal/config"
 	"kiosk-go/internal/qr"
@@ -29,6 +30,7 @@ type App struct {
 	timeConfig TimeConfig
 	roomName   string
 	schedule   Schedule
+	qrSize     int // Responsive QR code size (calculated from window dimensions)
 	mu         sync.RWMutex
 
 	// Update channels
@@ -52,7 +54,7 @@ func NewApp(cfg *config.Config) *App {
 		window:     window,
 		cfg:        cfg,
 		apiClient:  api.NewClient(cfg),
-		qrGen:      qr.NewGenerator(ColorPrimary, "assets/logo.png"),
+		qrGen:      qr.NewGenerator(ColorPrimary, assets.LogoData),
 		timeConfig: DefaultTimeConfig(),
 		updateChan: make(chan struct{}, 1),
 		stopChan:   make(chan struct{}),
@@ -161,32 +163,35 @@ func (a *App) updateData() {
 		}
 	}
 
-	// Fetch schedule
-	schedResp, err := a.apiClient.GetSchedule()
-	if err != nil {
-		log.Printf("Failed to fetch schedule: %v", err)
-		return
-	}
-
-	// Get date keys
-	var dateKeys []string
-	if a.cfg.Mode == config.ModeOffice {
-		days := GenerateWeekDays()
-		for _, d := range days {
-			dateKeys = append(dateKeys, d.DateKey)
+	// Fetch schedule (ONLY if not in Building mode)
+	// Building mode handles its own schedule fetching independently
+	if a.cfg.Mode != config.ModeBuilding {
+		schedResp, err := a.apiClient.GetSchedule()
+		if err != nil {
+			log.Printf("Failed to fetch schedule: %v", err)
+			return
 		}
-	} else {
-		days := GenerateDisplayDays()
-		for _, d := range days {
-			dateKeys = append(dateKeys, d.DateKey)
-		}
-	}
 
-	// Transform schedule
-	schedule := TransformSchedule(schedResp, dateKeys, a.timeConfig)
-	a.mu.Lock()
-	a.schedule = schedule
-	a.mu.Unlock()
+		// Get date keys
+		var dateKeys []string
+		if a.cfg.Mode == config.ModeOffice {
+			days := GenerateWeekDays()
+			for _, d := range days {
+				dateKeys = append(dateKeys, d.DateKey)
+			}
+		} else {
+			days := GenerateDisplayDays()
+			for _, d := range days {
+				dateKeys = append(dateKeys, d.DateKey)
+			}
+		}
+
+		// Transform schedule
+		schedule := TransformSchedule(schedResp, dateKeys, a.timeConfig)
+		a.mu.Lock()
+		a.schedule = schedule
+		a.mu.Unlock()
+	}
 
 	// Signal UI update
 	select {
@@ -237,17 +242,20 @@ func (a *App) Notify(message, textColor string, duration time.Duration) {
 	}
 }
 
-// createFooter builds the common footer component
+// createFooter builds the common footer component with responsive sizing
 func (a *App) createFooter() fyne.CanvasObject {
+	// Calculate responsive sizes
+	sizes := CalculateResponsiveSizes(a.window.Canvas().Size())
+
 	footerBg := canvas.NewRectangle(ColorPrimary)
-	footerBg.SetMinSize(fyne.NewSize(0, 60))
+	footerBg.SetMinSize(fyne.NewSize(0, sizes.FooterHeight))
 
 	infoText := canvas.NewText("pve.izu.edu.tr/randevu ← Randevu İçin", color.White)
-	infoText.TextSize = 20
+	infoText.TextSize = sizes.FontTitle
 	infoText.TextStyle = fyne.TextStyle{Bold: true}
 
 	clockText := canvas.NewText("", color.White)
-	clockText.TextSize = 20
+	clockText.TextSize = sizes.FontTitle
 	clockText.TextStyle = fyne.TextStyle{Bold: true}
 	clockText.Alignment = fyne.TextAlignTrailing
 
@@ -275,11 +283,12 @@ func (a *App) createFooter() fyne.CanvasObject {
 	return container.NewStack(footerBg, footerContent)
 }
 
-// createScheduleGrid builds the schedule grid component
+// createScheduleGrid builds the schedule grid component with responsive sizing
 // Rows are responsive - they fill the available screen height
 // Time column is narrow, day columns fill remaining space
 func (a *App) createScheduleGrid(days []DayInfo, fullWidth bool) fyne.CanvasObject {
 	hours := a.timeConfig.GenerateHours()
+	sizes := CalculateResponsiveSizes(a.window.Canvas().Size())
 
 	// Build time column (header + hour labels)
 	timeColumnCells := []fyne.CanvasObject{a.createHeaderCell("Saat", ColorPrimary)}
@@ -311,14 +320,51 @@ func (a *App) createScheduleGrid(days []DayInfo, fullWidth bool) fyne.CanvasObje
 	// Combine time column (narrow, fixed) with day grid (fills rest)
 	// Using Border layout to avoid visible divider
 	// Wrap time column in a container with max width
-	timeColumnWrapper := container.New(&fixedWidthLayout{width: 60}, timeColumn)
+	timeColumnWrapper := container.New(&fixedWidthLayout{width: sizes.TimeColWidth}, timeColumn)
 
 	return container.NewBorder(
 		nil, nil, // top, bottom
-		timeColumnWrapper, // left: fixed 60px time column
+		timeColumnWrapper, // left: fixed width time column
 		nil,
 		dayGrid, // center: fills remaining space
 	)
+}
+
+// createTightVBox creates a vertical box with tight, custom spacing
+// Used for text lines that need to be closer than standard theme padding
+func (a *App) createTightVBox(gap float32, objects ...fyne.CanvasObject) *fyne.Container {
+	return container.New(&tightVBoxLayout{gap: gap}, objects...)
+}
+
+// tightVBoxLayout implements a vertical layout with custom gap
+type tightVBoxLayout struct {
+	gap float32
+}
+
+func (l *tightVBoxLayout) Layout(objs []fyne.CanvasObject, size fyne.Size) {
+	y := float32(0)
+	for _, o := range objs {
+		o.Resize(o.MinSize())
+		// Center horizontally
+		x := (size.Width - o.MinSize().Width) / 2
+		o.Move(fyne.NewPos(x, y))
+		y += o.MinSize().Height + l.gap
+	}
+}
+
+func (l *tightVBoxLayout) MinSize(objs []fyne.CanvasObject) fyne.Size {
+	w, h := float32(0), float32(0)
+	for i, o := range objs {
+		childSize := o.MinSize()
+		if childSize.Width > w {
+			w = childSize.Width
+		}
+		h += childSize.Height
+		if i < len(objs)-1 {
+			h += l.gap
+		}
+	}
+	return fyne.NewSize(w, h)
 }
 
 // fixedWidthLayout is a custom layout that fixes width but fills height
@@ -340,21 +386,25 @@ func (l *fixedWidthLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
 	}
 }
 
-// createHeaderCell creates a header cell with text
+// createHeaderCell creates a header cell with text using responsive sizing
 func (a *App) createHeaderCell(text string, bgColor color.Color) fyne.CanvasObject {
+	sizes := CalculateResponsiveSizes(a.window.Canvas().Size())
+
 	bg := canvas.NewRectangle(bgColor)
-	bg.SetMinSize(fyne.NewSize(0, 50))
+	bg.SetMinSize(fyne.NewSize(0, sizes.HeaderHeight))
 
 	label := canvas.NewText(text, color.White)
-	label.TextSize = 18
+	label.TextSize = sizes.FontSubtitle
 	label.TextStyle = fyne.TextStyle{Bold: true}
 	label.Alignment = fyne.TextAlignCenter
 
 	return container.NewStack(bg, container.NewCenter(label))
 }
 
-// createDayHeaderCell creates a day header cell
+// createDayHeaderCell creates a day header cell with responsive sizing
 func (a *App) createDayHeaderCell(day DayInfo) fyne.CanvasObject {
+	sizes := CalculateResponsiveSizes(a.window.Canvas().Size())
+
 	bgColor := ColorPrimary
 	fgColor := ColorLight
 	if day.IsToday {
@@ -363,34 +413,36 @@ func (a *App) createDayHeaderCell(day DayInfo) fyne.CanvasObject {
 	}
 
 	bg := canvas.NewRectangle(bgColor)
-	bg.SetMinSize(fyne.NewSize(0, 50))
+	bg.SetMinSize(fyne.NewSize(0, sizes.HeaderHeight))
 
 	dayLabel := canvas.NewText(day.DayNameTR, fgColor)
-	dayLabel.TextSize = 16
+	dayLabel.TextSize = sizes.FontBody
 	dayLabel.TextStyle = fyne.TextStyle{Bold: true}
 	dayLabel.Alignment = fyne.TextAlignCenter
 
 	dateLabel := canvas.NewText(day.DisplayDate, fgColor)
-	dateLabel.TextSize = 12
+	dateLabel.TextSize = sizes.FontTiny
 	dateLabel.Alignment = fyne.TextAlignCenter
 
-	content := container.NewVBox(
-		container.NewCenter(dayLabel),
-		container.NewCenter(dateLabel),
-	)
+	// Use tight VBox for closer line spacing
+	// Gap is InnerPadding (approx 4px) which is half of standard padding
+	content := a.createTightVBox(sizes.InnerPadding, dayLabel, dateLabel)
 
 	if day.IsToday {
 		todayLabel := canvas.NewText("Bugün", fgColor)
-		todayLabel.TextSize = 10
+		todayLabel.TextSize = sizes.FontMicro
 		todayLabel.Alignment = fyne.TextAlignCenter
-		content.Add(container.NewCenter(todayLabel))
+
+		content.Add(todayLabel)
 	}
 
 	return container.NewStack(bg, container.NewCenter(content))
 }
 
-// createHourCell creates an hour label cell
+// createHourCell creates an hour label cell with responsive sizing
 func (a *App) createHourCell(hour string) fyne.CanvasObject {
+	sizes := CalculateResponsiveSizes(a.window.Canvas().Size())
+
 	currentHour := GetCurrentHourString(a.timeConfig)
 	bgColor := ColorLight
 	fgColor := ColorText
@@ -400,17 +452,18 @@ func (a *App) createHourCell(hour string) fyne.CanvasObject {
 	}
 
 	bg := canvas.NewRectangle(bgColor)
-	bg.SetMinSize(fyne.NewSize(60, 40))
+	bg.SetMinSize(fyne.NewSize(sizes.TimeColWidth, sizes.CellHeight))
 
 	label := canvas.NewText(hour, fgColor)
-	label.TextSize = 14
+	label.TextSize = sizes.FontSmall
 	label.Alignment = fyne.TextAlignCenter
 
 	return container.NewStack(bg, container.NewCenter(label))
 }
 
-// createScheduleCell creates a schedule cell for a specific day/hour
+// createScheduleCell creates a schedule cell for a specific day/hour with responsive sizing
 func (a *App) createScheduleCell(day DayInfo, hour string) fyne.CanvasObject {
+	sizes := CalculateResponsiveSizes(a.window.Canvas().Size())
 	schedule := a.GetSchedule()
 
 	bgColor := ColorAvailable
@@ -427,21 +480,19 @@ func (a *App) createScheduleCell(day DayInfo, hour string) fyne.CanvasObject {
 	}
 
 	bg := canvas.NewRectangle(bgColor)
-	bg.SetMinSize(fyne.NewSize(0, 40))
+	bg.SetMinSize(fyne.NewSize(0, sizes.CellHeight))
 
 	label1 := canvas.NewText(line1, fgColor)
-	label1.TextSize = 12
+	label1.TextSize = sizes.FontTiny
 	label1.TextStyle = fyne.TextStyle{Bold: true}
 	label1.Alignment = fyne.TextAlignCenter
 
 	label2 := canvas.NewText(line2, fgColor)
-	label2.TextSize = 10
+	label2.TextSize = sizes.FontMicro
 	label2.Alignment = fyne.TextAlignCenter
 
-	content := container.NewVBox(
-		container.NewCenter(label1),
-		container.NewCenter(label2),
-	)
+	// Use tight VBox for closer line spacing
+	content := a.createTightVBox(sizes.InnerPadding, label1, label2)
 
 	// Highlight current slot
 	currentHour := GetCurrentHourString(a.timeConfig)

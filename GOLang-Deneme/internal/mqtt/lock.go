@@ -36,7 +36,7 @@ func (lh *LockHandler) SetNotifyCallback(callback func(message string, color str
 
 // Start begins listening for door commands
 func (lh *LockHandler) Start() {
-	topic := fmt.Sprintf("v1/%s/opendoor", lh.cfg.RoomID)
+	topic := fmt.Sprintf("v1/%s/opendoor", lh.cfg.GetMQTTID())
 	lh.mqttClient.Subscribe(topic, lh.handleOpenDoor)
 
 	// Publish initial IP
@@ -101,7 +101,7 @@ func (lh *LockHandler) handleOpenDoor(topic string, payload []byte) {
 
 // publishIP publishes the device IP to MQTT
 func (lh *LockHandler) publishIP() {
-	topic := fmt.Sprintf("v1/%s/saveip", lh.cfg.RoomID)
+	topic := fmt.Sprintf("v1/%s/saveip", lh.cfg.GetMQTTID())
 	payload := map[string]string{
 		"ip": "dynamic_ip",
 	}
@@ -111,7 +111,7 @@ func (lh *LockHandler) publishIP() {
 
 // PublishOpenDoor sends an open door command (used by fingerprint handler)
 func (lh *LockHandler) PublishOpenDoor() error {
-	topic := fmt.Sprintf("v1/%s/opendoor", lh.cfg.RoomID)
+	topic := fmt.Sprintf("v1/%s/opendoor", lh.cfg.GetMQTTID())
 
 	// Generate token
 	claims := map[string]interface{}{

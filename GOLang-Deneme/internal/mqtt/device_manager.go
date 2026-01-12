@@ -72,8 +72,9 @@ func NewDeviceManager(mqttClient *Client, cfg *config.Config) *DeviceManager {
 
 // Start begins listening for device management commands
 func (dm *DeviceManager) Start() {
-	topicGetStatus := fmt.Sprintf("v1/%s/getStatus", dm.cfg.RoomID)
-	topicRestart := fmt.Sprintf("v1/%s/restartService", dm.cfg.RoomID)
+	topicID := dm.cfg.GetMQTTID()
+	topicGetStatus := fmt.Sprintf("v1/%s/getStatus", topicID)
+	topicRestart := fmt.Sprintf("v1/%s/restartService", topicID)
 
 	dm.mqttClient.Subscribe(topicGetStatus, dm.handleGetStatus)
 	dm.mqttClient.Subscribe(topicRestart, dm.handleRestartService)
@@ -104,7 +105,7 @@ func (dm *DeviceManager) handleGetStatus(topic string, payload []byte) {
 		Services:      dm.getServicesStatus(),
 	}
 
-	responseTopic := fmt.Sprintf("v1/%s/getStatus/response", dm.cfg.RoomID)
+	responseTopic := fmt.Sprintf("v1/%s/getStatus/response", dm.cfg.GetMQTTID())
 	if err := dm.mqttClient.Publish(responseTopic, response); err != nil {
 		log.Printf("DeviceManager: Failed to publish status: %v", err)
 	} else {
@@ -170,7 +171,7 @@ func (dm *DeviceManager) handleRestartService(topic string, payload []byte) {
 		response.Message = fmt.Sprintf("Service key '%s' not found", request.Service)
 	}
 
-	responseTopic := fmt.Sprintf("v1/%s/restartService/response", dm.cfg.RoomID)
+	responseTopic := fmt.Sprintf("v1/%s/restartService/response", dm.cfg.GetMQTTID())
 	dm.mqttClient.Publish(responseTopic, response)
 	log.Printf("DeviceManager: Restart response sent: %s", response.Status)
 }

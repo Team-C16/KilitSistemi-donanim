@@ -37,7 +37,7 @@ func NewUpdateHandler(mqttClient *Client, cfg *config.Config) *UpdateHandler {
 
 // Start begins listening for update commands
 func (uh *UpdateHandler) Start() {
-	topic := fmt.Sprintf("v1/%s/update", uh.cfg.RoomID)
+	topic := fmt.Sprintf("v1/%s/update", uh.cfg.GetMQTTID())
 	uh.mqttClient.Subscribe(topic, uh.handleUpdate)
 
 	uh.log.Info("Started, subscribed to %s", topic)

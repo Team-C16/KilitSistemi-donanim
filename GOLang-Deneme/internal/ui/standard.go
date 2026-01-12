@@ -16,18 +16,21 @@ import (
 func (a *App) buildStandardUI() fyne.CanvasObject {
 	log.Println("Building STANDARD mode UI")
 
-	// Left panel: QR Card (fixed ~28% width)
+	// Get responsive sizes
+	sizes := CalculateResponsiveSizes(a.window.Canvas().Size())
+
+	// Left panel: QR Card (responsive width)
 	qrPanel := a.createQRCard()
 
 	// Right panel: Schedule Grid
 	days := GenerateDisplayDays()
 	scheduleGrid := a.createScheduleGrid(days, false)
 
-	// Use Border layout for fixed left panel width
+	// Use Border layout for responsive left panel width
 	// This creates a non-interactive layout without a draggable divider
 	mainContent := container.NewBorder(
 		nil, nil, // top, bottom
-		container.NewGridWrap(fyne.NewSize(400, 0), qrPanel), // left (fixed width)
+		container.NewGridWrap(fyne.NewSize(sizes.QRPanelWidth, 0), qrPanel), // left (responsive width)
 		nil,                               // right
 		container.NewPadded(scheduleGrid), // center fills remaining space
 	)
@@ -45,42 +48,48 @@ func (a *App) buildStandardUI() fyne.CanvasObject {
 	)
 }
 
-// createQRCard creates the QR code panel
+// createQRCard creates the QR code panel with responsive sizing
 func (a *App) createQRCard() fyne.CanvasObject {
 	// Card background
 	cardBg := canvas.NewRectangle(ColorLight)
 
-	// Header
+	// Get responsive sizes
+	sizes := CalculateResponsiveSizes(a.window.Canvas().Size())
+
+	// Header with responsive height
 	headerBg := canvas.NewRectangle(ColorPrimary)
-	headerBg.SetMinSize(fyne.NewSize(0, 50))
+	headerBg.SetMinSize(fyne.NewSize(0, sizes.HeaderHeight))
 
 	headerText := canvas.NewText("Odaya Erişim", color.White)
-	headerText.TextSize = 18
+	headerText.TextSize = sizes.FontSubtitle
 	headerText.TextStyle = fyne.TextStyle{Bold: true}
 	headerText.Alignment = fyne.TextAlignCenter
 
 	header := container.NewStack(headerBg, container.NewCenter(headerText))
 
+	// Store QR size for updates
+	a.qrSize = int(sizes.QRCodeSize)
+
 	// QR Code placeholder (will be updated dynamically)
 	qrPlaceholder := canvas.NewRectangle(ColorPrimary)
-	qrPlaceholder.SetMinSize(fyne.NewSize(320, 320))
+	qrPlaceholder.SetMinSize(fyne.NewSize(sizes.QRCodeSize, sizes.QRCodeSize))
 
 	qrContainer := container.NewCenter(qrPlaceholder)
 
-	// Scan instruction
+	// Scan instruction with responsive font
 	scanText := canvas.NewText("QR Kodu Uygulamadan Taratın", ColorText)
-	scanText.TextSize = 14
+	scanText.TextSize = sizes.FontSmall
 	scanText.Alignment = fyne.TextAlignCenter
 
-	// Room name
+	// Room name with responsive font
 	roomNameText := canvas.NewText("", ColorText)
-	roomNameText.TextSize = 20
+	roomNameText.TextSize = sizes.FontTitle
 	roomNameText.TextStyle = fyne.TextStyle{Bold: true}
 	roomNameText.Alignment = fyne.TextAlignCenter
 
-	// Notification text (below room name)
+	// Notification text with responsive font
 	notifyText := canvas.NewText("", ColorAvailable)
-	notifyText.TextSize = 40
+	notifyText.TextSize = sizes.FontNotify
 	notifyText.TextStyle = fyne.TextStyle{Bold: true}
 	notifyText.Alignment = fyne.TextAlignCenter
 	a.notifyText = notifyText // Store reference for Notify() method
@@ -128,8 +137,14 @@ func (a *App) updateQRImage(qrContainer *fyne.Container) {
 		return
 	}
 
-	// Generate QR image
-	qrImg, err := a.qrGen.GenerateCanvasImage(qrResp.Token, 320)
+	// Use responsive QR size from app state
+	qrSize := a.qrSize
+	if qrSize == 0 {
+		qrSize = 280 // fallback default
+	}
+
+	// Generate QR image with responsive size
+	qrImg, err := a.qrGen.GenerateCanvasImage(qrResp.Token, qrSize)
 	if err != nil {
 		log.Printf("Failed to generate QR: %v", err)
 		return

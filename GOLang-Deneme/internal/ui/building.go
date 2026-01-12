@@ -100,16 +100,21 @@ func (a *App) createBuildingGrid(state *BuildingState) *fyne.Container {
 	state.mu.RUnlock()
 
 	if len(rooms) == 0 {
+		sizes := CalculateResponsiveSizes(a.window.Canvas().Size())
 		placeholder := canvas.NewText("Odalar yükleniyor...", ColorText)
-		placeholder.TextSize = 24
+		placeholder.TextSize = sizes.FontTitle + 4
 		return container.NewCenter(placeholder)
 	}
 
-	// Helper to create a row with fixed-width time cell and flexible room cells
+	// Get responsive sizes
+	sizes := CalculateResponsiveSizes(a.window.Canvas().Size())
+	timeColWidth := sizes.TimeColWidth + 20 // Slightly wider for building mode
+
+	// Helper to create a row with responsive-width time cell and flexible room cells
 	createRow := func(timeCell fyne.CanvasObject, roomCells []fyne.CanvasObject) fyne.CanvasObject {
 		roomGrid := container.NewGridWithColumns(len(roomCells), roomCells...)
 		return container.NewBorder(nil, nil,
-			container.NewGridWrap(fyne.NewSize(80, 0), timeCell), // fixed 80px time column
+			container.NewGridWrap(fyne.NewSize(timeColWidth, 0), timeCell), // responsive time column
 			nil,
 			roomGrid, // remaining space for rooms
 		)
@@ -146,26 +151,30 @@ func (a *App) createBuildingGrid(state *BuildingState) *fyne.Container {
 	return container.NewGridWithRows(len(rows), rows...)
 }
 
-// createBuildingHeaderCell creates a header cell
+// createBuildingHeaderCell creates a header cell with responsive sizing
 func (a *App) createBuildingHeaderCell(text string) fyne.CanvasObject {
+	sizes := CalculateResponsiveSizes(a.window.Canvas().Size())
+
 	bg := canvas.NewRectangle(ColorPrimary)
-	bg.SetMinSize(fyne.NewSize(80, 50))
+	bg.SetMinSize(fyne.NewSize(sizes.TimeColWidth+20, sizes.HeaderHeight))
 
 	label := canvas.NewText(text, color.White)
-	label.TextSize = 16
+	label.TextSize = sizes.FontBody
 	label.TextStyle = fyne.TextStyle{Bold: true}
 	label.Alignment = fyne.TextAlignCenter
 
 	return container.NewStack(bg, container.NewCenter(label))
 }
 
-// createRoomHeaderCell creates a room header cell with extension
+// createRoomHeaderCell creates a room header cell with extension using responsive sizing
 func (a *App) createRoomHeaderCell(roomName, ext string) fyne.CanvasObject {
+	sizes := CalculateResponsiveSizes(a.window.Canvas().Size())
+
 	bg := canvas.NewRectangle(ColorPrimary)
-	bg.SetMinSize(fyne.NewSize(0, 60))
+	bg.SetMinSize(fyne.NewSize(0, sizes.FooterHeight))
 
 	roomLabel := canvas.NewText(roomName, color.White)
-	roomLabel.TextSize = 14
+	roomLabel.TextSize = sizes.FontSmall
 	roomLabel.TextStyle = fyne.TextStyle{Bold: true}
 	roomLabel.Alignment = fyne.TextAlignCenter
 
@@ -173,7 +182,7 @@ func (a *App) createRoomHeaderCell(roomName, ext string) fyne.CanvasObject {
 
 	if ext != "" {
 		extLabel := canvas.NewText("Dahili: "+ext, color.White)
-		extLabel.TextSize = 10
+		extLabel.TextSize = sizes.FontMicro
 		extLabel.Alignment = fyne.TextAlignCenter
 		content.Add(container.NewCenter(extLabel))
 	}
@@ -181,8 +190,10 @@ func (a *App) createRoomHeaderCell(roomName, ext string) fyne.CanvasObject {
 	return container.NewStack(bg, container.NewCenter(content))
 }
 
-// createBuildingHourCell creates an hour cell for building mode
+// createBuildingHourCell creates an hour cell for building mode with responsive sizing
 func (a *App) createBuildingHourCell(hour string) fyne.CanvasObject {
+	sizes := CalculateResponsiveSizes(a.window.Canvas().Size())
+
 	now := time.Now()
 	currentHour := now.Format("15:00")
 
@@ -194,17 +205,19 @@ func (a *App) createBuildingHourCell(hour string) fyne.CanvasObject {
 	}
 
 	bg := canvas.NewRectangle(bgColor)
-	bg.SetMinSize(fyne.NewSize(80, 50))
+	bg.SetMinSize(fyne.NewSize(sizes.TimeColWidth+20, sizes.HeaderHeight))
 
 	label := canvas.NewText(hour, fgColor)
-	label.TextSize = 14
+	label.TextSize = sizes.FontSmall
 	label.Alignment = fyne.TextAlignCenter
 
 	return container.NewStack(bg, container.NewCenter(label))
 }
 
-// createBuildingScheduleCell creates a schedule cell for building mode
+// createBuildingScheduleCell creates a schedule cell for building mode with responsive sizing
 func (a *App) createBuildingScheduleCell(state *BuildingState, roomName, hour string) fyne.CanvasObject {
+	sizes := CalculateResponsiveSizes(a.window.Canvas().Size())
+
 	state.mu.RLock()
 	schedule := state.schedule
 	state.mu.RUnlock()
@@ -224,13 +237,13 @@ func (a *App) createBuildingScheduleCell(state *BuildingState, roomName, hour st
 	}
 
 	bg := canvas.NewRectangle(bgColor)
-	bg.SetMinSize(fyne.NewSize(0, 50))
+	bg.SetMinSize(fyne.NewSize(0, sizes.HeaderHeight))
 
 	content := container.NewVBox()
 
 	if line1 != "" {
 		label1 := canvas.NewText(line1, fgColor)
-		label1.TextSize = 12
+		label1.TextSize = sizes.FontTiny
 		label1.TextStyle = fyne.TextStyle{Bold: true}
 		label1.Alignment = fyne.TextAlignCenter
 		content.Add(container.NewCenter(label1))
@@ -238,7 +251,7 @@ func (a *App) createBuildingScheduleCell(state *BuildingState, roomName, hour st
 
 	if line2 != "" {
 		label2 := canvas.NewText(line2, fgColor)
-		label2.TextSize = 10
+		label2.TextSize = sizes.FontMicro
 		label2.Alignment = fyne.TextAlignCenter
 		content.Add(container.NewCenter(label2))
 	}
@@ -255,25 +268,27 @@ func (a *App) createBuildingScheduleCell(state *BuildingState, roomName, hour st
 	return container.NewStack(bg, container.NewCenter(content))
 }
 
-// createBuildingFooter creates the footer with building name
+// createBuildingFooter creates the footer with building name using responsive sizing
 func (a *App) createBuildingFooter(state *BuildingState) fyne.CanvasObject {
+	sizes := CalculateResponsiveSizes(a.window.Canvas().Size())
+
 	footerBg := canvas.NewRectangle(ColorPrimary)
-	footerBg.SetMinSize(fyne.NewSize(0, 70))
+	footerBg.SetMinSize(fyne.NewSize(0, sizes.FooterHeight+10))
 
 	infoText := canvas.NewText("pve.izu.edu.tr/randevu ← Randevu İçin", color.White)
-	infoText.TextSize = 16
+	infoText.TextSize = sizes.FontBody
 
 	state.mu.RLock()
 	buildingName := state.buildingName
 	state.mu.RUnlock()
 
 	buildingText := canvas.NewText(buildingName, color.White)
-	buildingText.TextSize = 20
+	buildingText.TextSize = sizes.FontTitle
 	buildingText.TextStyle = fyne.TextStyle{Bold: true}
 	buildingText.Alignment = fyne.TextAlignCenter
 
 	clockText := canvas.NewText("", color.White)
-	clockText.TextSize = 16
+	clockText.TextSize = sizes.FontBody
 
 	// Update clock
 	go func() {

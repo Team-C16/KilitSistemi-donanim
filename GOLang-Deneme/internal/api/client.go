@@ -180,6 +180,7 @@ func (c *Client) GetSchedule() (*ScheduleResponse, error) {
 
 	body, err := c.post("/getSchedule", payload)
 	if err != nil {
+		fmt.Printf("[DEBUG API] GetSchedule API call failed: %v\n", err)
 		return nil, err
 	}
 
@@ -194,6 +195,7 @@ func (c *Client) GetSchedule() (*ScheduleResponse, error) {
 
 	// Try as direct object
 	if err := json.Unmarshal(body, &scheduleResp); err != nil {
+		fmt.Printf("[DEBUG API] Unmarshal failed: %v\n", err)
 		return nil, fmt.Errorf("json unmarshal failed: %w", err)
 	}
 

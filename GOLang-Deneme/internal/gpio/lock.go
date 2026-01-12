@@ -25,7 +25,10 @@ func NewLockController(pin int) *LockController {
 
 	// Only initialize GPIO on Linux (Raspberry Pi)
 	if runtime.GOOS == "linux" {
-		lc.initGPIO()
+		if err := lc.initGPIO(); err != nil {
+			log.Printf("GPIO: Failed to initialize: %v (using mock mode)", err)
+			lc.available = false
+		}
 	} else {
 		log.Printf("GPIO: Running on %s, using mock mode", runtime.GOOS)
 	}
@@ -34,11 +37,23 @@ func NewLockController(pin int) *LockController {
 }
 
 // initGPIO initializes the GPIO hardware
-func (lc *LockController) initGPIO() {
-	// Note: Actual GPIO initialization would use go-rpio
-	// We keep this separate to avoid build issues on non-Linux systems
-	log.Printf("GPIO: Initializing pin %d for door lock", lc.pin)
-	lc.available = true
+func (lc *LockController) initGPIO() error {
+	// On Linux, initialize actual GPIO hardware
+	if runtime.GOOS == "linux" {
+		if err := initRPIO(); err != nil {
+			return err
+		}
+		if err := setupPin(lc.pin); err != nil {
+			return err
+		}
+		lc.available = true
+		log.Printf("GPIO: Hardware initialized on pin %d", lc.pin)
+		return nil
+	}
+
+	// On other platforms, use mock mode
+	log.Printf("GPIO: Initializing pin %d for door lock (mock mode)", lc.pin)
+	return nil
 }
 
 // Open activates the lock for the specified duration
@@ -89,13 +104,11 @@ func (lc *LockController) setPin(high bool) {
 		return
 	}
 
-	// Note: Actual implementation would use go-rpio here
-	// rpio.Pin(lc.pin).Output()
-	// if high {
-	//     rpio.Pin(lc.pin).High()
-	// } else {
-	//     rpio.Pin(lc.pin).Low()
-	// }
+	// Set the actual GPIO pin state
+	if err := writePin(lc.pin, high); err != nil {
+		log.Printf("GPIO: Error setting pin %d to %v: %v", lc.pin, high, err)
+		return
+	}
 	log.Printf("GPIO: Pin %d set to %v", lc.pin, high)
 }
 

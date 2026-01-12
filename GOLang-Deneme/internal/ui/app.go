@@ -46,9 +46,7 @@ type App struct {
 func NewApp(cfg *config.Config) *App {
 	fyneApp := app.NewWithID("tr.edu.izu.kiosk")
 	fyneApp.Settings().SetTheme(NewKioskTheme())
-
 	window := fyneApp.NewWindow("Oda Rezervasyon Sistemi")
-
 	a := &App{
 		fyneApp:    fyneApp,
 		window:     window,
@@ -59,10 +57,8 @@ func NewApp(cfg *config.Config) *App {
 		updateChan: make(chan struct{}, 1),
 		stopChan:   make(chan struct{}),
 	}
-
 	// Initialize notification manager
 	a.notifyMgr = NewNotificationManager(window)
-
 	return a
 }
 
@@ -166,6 +162,7 @@ func (a *App) updateData() {
 	// Fetch schedule (ONLY if not in Building mode)
 	// Building mode handles its own schedule fetching independently
 	if a.cfg.Mode != config.ModeBuilding {
+
 		schedResp, err := a.apiClient.GetSchedule()
 		if err != nil {
 			log.Printf("Failed to fetch schedule: %v", err)
@@ -186,14 +183,14 @@ func (a *App) updateData() {
 			}
 		}
 
-		// Transform schedule
 		schedule := TransformSchedule(schedResp, dateKeys, a.timeConfig)
+
 		a.mu.Lock()
 		a.schedule = schedule
 		a.mu.Unlock()
+	} else {
 	}
 
-	// Signal UI update
 	select {
 	case a.updateChan <- struct{}{}:
 	default:
@@ -246,7 +243,6 @@ func (a *App) Notify(message, textColor string, duration time.Duration) {
 func (a *App) createFooter() fyne.CanvasObject {
 	// Calculate responsive sizes
 	sizes := CalculateResponsiveSizes(a.window.Canvas().Size())
-
 	footerBg := canvas.NewRectangle(ColorPrimary)
 	footerBg.SetMinSize(fyne.NewSize(0, sizes.FooterHeight))
 
@@ -279,7 +275,6 @@ func (a *App) createFooter() fyne.CanvasObject {
 		container.NewPadded(infoText),
 		container.NewPadded(clockText),
 	)
-
 	return container.NewStack(footerBg, footerContent)
 }
 
@@ -404,38 +399,30 @@ func (a *App) createHeaderCell(text string, bgColor color.Color) fyne.CanvasObje
 // createDayHeaderCell creates a day header cell with responsive sizing
 func (a *App) createDayHeaderCell(day DayInfo) fyne.CanvasObject {
 	sizes := CalculateResponsiveSizes(a.window.Canvas().Size())
-
 	bgColor := ColorPrimary
 	fgColor := ColorLight
 	if day.IsToday {
 		bgColor = ColorAvailable
 		fgColor = ColorDark
 	}
-
 	bg := canvas.NewRectangle(bgColor)
 	bg.SetMinSize(fyne.NewSize(0, sizes.HeaderHeight))
-
 	dayLabel := canvas.NewText(day.DayNameTR, fgColor)
 	dayLabel.TextSize = sizes.FontBody
 	dayLabel.TextStyle = fyne.TextStyle{Bold: true}
 	dayLabel.Alignment = fyne.TextAlignCenter
-
 	dateLabel := canvas.NewText(day.DisplayDate, fgColor)
 	dateLabel.TextSize = sizes.FontTiny
 	dateLabel.Alignment = fyne.TextAlignCenter
-
 	// Use tight VBox for closer line spacing
 	// Gap is InnerPadding (approx 4px) which is half of standard padding
 	content := a.createTightVBox(sizes.InnerPadding, dayLabel, dateLabel)
-
 	if day.IsToday {
 		todayLabel := canvas.NewText("Bugün", fgColor)
 		todayLabel.TextSize = sizes.FontMicro
 		todayLabel.Alignment = fyne.TextAlignCenter
-
 		content.Add(todayLabel)
 	}
-
 	return container.NewStack(bg, container.NewCenter(content))
 }
 

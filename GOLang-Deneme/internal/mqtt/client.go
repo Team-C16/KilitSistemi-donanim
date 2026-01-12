@@ -97,31 +97,50 @@ func (c *Client) onConnectionLost(client paho.Client, err error) {
 }
 
 // reconnect attempts to reconnect with a fresh JWT token
+// Retries indefinitely with backoff: 5 attempts with 3s delay, then 60s wait before next batch
 func (c *Client) reconnect() {
+	attempt := 0
 	for {
-		log.Println("MQTT: Attempting reconnection...")
-		time.Sleep(3 * time.Second)
+		attempt++
+		log.Printf("MQTT: Attempting reconnection (attempt %d)...", attempt)
 
 		if err := c.Connect(); err != nil {
 			log.Printf("MQTT: Reconnection failed: %v", err)
+
+			// After every 5 attempts, wait 60 seconds before next batch
+			if attempt%5 == 0 {
+				log.Printf("MQTT: Waiting 60 seconds before next batch of attempts...")
+				time.Sleep(60 * time.Second)
+			} else {
+				time.Sleep(3 * time.Second)
+			}
 			continue
 		}
 
+		log.Printf("MQTT: Reconnection successful after %d attempts", attempt)
 		break
 	}
 }
 
 // subscribe subscribes to a topic
+// Retries indefinitely with backoff: 5 attempts with 1s delay, then 30s wait before next batch
 func (c *Client) subscribe(topic string) {
-	// Async wait with retries to prevent blocking/deadlock and handle transient failures
 	go func() {
-		for i := 0; i < 5; i++ {
-			if i > 0 {
-				time.Sleep(1 * time.Second)
+		attempt := 0
+		for {
+			attempt++
+
+			// Wait before retry (except first attempt)
+			if attempt > 1 {
+				// After every 5 attempts, wait 30 seconds before next batch
+				if (attempt-1)%5 == 0 {
+					log.Printf("MQTT: Waiting 30 seconds before next batch of subscribe attempts to %s...", topic)
+					time.Sleep(30 * time.Second)
+				} else {
+					time.Sleep(1 * time.Second)
+				}
 			}
 
-			// If we think we are disconnected, we might want to trigger reconnect?
-			// But for now, just retry the subscribe call.
 			token := c.client.Subscribe(topic, 1, func(client paho.Client, msg paho.Message) {
 				c.handlersMu.RLock()
 				handler, exists := c.handlers[topic]
@@ -133,17 +152,16 @@ func (c *Client) subscribe(topic string) {
 			})
 
 			if token.Wait() && token.Error() != nil {
-				log.Printf("MQTT: Subscribe to %s failed (attempt %d/5): %v", topic, i+1, token.Error())
-				if token.Error().Error() == "not Connected" && i == 0 {
-					// Check connection state
+				log.Printf("MQTT: Subscribe to %s failed (attempt %d): %v", topic, attempt, token.Error())
+				if token.Error().Error() == "not Connected" {
 					log.Printf("MQTT: Client status: connected=%v", c.client.IsConnected())
 				}
+				// Continue retrying indefinitely
 			} else {
-				log.Printf("MQTT: Subscribed to %s", topic)
+				log.Printf("MQTT: Subscribed to %s (after %d attempts)", topic, attempt)
 				return
 			}
 		}
-		log.Printf("MQTT: Gave up subscribing to %s after 5 attempts", topic)
 	}()
 }
 

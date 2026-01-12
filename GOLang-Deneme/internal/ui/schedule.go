@@ -182,19 +182,34 @@ func TransformSchedule(apiData *api.ScheduleResponse, dateKeys []string, tc Time
 
 	// Fill in from API data
 	for _, entry := range apiData.Schedule {
-		// Parse date
+		// Parse date with timezone support
 		dayStr := entry.Day
 		if idx := strings.Index(dayStr, "."); idx != -1 {
 			dayStr = dayStr[:idx]
 		}
 
-		utcTime, err := time.Parse("2006-01-02T15:04:05", dayStr)
+		// Parse as RFC3339 with timezone (e.g., "2026-01-08T21:00:00Z")
+		// API returns UTC time that represents local midnight
+		var parsedTime time.Time
+		var err error
+
+		// Try parsing with Z suffix
+		if !strings.HasSuffix(dayStr, "Z") {
+			dayStr = dayStr + "Z"
+		}
+		parsedTime, err = time.Parse(time.RFC3339, dayStr)
+
 		if err != nil {
-			continue
+			// Fallback to basic format
+			parsedTime, err = time.Parse("2006-01-02T15:04:05", strings.TrimSuffix(dayStr, "Z"))
+			if err != nil {
+				fmt.Printf("[DEBUG TRANSFORM]     Fallback parse also failed: %v\n", err)
+				continue
+			}
 		}
 
-		// Add 1 day (matching Python logic)
-		localTime := utcTime.AddDate(0, 0, 1)
+		// Convert UTC to local time and extract date
+		localTime := parsedTime.In(time.Local)
 		dateKey := localTime.Format("2006-01-02")
 
 		// Parse hour and apply suffix

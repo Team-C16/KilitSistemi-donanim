@@ -149,6 +149,22 @@ type BuildingScheduleResponse struct {
 	Schedule []BuildingScheduleEntry `json:"schedule"`
 }
 
+// Owner represents a room owner
+type Owner struct {
+	Name    string `json:"name"`
+	Surname string `json:"surname"`
+	Photo   string `json:"photo"` // URL to photo, can be placeholder
+}
+
+// RoomDetailsResponse represents the response from getRoomDetails
+type RoomDetailsResponse struct {
+	RoomName    string  `json:"room_name"`
+	Description string  `json:"description"`
+	MinPerson   int     `json:"min_person"`
+	MaxPerson   int     `json:"max_person"`
+	Owners      []Owner `json:"owners"`
+}
+
 // GetQRCodeToken fetches a new QR code token and optionally the room name
 func (c *Client) GetQRCodeToken(includeRoomName bool) (*QRTokenResponse, error) {
 	payload := map[string]interface{}{
@@ -292,4 +308,23 @@ func (c *Client) SaveIP(ip string) error {
 
 	_, err := c.post("/saveIPForRaspberry", payload)
 	return err
+}
+
+// GetRoomDetails fetches room details including owners
+func (c *Client) GetRoomDetails() (*RoomDetailsResponse, error) {
+	payload := map[string]interface{}{
+		"room_id": c.roomID,
+	}
+
+	body, err := c.post("/getRoomDetails", payload)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp RoomDetailsResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, fmt.Errorf("json unmarshal failed: %w", err)
+	}
+
+	return &resp, nil
 }

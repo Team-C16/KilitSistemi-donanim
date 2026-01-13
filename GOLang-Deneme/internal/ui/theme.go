@@ -156,13 +156,13 @@ func CalculateResponsiveSizes(windowSize fyne.Size) ResponsiveSizes {
 		// Element heights (scaled)
 		HeaderHeight: clampFloat(70*scale, 40, 120),
 		FooterHeight: clampFloat(60*scale, 40, 100),
-		CellHeight:   clampFloat(40*scale, 28, 70),
+		CellHeight:   clampFloat(40*scale, 22, 55),
 		TimeColWidth: clampFloat(60*scale, 45, 100),
 
 		// Panel widths (proportional to window width)
-		// QR panel is 16% of window width, QR code is 90% of panel (14.4% of window)
+		// QR panel is 16% of window width, QR code is smaller to fit carousel
 		QRPanelWidth: clampFloat(windowSize.Width*0.16, 200, 450),
-		QRCodeSize:   clampFloat(windowSize.Width*0.18, 200, 450),
+		QRCodeSize:   clampFloat(windowSize.Width*0.17, 200, 450), //clampFloat(windowSize.Width*0.12, 150, 320),
 
 		// Notification sizes (scaled)
 		NotifyWidth:  clampFloat(400*scale, 280, 600),

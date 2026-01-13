@@ -1,0 +1,78 @@
+name: Go Build - Raspberry Pi
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'GOLang-Deneme/**'
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'GOLang-Deneme/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        working-directory: ./GOLang-Deneme
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Get version from commit message
+      id: version
+      run: |
+        # Commit mesajından versiyon çıkar (örnek: "v1.2.3" veya "release v1.0.0")
+        COMMIT_MSG="${{ github.event.head_commit.message }}"
+        VERSION=$(echo "$COMMIT_MSG" | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "")
+        
+        if [ -z "$VERSION" ]; then
+          VERSION="latest"
+        fi
+        
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        echo "Building version: $VERSION"
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.23'
+        cache-dependency-path: GOLang-Deneme/go.sum
+
+    - name: Download Go modules
+      run: go mod download
+
+    - name: Verify dependencies
+      run: go mod verify
+      
+    - name: Install fyne-cross
+      run: go install github.com/fyne-io/fyne-cross/v2/cmd/fyne-cross@latest
+
+    - name: Build for Raspberry Pi (arm64)
+      run: |
+        OUTPUT_NAME="DonanimGO-${{ steps.version.outputs.VERSION }}-arm64"
+        ~/go/bin/fyne-cross linux -arch=arm64 -name "$OUTPUT_NAME" -ldflags "-s -w" ./cmd/kiosk
+        # fyne-cross places the binary in a specific folder; copy it to where the upload step expects it
+        cp ./fyne-cross/bin/linux-arm64/"$OUTPUT_NAME" ./DonanimGO-${{ steps.version.outputs.VERSION }}-arm64
+        cp ./fyne-cross/bin/linux-arm64/"$OUTPUT_NAME" ./DonanimGO-latest-arm64
+
+    - name: Upload versioned artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: DonanimGO-${{ steps.version.outputs.VERSION }}-arm64
+        path: GOLang-Deneme/DonanimGO-${{ steps.version.outputs.VERSION }}-arm64
+        retention-days: 30
+
+    - name: Upload latest artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: DonanimGO-latest-arm64
+        path: GOLang-Deneme/DonanimGO-latest-arm64
+        retention-days: 30
+        overwrite: true

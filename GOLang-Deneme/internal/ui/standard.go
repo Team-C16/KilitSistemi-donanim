@@ -4,6 +4,7 @@ package ui
 import (
 	"image/color"
 	"log"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -78,15 +79,16 @@ func (a *App) createQRCardWithScheduleUpdate(scheduleContainer *fyne.Container) 
 	roomNameText.TextSize = sizes.FontTitle
 	roomNameText.TextStyle = fyne.TextStyle{Bold: true}
 	roomNameText.Alignment = fyne.TextAlignCenter
-	// Notification text with responsive font
-	notifyText := canvas.NewText("", ColorAvailable)
-	notifyText.TextSize = sizes.FontNotify
-	notifyText.TextStyle = fyne.TextStyle{Bold: true}
-	notifyText.Alignment = fyne.TextAlignCenter
-	a.notifyText = notifyText // Store reference for Notify() method
+
+	// Owner carousel container (replaces notification text)
+	ownerCarouselContainer := container.NewVBox()
+	ownerIndex := 0
 
 	// Update both QR and schedule dynamically in a single goroutine
 	go func() {
+		carouselTicker := time.NewTicker(3 * time.Second)
+		defer carouselTicker.Stop()
+
 		for {
 			select {
 			case <-a.updateChan:
@@ -99,11 +101,23 @@ func (a *App) createQRCardWithScheduleUpdate(scheduleContainer *fyne.Container) 
 				// Update QR code
 				a.updateQRImage(qrContainer)
 
+				// Update owner carousel
+				a.updateOwnerCarousel(ownerCarouselContainer, ownerIndex, sizes)
+
 				// Update schedule grid
 				newDays := GenerateDisplayDays()
 				newGrid := a.createScheduleGrid(newDays, false)
 				scheduleContainer.Objects = []fyne.CanvasObject{newGrid}
 				scheduleContainer.Refresh()
+
+			case <-carouselTicker.C:
+				// Auto-slide carousel
+				details := a.GetRoomDetails()
+				if details != nil && len(details.Owners) > 1 {
+					ownerIndex = (ownerIndex + 1) % len(details.Owners)
+					a.updateOwnerCarousel(ownerCarouselContainer, ownerIndex, sizes)
+				}
+
 			case <-a.stopChan:
 				return
 			}
@@ -115,7 +129,7 @@ func (a *App) createQRCardWithScheduleUpdate(scheduleContainer *fyne.Container) 
 		container.NewPadded(qrContainer),
 		container.NewCenter(scanText),
 		container.NewCenter(roomNameText),
-		container.NewCenter(notifyText),
+		container.NewPadded(ownerCarouselContainer),
 	)
 	return container.NewStack(cardBg, container.NewPadded(content))
 }

@@ -48,19 +48,18 @@ jobs:
     - name: Download Go modules
       run: go mod download
 
-    - name: Verify dependencies
-      run: go mod verify
-      
     - name: Install fyne-cross
-      run: go install github.com/fyne-io/fyne-cross/v2/cmd/fyne-cross@latest
+      run: go install github.com/fyne-io/fyne-cross@latest
 
     - name: Build for Raspberry Pi (arm64)
       run: |
         OUTPUT_NAME="DonanimGO-${{ steps.version.outputs.VERSION }}-arm64"
-        ~/go/bin/fyne-cross linux -arch=arm64 -name "$OUTPUT_NAME" -ldflags "-s -w" ./cmd/kiosk
-        # fyne-cross places the binary in a specific folder; copy it to where the upload step expects it
-        cp ./fyne-cross/bin/linux-arm64/"$OUTPUT_NAME" ./DonanimGO-${{ steps.version.outputs.VERSION }}-arm64
-        cp ./fyne-cross/bin/linux-arm64/"$OUTPUT_NAME" ./DonanimGO-latest-arm64
+        ~/go/bin/fyne-cross linux -arch=arm64 -name "$OUTPUT_NAME" ./cmd/kiosk
+        
+        # The binary is output as 'kiosk' (derived from ./cmd/kiosk) in the bin directory
+        # The -name flag only affected the distribution package name
+        cp ./fyne-cross/bin/linux-arm64/kiosk ./DonanimGO-${{ steps.version.outputs.VERSION }}-arm64
+        cp ./fyne-cross/bin/linux-arm64/kiosk ./DonanimGO-latest-arm64
 
     - name: Upload versioned artifact
       uses: actions/upload-artifact@v4

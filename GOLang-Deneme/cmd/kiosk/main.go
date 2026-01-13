@@ -14,15 +14,14 @@
 package main
 
 import (
-	"log"
-	"os"
-	"os/signal"
-	"syscall"
-
 	"kiosk-go/internal/config"
 	"kiosk-go/internal/gpio"
 	"kiosk-go/internal/mqtt"
 	"kiosk-go/internal/ui"
+	"log"
+	"os"
+	"os/signal"
+	"syscall"
 )
 
 func main() {

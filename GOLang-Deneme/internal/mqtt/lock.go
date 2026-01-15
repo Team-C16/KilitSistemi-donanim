@@ -99,12 +99,12 @@ func (lh *LockHandler) handleOpenDoor(topic string, payload []byte) {
 
 	// Show notification
 	if lh.onNotify != nil {
-		lh.onNotify("Kilit Açık!", "green", 5*time.Second)
+		lh.onNotify("Kapı Açık!", "green", 5*time.Second)
 	}
 
 	// Update footer lock status
 	if lh.onLockStatusUpdate != nil {
-		lh.onLockStatusUpdate("Kilit Açık")
+		lh.onLockStatusUpdate("Kapı Açık")
 		// Clear status after lock duration
 		go func() {
 			time.Sleep(5 * time.Second)

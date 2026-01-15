@@ -17,6 +17,13 @@ import (
 type Generator struct {
 	primaryColor color.Color
 	logoData     []byte
+
+	// Cached processed logo (resized + with padding coordinates)
+	cachedLogo     *image.RGBA
+	cachedLogoSize int           // Size for which the logo was cached
+	cachedLogoW    int           // Cached logo width
+	cachedLogoH    int           // Cached logo height
+	cachedPadMask  []image.Point // Pre-computed padding pixel positions
 }
 
 // NewGenerator creates a new QR generator with the specified primary color
@@ -108,11 +115,48 @@ func (g *Generator) drawCircle(img *image.RGBA, cx, cy, r float64, c color.Color
 }
 
 // overlayLogo places the logo in the center of the QR code with contour padding
+// Uses cached processed logo if available for the same size
 func (g *Generator) overlayLogo(img *image.RGBA, qrSize int) {
 	if len(g.logoData) == 0 {
 		return
 	}
 
+	// Check if we need to process the logo (first time or size changed)
+	if g.cachedLogo == nil || g.cachedLogoSize != qrSize {
+		g.processAndCacheLogo(qrSize)
+	}
+
+	// If caching failed, skip
+	if g.cachedLogo == nil {
+		return
+	}
+
+	// Calculate center position
+	centerX := (qrSize - g.cachedLogoW) / 2
+	centerY := (qrSize - g.cachedLogoH) / 2
+
+	white := color.White
+
+	// PASS 1: Draw Padding using pre-computed mask positions
+	for _, pt := range g.cachedPadMask {
+		img.Set(centerX+pt.X, centerY+pt.Y, white)
+	}
+
+	// PASS 2: Draw Logo using cached resized image
+	for y := 0; y < g.cachedLogoH; y++ {
+		for x := 0; x < g.cachedLogoW; x++ {
+			c := g.cachedLogo.At(x, y)
+			_, _, _, a := c.RGBA()
+			if a > 0 {
+				dr := image.Rect(centerX+x, centerY+y, centerX+x+1, centerY+y+1)
+				draw.Draw(img, dr, g.cachedLogo, image.Point{x, y}, draw.Over)
+			}
+		}
+	}
+}
+
+// processAndCacheLogo decodes, resizes, and caches the logo for future use
+func (g *Generator) processAndCacheLogo(qrSize int) {
 	srcLogo, _, err := image.Decode(bytes.NewReader(g.logoData))
 	if err != nil {
 		return
@@ -122,19 +166,13 @@ func (g *Generator) overlayLogo(img *image.RGBA, qrSize int) {
 	targetSize := float64(qrSize) / 4.0
 	logoBounds := srcLogo.Bounds()
 
-	// Create resized logo
-	// Since we don't want to import heavy x/image packages if not needed, we'll use simple nearest neighbor referencing
-	// or simple implementation. But manual scaling (bilinear) is better.
-	// For now, let's use a simple scaling loop which is good enough for 25% reduction usually.
-
 	scale := targetSize / float64(logoBounds.Dx())
 	newW := int(targetSize)
 	newH := int(float64(logoBounds.Dy()) * scale)
 
 	resizedLogo := image.NewRGBA(image.Rect(0, 0, newW, newH))
 
-	// Manual Bilinear or Nearest Neighbor scaling + Alpha extraction for mask
-	// We'll do a simple mapping.
+	// Resize logo
 	for y := 0; y < newH; y++ {
 		for x := 0; x < newW; x++ {
 			srcX := int(float64(x) / scale)
@@ -145,34 +183,19 @@ func (g *Generator) overlayLogo(img *image.RGBA, qrSize int) {
 		}
 	}
 
-	// Calculate position
-	centerX := (qrSize - newW) / 2
-	centerY := (qrSize - newH) / 2
-
-	// Contour Padding
-	// Simulate dilation: for every non-transparent pixel in logo, draw a white circle of radius P on output.
-	// Python uses 5% of logo size as padding.
+	// Pre-compute padding mask (relative positions from logo top-left)
 	paddingRadius := targetSize * 0.05
 	paddingR2 := paddingRadius * paddingRadius
+	var padMask []image.Point
 
-	// We iterate the resized logo. If alpha > 0, we "draw" white circles on the main image at that pos.
-	// To optimize, we can compute the mask first.
-	// But drawing directly is fine if logo isn't huge (80x80 px).
-
-	white := color.White
-
-	// PASS 1: Draw Padding
-	// Warning: heavy loop O(W*H * R*R). 80*80 * 4*4 = 6400 * 16 operations ~100k, fast enough.
 	for ly := 0; ly < newH; ly++ {
 		for lx := 0; lx < newW; lx++ {
 			_, _, _, a := resizedLogo.At(lx, ly).RGBA()
-			if a > 0 { // If pixel exists
-				// Draw white circle at (centerX+lx, centerY+ly)
-				px := float64(centerX + lx)
-				py := float64(centerY + ly)
+			if a > 0 {
+				// Compute all padding pixels relative to this logo pixel
+				px := float64(lx)
+				py := float64(ly)
 
-				// Draw filled circle for padding
-				// Inline optimization
 				minX := int(px - paddingRadius)
 				minY := int(py - paddingRadius)
 				maxX := int(px + paddingRadius)
@@ -183,7 +206,7 @@ func (g *Generator) overlayLogo(img *image.RGBA, qrSize int) {
 						dx := float64(pxx) - px
 						dy := float64(pyy) - py
 						if dx*dx+dy*dy <= paddingR2 {
-							img.Set(pxx, pyy, white)
+							padMask = append(padMask, image.Point{pxx, pyy})
 						}
 					}
 				}
@@ -191,27 +214,12 @@ func (g *Generator) overlayLogo(img *image.RGBA, qrSize int) {
 		}
 	}
 
-	// PASS 2: Draw Logo
-	// Simple overlay
-	for y := 0; y < newH; y++ {
-		for x := 0; x < newW; x++ {
-			c := resizedLogo.At(x, y)
-			_, _, _, a := c.RGBA()
-			if a > 0 {
-				// Naive blending usually fine for logo on white
-				// But we want to preserve the logo's own alpha blending if partial
-				// img.Set(centerX+x, centerY+y, c) overwrites.
-				// We should blend if needed, but usually simple Set is ok if logo is opaque or we cleared bg.
-				// Since we drew white padding underneath, simple Alpha comp is:
-				// dest = src * alpha + dst * (1-alpha)
-				// Since dst is white (from padding), and src is logo.
-
-				// Standard Draw does blending.
-				dr := image.Rect(centerX+x, centerY+y, centerX+x+1, centerY+y+1)
-				draw.Draw(img, dr, resizedLogo, image.Point{x, y}, draw.Over)
-			}
-		}
-	}
+	// Store in cache
+	g.cachedLogo = resizedLogo
+	g.cachedLogoSize = qrSize
+	g.cachedLogoW = newW
+	g.cachedLogoH = newH
+	g.cachedPadMask = padMask
 }
 
 // GenerateCanvasImage creates a Fyne canvas image from QR data

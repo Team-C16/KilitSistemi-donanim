@@ -2,9 +2,11 @@
 package ui
 
 import (
+	"image"
 	"image/color"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/theme"
 )
 
@@ -33,6 +35,9 @@ var (
 	// Building mode colors
 	ColorBuildingPrimary = color.NRGBA{R: 0x6D, G: 0x3A, B: 0xFF, A: 0xFF} // #6D3AFF Purple
 	ColorBuildingBG      = color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0xFF} // #FFFFFF
+
+	// Status colors
+	ColorSuccess = color.NRGBA{R: 0x2E, G: 0xCC, B: 0x71, A: 0xFF} // #2ECC71 Emerald Green
 )
 
 // NewKioskTheme creates a new kiosk theme
@@ -94,6 +99,35 @@ func (t *KioskTheme) Size(name fyne.ThemeSizeName) float32 {
 func (t *KioskTheme) Icon(name fyne.ThemeIconName) fyne.Resource {
 	return t.Theme.Icon(name)
 }
+
+// HiddenCursor implements desktop.Cursor to provide an invisible cursor
+type HiddenCursor struct{}
+
+// Image returns nil to hide the cursor
+func (h HiddenCursor) Image() (image.Image, int, int) {
+	return nil, 0, 0
+}
+
+// Ensure HiddenCursor implements desktop.Cursor
+var _ desktop.Cursor = HiddenCursor{}
+
+// CursorHiderWidget wraps content and hides the cursor when hovered
+type CursorHiderWidget struct {
+	fyne.CanvasObject
+}
+
+// NewCursorHider creates a new cursor hiding wrapper
+func NewCursorHider(content fyne.CanvasObject) *CursorHiderWidget {
+	return &CursorHiderWidget{CanvasObject: content}
+}
+
+// Cursor returns the hidden cursor
+func (c *CursorHiderWidget) Cursor() desktop.Cursor {
+	return HiddenCursor{}
+}
+
+// Ensure CursorHiderWidget implements desktop.Cursorable
+var _ desktop.Cursorable = (*CursorHiderWidget)(nil)
 
 // ResponsiveSizes holds all calculated responsive sizes based on window dimensions
 type ResponsiveSizes struct {

@@ -44,7 +44,7 @@ func (a *App) buildOfficeUI() fyne.CanvasObject {
 
 	// Start update loop to refresh grid when schedule data changes
 	go func() {
-		carouselTicker := time.NewTicker(3 * time.Second)
+		carouselTicker := time.NewTicker(10 * time.Second)
 		defer carouselTicker.Stop()
 
 		for {

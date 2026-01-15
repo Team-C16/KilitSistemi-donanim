@@ -84,7 +84,7 @@ func (a *App) createQRCardWithScheduleUpdate(scheduleContainer *fyne.Container) 
 
 	// Update both QR and schedule dynamically in a single goroutine
 	go func() {
-		carouselTicker := time.NewTicker(3 * time.Second)
+		carouselTicker := time.NewTicker(10 * time.Second)
 		defer carouselTicker.Stop()
 
 		for {

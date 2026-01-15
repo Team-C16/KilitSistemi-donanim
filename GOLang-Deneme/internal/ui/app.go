@@ -4,6 +4,7 @@ package ui
 import (
 	"image/color"
 	"log"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -80,6 +81,9 @@ func (a *App) Run() {
 	// Start background update loops
 	go a.startUpdateLoop()
 
+	// Set memory limit to 150MB - Go's GC will trigger automatically when approaching limit
+	debug.SetMemoryLimit(150 * 1024 * 1024)
+
 	// Show and run
 	a.window.ShowAndRun()
 
@@ -130,7 +134,7 @@ func (a *App) startUpdateLoop() {
 	// Initial update
 	a.updateData()
 
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 
 	for {
@@ -275,9 +279,9 @@ func (a *App) createFooter() fyne.CanvasObject {
 	infoText.TextSize = sizes.FontTitle
 	infoText.TextStyle = fyne.TextStyle{Bold: true}
 
-	// Lock status text in center
-	lockText := canvas.NewText("", ColorAvailable)
-	lockText.TextSize = sizes.FontSubtitle
+	// Lock status text in center with green text and bigger font
+	lockText := canvas.NewText("", ColorSuccess)
+	lockText.TextSize = sizes.FontNotify // Bigger font
 	lockText.TextStyle = fyne.TextStyle{Bold: true}
 	lockText.Alignment = fyne.TextAlignCenter
 	a.lockStatusText = lockText // Store reference for updates
@@ -306,7 +310,7 @@ func (a *App) createFooter() fyne.CanvasObject {
 		nil, nil,
 		container.NewPadded(infoText),
 		container.NewPadded(clockText),
-		container.NewCenter(lockText), // Center: lock status
+		lockText, // Center: lock status
 	)
 	return container.NewStack(footerBg, footerContent)
 }

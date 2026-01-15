@@ -2,6 +2,7 @@
 package mqtt
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -50,7 +51,12 @@ func (c *Client) generateToken() string {
 
 // Connect establishes connection to the MQTT broker
 func (c *Client) Connect() error {
-	brokerURL := fmt.Sprintf("tcp://%s:%d", c.cfg.MQTTBrokerIP, c.cfg.MQTTBrokerPort)
+	// Use mqtts:// for TLS, tcp:// for non-TLS (not recommended)
+	protocol := "tcp"
+	if c.cfg.MQTTUseTLS {
+		protocol = "mqtts"
+	}
+	brokerURL := fmt.Sprintf("%s://%s:%d", protocol, c.cfg.MQTTBrokerIP, c.cfg.MQTTBrokerPort)
 
 	opts := paho.NewClientOptions().
 		AddBroker(brokerURL).
@@ -61,6 +67,14 @@ func (c *Client) Connect() error {
 		SetOnConnectHandler(c.onConnect).
 		SetConnectionLostHandler(c.onConnectionLost)
 
+	// Configure TLS if enabled
+	if c.cfg.MQTTUseTLS {
+		tlsConfig := &tls.Config{
+			InsecureSkipVerify: c.cfg.MQTTInsecureSkipVerify,
+		}
+		opts.SetTLSConfig(tlsConfig)
+	}
+
 	c.client = paho.NewClient(opts)
 
 	token := c.client.Connect()
@@ -69,13 +83,11 @@ func (c *Client) Connect() error {
 	}
 
 	c.connected = true
-	log.Printf("MQTT: Connected to %s", brokerURL)
 	return nil
 }
 
 // onConnect is called when MQTT connection is established
 func (c *Client) onConnect(client paho.Client) {
-	log.Println("MQTT: Connection established")
 	c.connected = true
 
 	// Resubscribe to all handlers
@@ -89,7 +101,7 @@ func (c *Client) onConnect(client paho.Client) {
 
 // onConnectionLost is called when MQTT connection is lost
 func (c *Client) onConnectionLost(client paho.Client, err error) {
-	log.Printf("MQTT: Connection lost: %v", err)
+	log.Printf("MQTT: Connection lost: %v", err) // Log errors
 	c.connected = false
 
 	// Attempt reconnection with fresh token
@@ -102,14 +114,12 @@ func (c *Client) reconnect() {
 	attempt := 0
 	for {
 		attempt++
-		log.Printf("MQTT: Attempting reconnection (attempt %d)...", attempt)
 
 		if err := c.Connect(); err != nil {
-			log.Printf("MQTT: Reconnection failed: %v", err)
+			log.Printf("MQTT: Reconnection failed: %v", err) // Log errors
 
 			// After every 5 attempts, wait 60 seconds before next batch
 			if attempt%5 == 0 {
-				log.Printf("MQTT: Waiting 60 seconds before next batch of attempts...")
 				time.Sleep(60 * time.Second)
 			} else {
 				time.Sleep(3 * time.Second)
@@ -117,7 +127,6 @@ func (c *Client) reconnect() {
 			continue
 		}
 
-		log.Printf("MQTT: Reconnection successful after %d attempts", attempt)
 		break
 	}
 }
@@ -134,7 +143,6 @@ func (c *Client) subscribe(topic string) {
 			if attempt > 1 {
 				// After every 5 attempts, wait 30 seconds before next batch
 				if (attempt-1)%5 == 0 {
-					log.Printf("MQTT: Waiting 30 seconds before next batch of subscribe attempts to %s...", topic)
 					time.Sleep(30 * time.Second)
 				} else {
 					time.Sleep(1 * time.Second)
@@ -152,13 +160,9 @@ func (c *Client) subscribe(topic string) {
 			})
 
 			if token.Wait() && token.Error() != nil {
-				log.Printf("MQTT: Subscribe to %s failed (attempt %d): %v", topic, attempt, token.Error())
-				if token.Error().Error() == "not Connected" {
-					log.Printf("MQTT: Client status: connected=%v", c.client.IsConnected())
-				}
+				log.Printf("MQTT: Subscribe to %s failed: %v", topic, token.Error()) // Log errors
 				// Continue retrying indefinitely
 			} else {
-				log.Printf("MQTT: Subscribed to %s (after %d attempts)", topic, attempt)
 				return
 			}
 		}
@@ -209,7 +213,6 @@ func (c *Client) Disconnect() {
 	if c.client != nil && c.connected {
 		c.client.Disconnect(1000)
 		c.connected = false
-		log.Println("MQTT: Disconnected")
 	}
 }
 

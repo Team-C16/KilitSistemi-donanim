@@ -50,8 +50,10 @@ func (lb *LogBuffer) Log(level, format string, args ...interface{}) {
 	}
 	lb.logs = append(lb.logs, entry)
 
-	// Also print to standard log
-	fmt.Printf("%s [%s] %s: %s\n", entry.Time.Format("15:04:05"), entry.Level, lb.name, entry.Message)
+	// Only print ERROR level to console
+	if level == "ERROR" {
+		fmt.Printf("%s [%s] %s: %s\n", entry.Time.Format("15:04:05"), entry.Level, lb.name, entry.Message)
+	}
 }
 
 // Info logs an info message

@@ -93,7 +93,6 @@ sudo systemctl enable kiosk
 sudo systemctl start kiosk
 ```
 
-
 ## Current Benchmarks
 
 ```

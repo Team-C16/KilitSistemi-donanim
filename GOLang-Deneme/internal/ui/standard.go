@@ -15,8 +15,6 @@ import (
 // Left: QR card with room name
 // Right: 5-day rolling schedule grid
 func (a *App) buildStandardUI() fyne.CanvasObject {
-	log.Println("Building STANDARD mode UI")
-
 	// Get responsive sizes
 	sizes := CalculateResponsiveSizes(a.window.Canvas().Size())
 

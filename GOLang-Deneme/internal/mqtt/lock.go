@@ -12,11 +12,12 @@ import (
 
 // LockHandler handles door lock commands via MQTT
 type LockHandler struct {
-	mqttClient     *Client
-	cfg            *config.Config
-	lockController *gpio.LockController
-	onNotify       func(message string, color string, duration time.Duration)
-	log            *LogBuffer
+	mqttClient         *Client
+	cfg                *config.Config
+	lockController     *gpio.LockController
+	onNotify           func(message string, color string, duration time.Duration)
+	onLockStatusUpdate func(status string) // Callback to update footer lock status
+	log                *LogBuffer
 }
 
 // NewLockHandler creates a new lock handler
@@ -32,6 +33,11 @@ func NewLockHandler(mqttClient *Client, cfg *config.Config, lockController *gpio
 // SetNotifyCallback sets the notification callback for UI updates
 func (lh *LockHandler) SetNotifyCallback(callback func(message string, color string, duration time.Duration)) {
 	lh.onNotify = callback
+}
+
+// SetLockStatusCallback sets the callback to update footer lock status
+func (lh *LockHandler) SetLockStatusCallback(callback func(status string)) {
+	lh.onLockStatusUpdate = callback
 }
 
 // Start begins listening for door commands
@@ -94,6 +100,16 @@ func (lh *LockHandler) handleOpenDoor(topic string, payload []byte) {
 	// Show notification
 	if lh.onNotify != nil {
 		lh.onNotify("Kilit Açık!", "green", 5*time.Second)
+	}
+
+	// Update footer lock status
+	if lh.onLockStatusUpdate != nil {
+		lh.onLockStatusUpdate("Kilit Açık")
+		// Clear status after lock duration
+		go func() {
+			time.Sleep(5 * time.Second)
+			lh.onLockStatusUpdate("")
+		}()
 	}
 
 	lh.log.Info("Door opened successfully")

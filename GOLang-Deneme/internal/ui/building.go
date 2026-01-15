@@ -28,8 +28,6 @@ type BuildingState struct {
 // buildBuildingUI creates the BUILDING mode layout
 // Multi-room schedule with sliding animation
 func (a *App) buildBuildingUI() fyne.CanvasObject {
-	log.Println("Building BUILDING mode UI")
-
 	state := &BuildingState{
 		roomMap: make(map[int]string),
 	}
@@ -85,8 +83,6 @@ func (a *App) fetchBuildingDetails(state *BuildingState) {
 		state.roomExts = append(state.roomExts, room.RoomDesc)
 		state.roomMap[room.RoomID] = room.RoomName
 	}
-
-	log.Printf("Building %s has %d rooms", state.buildingName, len(state.rooms))
 }
 
 // createBuildingGrid creates the multi-room schedule grid
@@ -335,7 +331,6 @@ func (a *App) runBuildingSlider(state *BuildingState, _ *fyne.Container) {
 				state.slideIndex = (state.slideIndex + 4) % numRooms
 			}
 			state.mu.Unlock()
-			log.Printf("Slide to index: %d", state.slideIndex)
 		case <-a.stopChan:
 			return
 		}
@@ -377,6 +372,4 @@ func (a *App) fetchBuildingSchedule(state *BuildingState) {
 		hours,
 	)
 	state.mu.Unlock()
-
-	log.Println("Building schedule updated")
 }

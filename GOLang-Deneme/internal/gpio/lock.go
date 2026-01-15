@@ -29,8 +29,6 @@ func NewLockController(pin int) *LockController {
 			log.Printf("GPIO: Failed to initialize: %v (using mock mode)", err)
 			lc.available = false
 		}
-	} else {
-		log.Printf("GPIO: Running on %s, using mock mode", runtime.GOOS)
 	}
 
 	return lc
@@ -47,12 +45,9 @@ func (lc *LockController) initGPIO() error {
 			return err
 		}
 		lc.available = true
-		log.Printf("GPIO: Hardware initialized on pin %d", lc.pin)
 		return nil
 	}
 
-	// On other platforms, use mock mode
-	log.Printf("GPIO: Initializing pin %d for door lock (mock mode)", lc.pin)
 	return nil
 }
 
@@ -62,12 +57,10 @@ func (lc *LockController) Open(duration time.Duration) {
 	defer lc.mu.Unlock()
 
 	if lc.isOpen {
-		log.Println("GPIO: Lock already open, ignoring request")
 		return
 	}
 
 	lc.isOpen = true
-	log.Printf("GPIO: Opening lock for %v", duration)
 
 	if lc.available {
 		lc.setPin(true)
@@ -89,7 +82,6 @@ func (lc *LockController) Close() {
 		return
 	}
 
-	log.Println("GPIO: Closing lock")
 	lc.isOpen = false
 
 	if lc.available {
@@ -100,7 +92,6 @@ func (lc *LockController) Close() {
 // setPin sets the GPIO pin state
 func (lc *LockController) setPin(high bool) {
 	if !lc.available {
-		log.Printf("GPIO: Mock - Pin %d set to %v", lc.pin, high)
 		return
 	}
 
@@ -109,7 +100,6 @@ func (lc *LockController) setPin(high bool) {
 		log.Printf("GPIO: Error setting pin %d to %v: %v", lc.pin, high, err)
 		return
 	}
-	log.Printf("GPIO: Pin %d set to %v", lc.pin, high)
 }
 
 // IsAvailable returns whether GPIO hardware is available

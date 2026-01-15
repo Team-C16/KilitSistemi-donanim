@@ -30,8 +30,10 @@ type Config struct {
 	BuildingID string
 
 	// MQTT settings
-	MQTTBrokerIP   string
-	MQTTBrokerPort int
+	MQTTBrokerIP           string
+	MQTTBrokerPort         int
+	MQTTUseTLS             bool
+	MQTTInsecureSkipVerify bool
 
 	// Optional services
 	EnableLockMQTT      bool
@@ -55,9 +57,7 @@ var cfg *Config
 // Load initializes the configuration from environment variables
 func Load() *Config {
 	// Try to load .env file (ignore error if not present)
-	if err := godotenv.Load(); err != nil {
-		log.Println("No .env file found, using environment variables")
-	}
+	godotenv.Load()
 
 	cfg = &Config{
 		// Core settings
@@ -68,8 +68,10 @@ func Load() *Config {
 		BuildingID: getEnv("BUILDING_ID", "1"),
 
 		// MQTT settings
-		MQTTBrokerIP:   getEnv("MQTT_BROKER_IP", getEnv("mqttbrokerip", "pve.izu.edu.tr")),
-		MQTTBrokerPort: getEnvInt("MQTT_BROKER_PORT", getEnvInt("mqttbrokerport", 1883)),
+		MQTTBrokerIP:           getEnv("MQTT_BROKER_IP", getEnv("mqttbrokerip", "pve.izu.edu.tr")),
+		MQTTBrokerPort:         getEnvInt("MQTT_BROKER_PORT", getEnvInt("mqttbrokerport", 8883)),
+		MQTTUseTLS:             getEnvBool("MQTT_USE_TLS", true),
+		MQTTInsecureSkipVerify: getEnvBool("MQTT_INSECURE_SKIP_VERIFY", false),
 
 		// Optional services
 		EnableLockMQTT:      getEnvBool("ENABLE_LOCK_MQTT", false),
@@ -92,7 +94,6 @@ func Load() *Config {
 		log.Println("WARNING: JWT_SECRET is not set!")
 	}
 
-	log.Printf("Configuration loaded: Mode=%s, RoomID=%s", cfg.Mode, cfg.RoomID)
 	return cfg
 }
 

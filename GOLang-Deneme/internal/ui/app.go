@@ -95,7 +95,6 @@ func (a *App) setupWindow() {
 	// Escape key to quit (for development)
 	a.window.Canvas().SetOnTypedKey(func(ke *fyne.KeyEvent) {
 		if ke.Name == fyne.KeyEscape {
-			log.Println("Escape pressed, quitting...")
 			a.fyneApp.Quit()
 		}
 	})
@@ -112,14 +111,10 @@ func (a *App) fetchTimeConfig() {
 		return
 	}
 	a.timeConfig = ParseTimeConfig(configs)
-	log.Printf("Time config loaded: suffix=%s, hours=%d-%d",
-		a.timeConfig.TimeSuffix, a.timeConfig.StartHour, a.timeConfig.EndHour)
 }
 
 // buildModeUI creates the appropriate UI based on the configured mode
 func (a *App) buildModeUI() fyne.CanvasObject {
-	log.Printf("Building UI for mode: %s", a.cfg.Mode)
-
 	switch a.cfg.Mode {
 	case config.ModeOffice:
 		return a.buildOfficeUI()
@@ -150,8 +145,6 @@ func (a *App) startUpdateLoop() {
 
 // updateData fetches fresh data from the API
 func (a *App) updateData() {
-	log.Println("Updating data...")
-
 	// Fetch room name and QR token for STANDARD mode
 	if a.cfg.Mode == config.ModeStandard {
 		qrResp, err := a.apiClient.GetQRCodeToken(true)
@@ -247,8 +240,6 @@ func (a *App) SetLockStatus(status string) {
 
 // Notify shows a notification to the user
 func (a *App) Notify(message, textColor string, duration time.Duration) {
-	log.Printf("NOTIFY: %s (color: %s, duration: %v)", message, textColor, duration)
-
 	// Update in-app notification text
 	if a.notifyText != nil {
 		switch textColor {

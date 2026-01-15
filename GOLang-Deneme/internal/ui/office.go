@@ -4,7 +4,6 @@ package ui
 import (
 	"fmt"
 	"image/color"
-	"log"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -19,8 +18,6 @@ import (
 // Weekend displays next week
 // Left panel shows room info and owner carousel (hidden if no data)
 func (a *App) buildOfficeUI() fyne.CanvasObject {
-	log.Println("Building OFFICE mode UI")
-
 	// Get responsive sizes
 	sizes := CalculateResponsiveSizes(a.window.Canvas().Size())
 

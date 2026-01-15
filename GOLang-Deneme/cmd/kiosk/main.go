@@ -14,25 +14,20 @@
 package main
 
 import (
-	"kiosk-go/internal/config"
-	"kiosk-go/internal/gpio"
-	"kiosk-go/internal/mqtt"
-	"kiosk-go/internal/ui"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
+
+	"kiosk-go/internal/config"
+	"kiosk-go/internal/gpio"
+	"kiosk-go/internal/mqtt"
+	"kiosk-go/internal/ui"
 )
 
 func main() {
-	log.Println("=== Kiosk Application Starting ===")
-
 	// Load configuration
 	cfg := config.Load()
-	log.Printf("Mode: %s, Room ID: %s, Building ID: %s", cfg.Mode, cfg.RoomID, cfg.BuildingID)
-	log.Printf("MQTT Config: Broker=%s:%d, ID_Prefix=%s", cfg.MQTTBrokerIP, cfg.MQTTBrokerPort, cfg.GetMQTTID())
-	log.Printf("Services Enabled: Lock=%v, DeviceManager=%v, Update=%v",
-		cfg.EnableLockMQTT, cfg.EnableDeviceManager, cfg.EnableUpdateService)
 
 	// Create UI application first (needed for notification callback)
 	app := ui.NewApp(cfg)
@@ -40,16 +35,12 @@ func main() {
 	// Initialize MQTT client if any MQTT services are enabled
 	var mqttClient *mqtt.Client
 	if cfg.EnableLockMQTT || cfg.EnableDeviceManager || cfg.EnableUpdateService {
-		log.Println("Initializing MQTT client...")
 		mqttClient = mqtt.NewClient(cfg)
 		if err := mqttClient.Connect(); err != nil {
 			log.Printf("MQTT connection failed: %v", err)
 		} else {
 			defer mqttClient.Disconnect()
-			log.Println("MQTT client connected successfully")
 		}
-	} else {
-		log.Println("No MQTT services enabled, skipping MQTT client initialization")
 	}
 
 	// Initialize GPIO for lock control
@@ -63,20 +54,19 @@ func main() {
 		lockHandler := mqtt.NewLockHandler(mqttClient, cfg, lockController)
 		// Connect notification callback to UI
 		lockHandler.SetNotifyCallback(app.Notify)
+		// Connect footer lock status callback to UI
+		lockHandler.SetLockStatusCallback(app.SetLockStatus)
 		lockHandler.Start()
-		log.Println("Lock MQTT handler started")
 	}
 
 	if cfg.EnableDeviceManager && mqttClient != nil {
 		deviceManager := mqtt.NewDeviceManager(mqttClient, cfg)
 		deviceManager.Start()
-		log.Println("Device Manager started")
 	}
 
 	if cfg.EnableUpdateService && mqttClient != nil {
 		updateHandler := mqtt.NewUpdateHandler(mqttClient, cfg)
 		updateHandler.Start()
-		log.Println("Update handler started")
 	}
 
 	// Setup signal handling for graceful shutdown
@@ -84,13 +74,9 @@ func main() {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		<-sigChan
-		log.Println("Shutdown signal received")
 		os.Exit(0)
 	}()
 
 	// Run the UI application
-	log.Println("Starting UI...")
 	app.Run()
-
-	log.Println("=== Kiosk Application Stopped ===")
 }

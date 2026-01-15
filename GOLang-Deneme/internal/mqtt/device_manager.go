@@ -95,8 +95,6 @@ func (dm *DeviceManager) restart() error {
 
 // handleGetStatus processes status query requests
 func (dm *DeviceManager) handleGetStatus(topic string, payload []byte) {
-	log.Println("DeviceManager: Status request received")
-
 	response := StatusResponse{
 		RoomID:        dm.cfg.RoomID,
 		CurrentCommit: dm.getGitCommit(),
@@ -108,8 +106,6 @@ func (dm *DeviceManager) handleGetStatus(topic string, payload []byte) {
 	responseTopic := fmt.Sprintf("v1/%s/getStatus/response", dm.cfg.GetMQTTID())
 	if err := dm.mqttClient.Publish(responseTopic, response); err != nil {
 		log.Printf("DeviceManager: Failed to publish status: %v", err)
-	} else {
-		log.Println("DeviceManager: Status report sent")
 	}
 }
 
@@ -122,8 +118,6 @@ func (dm *DeviceManager) handleRestartService(topic string, payload []byte) {
 		log.Printf("DeviceManager: Invalid restart request: %v", err)
 		return
 	}
-
-	log.Printf("DeviceManager: Restart request for %s", request.Service)
 
 	response := RestartResponse{
 		RoomID:           dm.cfg.RoomID,
@@ -173,7 +167,6 @@ func (dm *DeviceManager) handleRestartService(topic string, payload []byte) {
 
 	responseTopic := fmt.Sprintf("v1/%s/restartService/response", dm.cfg.GetMQTTID())
 	dm.mqttClient.Publish(responseTopic, response)
-	log.Printf("DeviceManager: Restart response sent: %s", response.Status)
 }
 
 // getDeviceInfo collects hardware information

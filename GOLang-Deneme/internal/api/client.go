@@ -149,8 +149,8 @@ type BuildingScheduleResponse struct {
 	Schedule []BuildingScheduleEntry `json:"schedule"`
 }
 
-// Owner represents a room owner
-type Owner struct {
+// Occupant represents a room occupant
+type Occupant struct {
 	Name    string `json:"name"`
 	Surname string `json:"surname"`
 	Photo   string `json:"photo"` // URL to photo, can be placeholder
@@ -158,11 +158,11 @@ type Owner struct {
 
 // RoomDetailsResponse represents the response from getRoomDetails
 type RoomDetailsResponse struct {
-	RoomName    string  `json:"room_name"`
-	Description string  `json:"description"`
-	MinPerson   int     `json:"min_person"`
-	MaxPerson   int     `json:"max_person"`
-	Owners      []Owner `json:"owners"`
+	RoomName    string     `json:"room_name"`
+	Description string     `json:"description"`
+	MinPerson   int        `json:"min_person"`
+	MaxPerson   int        `json:"max_person"`
+	Occupants   []Occupant `json:"occupants"`
 }
 
 // GetQRCodeToken fetches a new QR code token and optionally the room name

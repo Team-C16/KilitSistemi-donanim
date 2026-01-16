@@ -78,9 +78,9 @@ func (a *App) createQRCardWithScheduleUpdate(scheduleContainer *fyne.Container) 
 	roomNameText.TextStyle = fyne.TextStyle{Bold: true}
 	roomNameText.Alignment = fyne.TextAlignCenter
 
-	// Owner carousel container (replaces notification text)
-	ownerCarouselContainer := container.NewVBox()
-	ownerIndex := 0
+	// Occupant carousel container (replaces notification text)
+	occupantCarouselContainer := container.NewVBox()
+	occupantIndex := 0
 
 	// Update both QR and schedule dynamically in a single goroutine
 	go func() {
@@ -99,8 +99,8 @@ func (a *App) createQRCardWithScheduleUpdate(scheduleContainer *fyne.Container) 
 				// Update QR code
 				a.updateQRImage(qrContainer)
 
-				// Update owner carousel
-				a.updateOwnerCarousel(ownerCarouselContainer, ownerIndex, sizes)
+				// Update occupant carousel
+				a.updateOccupantCarousel(occupantCarouselContainer, occupantIndex, sizes)
 
 				// Update schedule grid
 				newDays := GenerateDisplayDays()
@@ -111,9 +111,9 @@ func (a *App) createQRCardWithScheduleUpdate(scheduleContainer *fyne.Container) 
 			case <-carouselTicker.C:
 				// Auto-slide carousel
 				details := a.GetRoomDetails()
-				if details != nil && len(details.Owners) > 1 {
-					ownerIndex = (ownerIndex + 1) % len(details.Owners)
-					a.updateOwnerCarousel(ownerCarouselContainer, ownerIndex, sizes)
+				if details != nil && len(details.Occupants) > 1 {
+					occupantIndex = (occupantIndex + 1) % len(details.Occupants)
+					a.updateOccupantCarousel(occupantCarouselContainer, occupantIndex, sizes)
 				}
 
 			case <-a.stopChan:
@@ -127,7 +127,7 @@ func (a *App) createQRCardWithScheduleUpdate(scheduleContainer *fyne.Container) 
 		container.NewPadded(qrContainer),
 		container.NewCenter(scanText),
 		container.NewCenter(roomNameText),
-		container.NewPadded(ownerCarouselContainer),
+		container.NewPadded(occupantCarouselContainer),
 	)
 	return container.NewStack(cardBg, container.NewPadded(content))
 }

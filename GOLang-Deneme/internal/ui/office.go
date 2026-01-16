@@ -16,7 +16,7 @@ import (
 // buildOfficeUI creates the OFFICE mode layout
 // Full-width Mon-Fri grid without QR card
 // Weekend displays next week
-// Left panel shows room info and owner carousel (hidden if no data)
+// Left panel shows room info and occupant carousel (hidden if no data)
 func (a *App) buildOfficeUI() fyne.CanvasObject {
 	// Get responsive sizes
 	sizes := CalculateResponsiveSizes(a.window.Canvas().Size())
@@ -30,7 +30,7 @@ func (a *App) buildOfficeUI() fyne.CanvasObject {
 
 	// Create left panel container (will be populated dynamically)
 	leftPanelContent := container.NewVBox()
-	ownerIndex := 0
+	occupantIndex := 0
 
 	// Left panel wrapper with fixed width (compact)
 	leftPanelWidth := sizes.QRPanelWidth * 0.6
@@ -58,11 +58,11 @@ func (a *App) buildOfficeUI() fyne.CanvasObject {
 
 				// Check if we have room details
 				details := a.GetRoomDetails()
-				hasData := details != nil && len(details.Owners) > 0
+				hasData := details != nil && len(details.Occupants) > 0
 
 				if hasData {
 					// Update left panel and show it
-					newPanel := a.createOfficeLeftPanelWithIndex(sizes, ownerIndex)
+					newPanel := a.createOfficeLeftPanelWithIndex(sizes, occupantIndex)
 					leftPanelContent.Objects = []fyne.CanvasObject{newPanel}
 					leftPanelContent.Refresh()
 
@@ -84,9 +84,9 @@ func (a *App) buildOfficeUI() fyne.CanvasObject {
 			case <-carouselTicker.C:
 				// Auto-slide carousel
 				details := a.GetRoomDetails()
-				if details != nil && len(details.Owners) > 1 {
-					ownerIndex = (ownerIndex + 1) % len(details.Owners)
-					newPanel := a.createOfficeLeftPanelWithIndex(sizes, ownerIndex)
+				if details != nil && len(details.Occupants) > 1 {
+					occupantIndex = (occupantIndex + 1) % len(details.Occupants)
+					newPanel := a.createOfficeLeftPanelWithIndex(sizes, occupantIndex)
 					leftPanelContent.Objects = []fyne.CanvasObject{newPanel}
 					leftPanelContent.Refresh()
 				}
@@ -110,11 +110,11 @@ func (a *App) buildOfficeUI() fyne.CanvasObject {
 	)
 }
 
-// createOfficeLeftPanelWithIndex creates the left panel with room info and owner carousel
-func (a *App) createOfficeLeftPanelWithIndex(sizes ResponsiveSizes, ownerIndex int) fyne.CanvasObject {
+// createOfficeLeftPanelWithIndex creates the left panel with room info and occupant carousel
+func (a *App) createOfficeLeftPanelWithIndex(sizes ResponsiveSizes, occupantIndex int) fyne.CanvasObject {
 	details := a.GetRoomDetails()
-	if details == nil || len(details.Owners) == 0 {
-		// Return empty/minimal container if no owners
+	if details == nil || len(details.Occupants) == 0 {
+		// Return empty/minimal container if no occupants
 		return container.NewVBox()
 	}
 
@@ -169,44 +169,31 @@ func (a *App) createOfficeLeftPanelWithIndex(sizes ResponsiveSizes, ownerIndex i
 	divider := canvas.NewRectangle(ColorPrimary)
 	divider.SetMinSize(fyne.NewSize(0, 2))
 
-	// Owner section header
-	ownerHeaderText := canvas.NewText("Oda Sahipleri", ColorPrimary)
-	ownerHeaderText.TextSize = sizes.FontSmall
-	ownerHeaderText.TextStyle = fyne.TextStyle{Bold: true}
-	ownerHeaderText.Alignment = fyne.TextAlignCenter
+	// Occupant section header
+	occupantHeaderText := canvas.NewText("Oda Sahipleri", ColorPrimary)
+	occupantHeaderText.TextSize = sizes.FontSmall
+	occupantHeaderText.TextStyle = fyne.TextStyle{Bold: true}
+	occupantHeaderText.Alignment = fyne.TextAlignCenter
 
-	// Current owner
-	owner := details.Owners[ownerIndex%len(details.Owners)]
+	// Current occupant
+	occupant := details.Occupants[occupantIndex%len(details.Occupants)]
 
-	// Photo placeholder (circle with initial)
-	photoBg := canvas.NewRectangle(ColorPrimary)
+	// Photo container (circle with photo or initial)
 	photoSize := sizes.HeaderHeight
-	photoBg.SetMinSize(fyne.NewSize(photoSize, photoSize))
-	photoBg.CornerRadius = photoSize / 2
+	photoContainer := a.createOccupantPhotoContainer(occupant, photoSize, sizes.FontTitle)
 
-	var initial string
-	if len(owner.Name) > 0 {
-		initial = string([]rune(owner.Name)[0])
-	}
-	photoInitial := canvas.NewText(initial, color.White)
-	photoInitial.TextSize = sizes.FontTitle
-	photoInitial.TextStyle = fyne.TextStyle{Bold: true}
-	photoInitial.Alignment = fyne.TextAlignCenter
-
-	photoContainer := container.NewStack(photoBg, container.NewCenter(photoInitial))
-
-	// Owner name
-	nameText := canvas.NewText(owner.Name+" "+owner.Surname, ColorText)
+	// Occupant name
+	nameText := canvas.NewText(occupant.Name+" "+occupant.Surname, ColorText)
 	nameText.TextSize = sizes.FontBody
 	nameText.TextStyle = fyne.TextStyle{Bold: true}
 	nameText.Alignment = fyne.TextAlignCenter
 
 	// Count indicator (dots)
 	var countWidget fyne.CanvasObject
-	if len(details.Owners) > 1 {
+	if len(details.Occupants) > 1 {
 		dots := ""
-		for i := 0; i < len(details.Owners); i++ {
-			if i == ownerIndex {
+		for i := 0; i < len(details.Occupants); i++ {
+			if i == occupantIndex {
 				dots += "●"
 			} else {
 				dots += "○"
@@ -226,7 +213,7 @@ func (a *App) createOfficeLeftPanelWithIndex(sizes ResponsiveSizes, ownerIndex i
 		container.NewPadded(descWidget),
 		capacityWidget,
 		container.NewPadded(divider),
-		container.NewCenter(ownerHeaderText),
+		container.NewCenter(occupantHeaderText),
 		container.NewPadded(container.NewCenter(photoContainer)),
 		container.NewCenter(nameText),
 		countWidget,

@@ -2,9 +2,15 @@
 package ui
 
 import (
+	"image"
 	"image/color"
+	_ "image/jpeg"
+	_ "image/png"
 	"log"
+	"math"
+	"net/http"
 	"runtime/debug"
+	"strings"
 	"sync"
 	"time"
 
@@ -315,47 +321,144 @@ func (a *App) createFooter() fyne.CanvasObject {
 	return container.NewStack(footerBg, footerContent)
 }
 
-// updateOwnerCarousel updates the owner carousel display (compact version)
-func (a *App) updateOwnerCarousel(carouselContainer *fyne.Container, index int, sizes ResponsiveSizes) {
+// getImageURL builds the full image URL from a path
+func (a *App) getImageURL(path string) string {
+	if path == "" {
+		return ""
+	}
+	if strings.HasPrefix(path, "http") {
+		return path
+	}
+	return a.cfg.APIBaseURL + path
+}
+
+// loadImageFromURL loads an image from URL and returns it as a circular canvas.Image
+func (a *App) loadImageFromURL(url string, size float32) *canvas.Image {
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil
+	}
+
+	img, _, err := image.Decode(resp.Body)
+	if err != nil {
+		return nil
+	}
+
+	// Create circular cropped image
+	circularImg := a.createCircularImage(img, int(size))
+
+	canvasImg := canvas.NewImageFromImage(circularImg)
+	canvasImg.FillMode = canvas.ImageFillContain
+	canvasImg.SetMinSize(fyne.NewSize(size, size))
+	return canvasImg
+}
+
+// createCircularImage crops an image to a circle
+func (a *App) createCircularImage(src image.Image, size int) image.Image {
+	// Create a new RGBA image with the desired size
+	dst := image.NewRGBA(image.Rect(0, 0, size, size))
+
+	// Get source bounds and scale
+	srcBounds := src.Bounds()
+	srcW := srcBounds.Dx()
+	srcH := srcBounds.Dy()
+
+	// Calculate center and radius
+	centerX := float64(size) / 2
+	centerY := float64(size) / 2
+	radius := float64(size) / 2
+
+	// Draw the source image scaled to fit, with circular mask
+	for y := 0; y < size; y++ {
+		for x := 0; x < size; x++ {
+			// Check if point is inside circle
+			dx := float64(x) - centerX + 0.5
+			dy := float64(y) - centerY + 0.5
+			distance := math.Sqrt(dx*dx + dy*dy)
+
+			if distance <= radius {
+				// Map to source image coordinates
+				srcX := int(float64(x) * float64(srcW) / float64(size))
+				srcY := int(float64(y) * float64(srcH) / float64(size))
+
+				if srcX >= srcW {
+					srcX = srcW - 1
+				}
+				if srcY >= srcH {
+					srcY = srcH - 1
+				}
+
+				dst.Set(x, y, src.At(srcBounds.Min.X+srcX, srcBounds.Min.Y+srcY))
+			}
+			// Outside circle remains transparent (zero value)
+		}
+	}
+
+	return dst
+}
+
+// createOccupantPhotoContainer creates a circular photo container for an occupant
+func (a *App) createOccupantPhotoContainer(occupant api.Occupant, photoSize float32, initialFontSize float32) fyne.CanvasObject {
+	// Background circle
+	photoBg := canvas.NewRectangle(ColorPrimary)
+	photoBg.SetMinSize(fyne.NewSize(photoSize, photoSize))
+	photoBg.CornerRadius = photoSize / 2
+
+	// Try to load actual photo if available
+	photoURL := a.getImageURL(occupant.Photo)
+	if photoURL != "" {
+		if img := a.loadImageFromURL(photoURL, photoSize); img != nil {
+			// Create circular mask effect by stacking with round container
+			return container.NewStack(photoBg, container.NewCenter(img))
+		}
+	}
+
+	// Fallback to initial letter
+	var initial string
+	if len(occupant.Name) > 0 {
+		initial = string([]rune(occupant.Name)[0])
+	}
+	photoInitial := canvas.NewText(initial, color.White)
+	photoInitial.TextSize = initialFontSize
+	photoInitial.TextStyle = fyne.TextStyle{Bold: true}
+	photoInitial.Alignment = fyne.TextAlignCenter
+
+	return container.NewStack(photoBg, container.NewCenter(photoInitial))
+}
+
+// updateOccupantCarousel updates the occupant carousel display (compact version)
+func (a *App) updateOccupantCarousel(carouselContainer *fyne.Container, index int, sizes ResponsiveSizes) {
 	details := a.GetRoomDetails()
-	if details == nil || len(details.Owners) == 0 {
+	if details == nil || len(details.Occupants) == 0 {
 		carouselContainer.Objects = nil
 		carouselContainer.Refresh()
 		return
 	}
 
-	// Get current owner
-	owner := details.Owners[index%len(details.Owners)]
+	// Get current occupant
+	occupant := details.Occupants[index%len(details.Occupants)]
 
-	// Photo placeholder (smaller circle)
-	photoBg := canvas.NewRectangle(ColorPrimary)
-	photoSize := sizes.HeaderHeight * 0.8 // Smaller photo
-	photoBg.SetMinSize(fyne.NewSize(photoSize, photoSize))
-	photoBg.CornerRadius = photoSize / 2
-
-	var initial string
-	if len(owner.Name) > 0 {
-		initial = string([]rune(owner.Name)[0])
-	}
-	photoInitial := canvas.NewText(initial, color.White)
-	photoInitial.TextSize = sizes.FontSmall
-	photoInitial.TextStyle = fyne.TextStyle{Bold: true}
-	photoInitial.Alignment = fyne.TextAlignCenter
-
-	photoContainer := container.NewStack(photoBg, container.NewCenter(photoInitial))
+	// Photo container (smaller circle)
+	photoSize := sizes.HeaderHeight * 0.8
+	photoContainer := a.createOccupantPhotoContainer(occupant, photoSize, sizes.FontSmall)
 
 	// Name and surname (smaller font)
-	nameText := canvas.NewText(owner.Name+" "+owner.Surname, ColorText)
+	nameText := canvas.NewText(occupant.Name+" "+occupant.Surname, ColorText)
 	nameText.TextSize = sizes.FontSmall
 	nameText.TextStyle = fyne.TextStyle{Bold: true}
 	nameText.Alignment = fyne.TextAlignCenter
 
-	// Owner count indicator (dots style)
+	// Occupant count indicator (dots style)
 	var countWidget fyne.CanvasObject
-	if len(details.Owners) > 1 {
+	if len(details.Occupants) > 1 {
 		dots := ""
-		for i := 0; i < len(details.Owners); i++ {
-			if i == index%len(details.Owners) {
+		for i := 0; i < len(details.Occupants); i++ {
+			if i == index%len(details.Occupants) {
 				dots += "●"
 			} else {
 				dots += "○"

@@ -2,6 +2,7 @@
 package ui
 
 import (
+	"fmt"
 	"image/color"
 	"log"
 	"sync"
@@ -10,55 +11,85 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/widget"
 
 	"kiosk-go/internal/api"
+	"kiosk-go/internal/config"
 )
 
 // BuildingState holds state for building mode
 type BuildingState struct {
-	rooms        []string
-	roomExts     []string
-	roomMap      map[int]string
-	buildingName string
-	schedule     RoomSchedule
-	slideIndex   int
-	mu           sync.RWMutex
+	rooms          []string
+	roomExts       []string
+	roomMap        map[int]string
+	roomConfigs    map[string]RoomTimeConfig // room name -> time config
+	globalConfig   TimeConfig                // global grid config
+	buildingName   string
+	schedule       RoomSchedule
+	slideIndex     int
+	slideDirection int // 1 for forward, -1 for backward
+	progress       *widget.ProgressBar
+	mu             sync.RWMutex
 }
 
 // buildBuildingUI creates the BUILDING mode layout
 // Multi-room schedule with sliding animation
 func (a *App) buildBuildingUI() fyne.CanvasObject {
 	state := &BuildingState{
-		roomMap: make(map[int]string),
+		roomMap:        make(map[int]string),
+		roomConfigs:    make(map[string]RoomTimeConfig),
+		slideDirection: 1, // Start moving forward
+		progress:       widget.NewProgressBar(),
 	}
+
+	// Remove text from progress bar
+	state.progress.TextFormatter = func() string { return "" }
 
 	// Fetch building details first
 	a.fetchBuildingDetails(state)
 
 	// Create scrollable room grid
-	roomGrid := a.createBuildingGrid(state)
+	// now returns the grid container and a thread-safe update function
+	roomGrid, updateGridFunc := a.createBuildingGrid(state)
 
 	// Footer with building name
 	footer := a.createBuildingFooter(state)
 
+	// Combine footer with progress bar
+	// Use GridWrap to size the bar to 300x4, and Center to position it
+	progressBarSized := container.NewGridWrap(fyne.NewSize(300, 4), state.progress)
+	bottomContainer := container.NewVBox(container.NewCenter(progressBarSized), footer)
+
 	// Start sliding animation
-	go a.runBuildingSlider(state, roomGrid)
+	go a.runBuildingSlider(state, updateGridFunc)
 
 	// Start data updates
-	go a.updateBuildingData(state)
+	go a.updateBuildingData(state, updateGridFunc)
 
 	// Main layout
 	return container.NewBorder(
-		nil,    // top
-		footer, // bottom
-		nil,    // left
-		nil,    // right
+		nil,             // top
+		bottomContainer, // bottom
+		nil,             // left
+		nil,             // right
 		roomGrid,
 	)
 }
 
 // fetchBuildingDetails fetches building and room information
 func (a *App) fetchBuildingDetails(state *BuildingState) {
+	// First fetch global indexes for the grid structure
+	globalConfigs, err := a.apiClient.GetGlobalIndexes()
+	if err != nil {
+		log.Printf("Failed to fetch global indexes, using defaults: %v", err)
+		state.globalConfig = DefaultTimeConfig()
+	} else {
+		state.globalConfig = ParseTimeConfig(globalConfigs)
+	}
+
+	// Update app's time config with global config
+	a.timeConfig = state.globalConfig
+
 	details, err := a.apiClient.GetBuildingDetails()
 	if err != nil {
 		log.Printf("Failed to fetch building details: %v", err)
@@ -77,191 +108,404 @@ func (a *App) fetchBuildingDetails(state *BuildingState) {
 	state.rooms = make([]string, 0, len(details.Rooms))
 	state.roomExts = make([]string, 0, len(details.Rooms))
 	state.roomMap = make(map[int]string)
+	state.roomConfigs = make(map[string]RoomTimeConfig)
 
 	for _, room := range details.Rooms {
 		state.rooms = append(state.rooms, room.RoomName)
 		state.roomExts = append(state.roomExts, room.RoomDesc)
 		state.roomMap[room.RoomID] = room.RoomName
+
+		// Parse room-specific time config
+		roomConfig := ParseRoomTimeConfig(&room, state.globalConfig)
+		state.roomConfigs[room.RoomName] = roomConfig
 	}
 }
 
-// createBuildingGrid creates the multi-room schedule grid
-// Rows are responsive - they fill the available screen height
-func (a *App) createBuildingGrid(state *BuildingState) *fyne.Container {
-	hours := a.timeConfig.GenerateHours()
-
-	state.mu.RLock()
-	rooms := state.rooms
-	roomExts := state.roomExts
-	state.mu.RUnlock()
-
-	if len(rooms) == 0 {
-		sizes := CalculateResponsiveSizes(a.window.Canvas().Size())
-		placeholder := canvas.NewText("Odalar yükleniyor...", ColorText)
-		placeholder.TextSize = sizes.FontTitle + 4
-		return container.NewCenter(placeholder)
+// createBuildingGrid creates the multi-room schedule grid with DYNAMIC COLUMN Layout
+func (a *App) createBuildingGrid(state *BuildingState) (*fyne.Container, func()) {
+	// 1. Calculate Global Metrics
+	globalTC := state.globalConfig
+	// Ensure valid range
+	if globalTC.EndHour <= globalTC.StartHour {
+		globalTC.EndHour = globalTC.StartHour + 9 // Default 9 hours
 	}
 
-	// Get responsive sizes
+	globalInterval := globalTC.Interval
+	if globalInterval <= 0 {
+		globalInterval = 60
+	}
+
+	// Calculate total minutes including the LAST slot
+	// If Start=9, End=18. We want slots 9, 10, ..., 18.
+	// That is (18-9+1) slots * 60 = 10 * 60 = 600 minutes.
+	// Or (End - Start)*60 + Interval
+	totalGlobalMinutes := (globalTC.EndHour-globalTC.StartHour)*60 + globalInterval
+
+	if totalGlobalMinutes <= 0 {
+		totalGlobalMinutes = 600 // 10 hours
+	}
+
+	// Responsive sizes
 	sizes := CalculateResponsiveSizes(a.window.Canvas().Size())
-	timeColWidth := sizes.TimeColWidth + 20 // Slightly wider for building mode
+	timeColWidth := sizes.TimeColWidth + 20
 
-	// Helper to create a row with responsive-width time cell and flexible room cells
-	createRow := func(timeCell fyne.CanvasObject, roomCells []fyne.CanvasObject) fyne.CanvasObject {
-		roomGrid := container.NewGridWithColumns(len(roomCells), roomCells...)
-		return container.NewBorder(nil, nil,
-			container.NewGridWrap(fyne.NewSize(timeColWidth, 0), timeCell), // responsive time column
-			nil,
-			roomGrid, // remaining space for rooms
-		)
+	// Determine number of visible room columns
+	cfg := config.Get()
+	numVisible := cfg.BuildingMaxVisibleRooms
+	if numVisible <= 0 {
+		numVisible = 6
 	}
 
-	// Create header row with rooms
-	numVisible := 4
-	roomCells := make([]fyne.CanvasObject, 0, numVisible)
+	// ---------------------------------------------------------
+	// 2. Create Time Column (Static)
+	// ---------------------------------------------------------
+	var timeSlots []RoomSlotData
+	var timeObjects []fyne.CanvasObject
 
-	for i := 0; i < len(rooms) && i < numVisible; i++ {
-		ext := ""
-		if i < len(roomExts) {
-			ext = roomExts[i]
+	// Generate slots based on Global Config Interval
+
+	// Parse suffix
+	var globalSuffixM int
+	fmt.Sscanf(globalTC.TimeSuffix, ":%d", &globalSuffixM)
+
+	currM := globalTC.StartHour*60 + globalSuffixM
+	// EndM should INCLUDE the last slot start
+	endM := globalTC.EndHour*60 + globalSuffixM + globalInterval // Use +Interval to create upper bound
+
+	// Loop strictly less than upper bound
+	// If End=18:00, start of last slot is 18:00. End of last slot is 19:00.
+	// Loop should process 18:00.
+	for currM < endM {
+		// Calculate offset from start (start is 0 visual)
+		// But in our layout, 0 is Global Start Hour exactly?
+		// Layout assumes 0 = StartHour * 60.
+		// So `offset` should be absolute minutes from midnight?
+		// Uncheck: ScheduleColumnLayout logic:
+		// yPos = float32(slot.StartMinuteOffset) * pixelsPerMinute
+		// pixelsPerMinute = totalHeight / float32(l.TotalGlobalMinutes)
+		// TotalGlobalMinutes = (End - Start) * 60.
+		// So 0 offset = Top of container.
+
+		// If Global Start is 09:00, and we have a suffix :30.
+		// Then 09:30 should be at offset 30 relative to container top?
+		// NO! logic changed. The container NOW starts at GlobalStart+Suffix.
+		// So 09:30 should be at Offset 0.
+
+		// Container Start Time in Minutes
+		containerStartM := globalTC.StartHour*60 + globalSuffixM
+
+		offset := currM - containerStartM
+
+		// Format Hour String
+		h := currM / 60
+		m := currM % 60
+		hourStr := fmt.Sprintf("%02d:%02d", h, m)
+
+		// Background
+		bg := canvas.NewRectangle(ColorLight)
+		// Alternating color logic based on index?
+		if (currM/globalInterval)%2 == 0 {
+			// bg.FillColor = ...
 		}
-		roomCells = append(roomCells, a.createRoomHeaderCell(rooms[i], ext))
+
+		// Text
+		label := canvas.NewText(hourStr, ColorText)
+		label.TextSize = sizes.FontSmall
+		label.Alignment = fyne.TextAlignCenter
+
+		// Separator
+		sep := canvas.NewRectangle(ColorDisabled)
+		sep.SetMinSize(fyne.NewSize(0, 1))
+		sepContainer := container.NewBorder(nil, sep, nil, nil, nil)
+
+		cell := container.NewStack(bg, sepContainer, container.NewCenter(label))
+
+		timeSlots = append(timeSlots, RoomSlotData{
+			StartMinuteOffset: offset,
+			DurationMinutes:   globalInterval,
+		})
+		timeObjects = append(timeObjects, cell)
+
+		currM += globalInterval
 	}
 
-	headerRow := createRow(a.createBuildingHeaderCell("Saat"), roomCells)
+	// Create Time Column Container
+	// MinHeight=0 allows it to auto-scale to available space
+	timeColLayout := NewScheduleColumnLayout(timeSlots, totalGlobalMinutes, 0)
+	timeColumn := container.New(timeColLayout, timeObjects...)
 
-	// Create data rows
-	rows := []fyne.CanvasObject{headerRow}
+	// Add background to Time Column
+	timeColBg := canvas.NewRectangle(ColorLight) // White background
+	// Using ColorBackground which is usually dark in this theme.
+	timeColStack := container.NewStack(timeColBg, timeColumn)
 
-	for _, hour := range hours {
-		roomCells := make([]fyne.CanvasObject, 0, numVisible)
+	// FIX: Use FixedWidthLayout instead of GridWrap(w, 0)
+	// GridWrap with height 0 was likely collapsing it.
+	timeColumnWrapper := container.New(NewFixedWidthLayout(timeColWidth), timeColStack)
 
-		for i := 0; i < len(rooms) && i < numVisible; i++ {
-			roomCells = append(roomCells, a.createBuildingScheduleCell(state, rooms[i], hour))
+	// ---------------------------------------------------------
+	// 3. Create Room Grid (Center)
+	// ---------------------------------------------------------
+
+	roomColWrappers := make([]fyne.CanvasObject, numVisible) // Includes Header
+
+	type RoomColWidgets struct {
+		HeaderName *canvas.Text
+		HeaderExt  *canvas.Text
+		Container  *fyne.Container // The schedule part
+		Root       *fyne.Container // The VBox of Header+Schedule
+	}
+
+	roomWidgets := make([]*RoomColWidgets, numVisible)
+
+	for i := 0; i < numVisible; i++ {
+		// Header
+		name := canvas.NewText("", color.White)
+		name.TextSize = sizes.FontSmall
+		name.TextStyle = fyne.TextStyle{Bold: true}
+		name.Alignment = fyne.TextAlignCenter
+
+		ext := canvas.NewText("", color.White)
+		ext.TextSize = sizes.FontMicro
+		ext.Alignment = fyne.TextAlignCenter
+
+		headerContent := container.NewVBox(container.NewCenter(name), container.NewCenter(ext))
+		headerBg := canvas.NewRectangle(ColorPrimary)
+
+		// Header uses FixedHeightLayout wrapper to ensure it has height
+		// previous GridWrap(0, 60) was okay, but let's be safe.
+		headerStack := container.NewStack(headerBg, container.NewCenter(headerContent))
+		headerContainer := container.New(NewFixedHeightLayout(80), headerStack) // Increased height to 80 to prevent overlap
+
+		// Schedule Column
+		// Initial empty layout
+		schedCol := container.NewWithoutLayout()
+
+		// Use VerticalFixedHeaderLayout instead of Border to REMOVE GAP
+		colRoot := container.New(NewVerticalFixedHeaderLayout(), headerContainer, schedCol)
+
+		roomWidgets[i] = &RoomColWidgets{
+			HeaderName: name,
+			HeaderExt:  ext,
+			Container:  schedCol,
+			Root:       colRoot,
 		}
-
-		rows = append(rows, createRow(a.createBuildingHourCell(hour), roomCells))
+		roomColWrappers[i] = colRoot
 	}
 
-	// Use GridWithRows to make rows fill the available screen height
-	return container.NewGridWithRows(len(rows), rows...)
-}
+	// Make the Room Grid
+	roomGrid := container.NewGridWithColumns(numVisible, roomColWrappers...)
 
-// createBuildingHeaderCell creates a header cell with responsive sizing
-func (a *App) createBuildingHeaderCell(text string) fyne.CanvasObject {
-	sizes := CalculateResponsiveSizes(a.window.Canvas().Size())
+	// ---------------------------------------------------------
+	// 4. Update Function
+	// ---------------------------------------------------------
+	updateFunc := func() {
+		state.mu.RLock()
+		rooms := state.rooms
+		roomExts := state.roomExts
+		schedule := state.schedule
+		slideIndex := state.slideIndex
+		configs := state.roomConfigs
+		state.mu.RUnlock()
 
-	bg := canvas.NewRectangle(ColorPrimary)
-	bg.SetMinSize(fyne.NewSize(sizes.TimeColWidth+20, sizes.HeaderHeight))
+		// Refresh Rooms
+		for i := 0; i < numVisible; i++ {
+			roomIdx := slideIndex + i
+			w := roomWidgets[i]
 
-	label := canvas.NewText(text, color.White)
-	label.TextSize = sizes.FontBody
-	label.TextStyle = fyne.TextStyle{Bold: true}
-	label.Alignment = fyne.TextAlignCenter
+			if roomIdx < len(rooms) {
+				roomName := rooms[roomIdx]
+				roomConfig, ok := configs[roomName]
+				if !ok {
+					roomConfig = ParseRoomTimeConfig(&api.RoomInfo{}, globalTC) // Fallback
+				}
 
-	return container.NewStack(bg, container.NewCenter(label))
-}
+				// Update Header
+				w.HeaderName.Text = roomName
+				w.HeaderName.Refresh()
 
-// createRoomHeaderCell creates a room header cell with extension using responsive sizing
-func (a *App) createRoomHeaderCell(roomName, ext string) fyne.CanvasObject {
-	sizes := CalculateResponsiveSizes(a.window.Canvas().Size())
+				ext := ""
+				if roomIdx < len(roomExts) {
+					ext = "Dahili: " + TruncateString(roomExts[roomIdx], 30)
+				}
+				w.HeaderExt.Text = ext
+				w.HeaderExt.Refresh()
 
-	bg := canvas.NewRectangle(ColorPrimary)
-	bg.SetMinSize(fyne.NewSize(0, sizes.FooterHeight))
+				// Build Schedule Slots
+				var slots []RoomSlotData
+				var objects []fyne.CanvasObject
 
-	roomLabel := canvas.NewText(roomName, color.White)
-	roomLabel.TextSize = sizes.FontSmall
-	roomLabel.TextStyle = fyne.TextStyle{Bold: true}
-	roomLabel.Alignment = fyne.TextAlignCenter
+				// Parse room start offset
+				var roomStartH, startSuffixM int
+				roomStartH = roomConfig.StartHour
+				// Parse suffix
+				fmt.Sscanf(roomConfig.TimeSuffix, ":%d", &startSuffixM)
 
-	content := container.NewVBox(container.NewCenter(roomLabel))
+				roomStartTotalM := roomStartH*60 + startSuffixM
 
-	if ext != "" {
-		extLabel := canvas.NewText("Dahili: "+ext, color.White)
-		extLabel.TextSize = sizes.FontMicro
-		extLabel.Alignment = fyne.TextAlignCenter
-		content.Add(container.NewCenter(extLabel))
-	}
+				// Parse Global Suffix again
+				var globalSuffixM int
+				fmt.Sscanf(globalTC.TimeSuffix, ":%d", &globalSuffixM)
 
-	return container.NewStack(bg, container.NewCenter(content))
-}
+				// Global Range Logic:
+				// If Global Start=9, Suffix=:30.
+				// The Time Column STARTS visually at 09:30.
+				// So "Offset 0" corresponds to 09:30 (570 mins).
+				// We must clip against [GlobalStart+Suffix, GlobalEnd+Suffix+Interval].
 
-// createBuildingHourCell creates an hour cell for building mode with responsive sizing
-func (a *App) createBuildingHourCell(hour string) fyne.CanvasObject {
-	sizes := CalculateResponsiveSizes(a.window.Canvas().Size())
+				globalStartTotalM := globalTC.StartHour*60 + globalSuffixM
+				// End total is Global End Hour + Interval + Suffix
+				globalEndTotalM := globalTC.EndHour*60 + globalSuffixM + globalInterval
 
-	now := time.Now()
-	currentHour := now.Format("15:00")
+				intervalM := roomConfig.Interval
+				if intervalM <= 0 {
+					intervalM = 60
+				}
 
-	bgColor := ColorBackground
-	fgColor := ColorText
-	if hour == currentHour {
-		bgColor = ColorHighlight
-		fgColor = ColorDark
-	}
+				currM := roomStartTotalM
+				for currM < globalEndTotalM {
+					slotStart := currM
+					slotEnd := currM + intervalM
 
-	bg := canvas.NewRectangle(bgColor)
-	bg.SetMinSize(fyne.NewSize(sizes.TimeColWidth+20, sizes.HeaderHeight))
+					// Next iteration if completely before global start
+					// Note: roomStartTotalM might be < globalStartTotalM, so we need to iterate
+					// but can skip full intervals that are before visible area.
+					if slotEnd <= globalStartTotalM {
+						currM += intervalM
+						continue
+					}
 
-	label := canvas.NewText(hour, fgColor)
-	label.TextSize = sizes.FontSmall
-	label.Alignment = fyne.TextAlignCenter
+					// Stop if we reached beyond global end
+					if slotStart >= globalEndTotalM {
+						break
+					}
 
-	return container.NewStack(bg, container.NewCenter(label))
-}
+					// Calculate intersection with Global Window
+					renderStart := slotStart
+					if renderStart < globalStartTotalM {
+						renderStart = globalStartTotalM
+					}
 
-// createBuildingScheduleCell creates a schedule cell for building mode with responsive sizing
-func (a *App) createBuildingScheduleCell(state *BuildingState, roomName, hour string) fyne.CanvasObject {
-	sizes := CalculateResponsiveSizes(a.window.Canvas().Size())
+					renderEnd := slotEnd
+					if renderEnd > globalEndTotalM {
+						renderEnd = globalEndTotalM
+					}
 
-	state.mu.RLock()
-	schedule := state.schedule
-	state.mu.RUnlock()
+					renderDuration := renderEnd - renderStart
+					renderOffset := renderStart - globalStartTotalM
 
-	bgColor := ColorLight
-	fgColor := ColorText
-	line1 := ""
-	line2 := ""
+					// If purely clipped out (e.g. duration <= 0), skip
+					if renderDuration <= 0 {
+						currM += intervalM
+						continue
+					}
 
-	if roomSchedule, ok := schedule[roomName]; ok {
-		if slot, ok := roomSchedule[hour]; ok && slot.Status == SlotOccupied {
-			bgColor = ColorUnavailable
-			fgColor = ColorLight
-			line1 = TruncateString(slot.Activity, 18)
-			line2 = TruncateString(slot.Organizer, 18)
+					// Data retrieval (using original slot start for key)
+					hourKey := fmt.Sprintf("%02d:%02d", currM/60, currM%60)
+
+					// Check Schedule
+					var slotStatus SlotStatus = SlotEmpty
+					var line1Text, line2Text string
+
+					if rSched, ok := schedule[roomName]; ok {
+						if data, ok := rSched[hourKey]; ok {
+							slotStatus = data.Status
+							if slotStatus == SlotOccupied {
+								line1Text = data.Activity
+								line2Text = data.Organizer
+							}
+						}
+					}
+
+					// Create Widget
+					bg := canvas.NewRectangle(ColorLight)
+					if slotStatus == SlotOccupied {
+						bg.FillColor = ColorUnavailable
+					} else {
+						bg.FillColor = ColorLight
+					}
+
+					t1 := canvas.NewText(line1Text, ColorLight)
+					if slotStatus == SlotEmpty {
+						t1.Color = ColorText
+					}
+					t1.TextSize = sizes.FontTiny
+					t1.TextStyle = fyne.TextStyle{Bold: true}
+					t1.Alignment = fyne.TextAlignCenter
+
+					t2 := canvas.NewText(line2Text, ColorLight)
+					if slotStatus == SlotEmpty {
+						t2.Color = ColorText
+					}
+					t2.TextSize = sizes.FontMicro
+					t2.Alignment = fyne.TextAlignCenter
+
+					content := container.NewVBox(container.NewCenter(t1), container.NewCenter(t2))
+
+					// Removed explicit border rectangle
+					// Added minimal padding container to allow background radius to be visible if needed?
+					// Or just stack directly.
+					// If we want spacing between slots, we might need a margin wrapper, but current layout
+					// handles positioning. Since they are stacked tight, radius might touch.
+					// Let's add a small Padded container if we want gaps, but user just said radius.
+
+					// Separator
+					sep := canvas.NewRectangle(ColorDisabled)
+					sep.SetMinSize(fyne.NewSize(0, 1))
+					sepContainer := container.NewBorder(nil, sep, nil, nil, nil)
+
+					stack := container.NewStack(bg, sepContainer, container.NewCenter(content))
+
+					slots = append(slots, RoomSlotData{
+						StartMinuteOffset: renderOffset,
+						DurationMinutes:   renderDuration,
+					})
+					objects = append(objects, stack)
+
+					currM += intervalM
+				}
+
+				// Apply to Container
+				w.Container.Objects = objects
+				w.Container.Layout = NewScheduleColumnLayout(slots, totalGlobalMinutes, 0)
+				w.Container.Refresh()
+
+			} else {
+				// Empty Room Slot
+				w.HeaderName.Text = ""
+				w.HeaderName.Refresh()
+				w.HeaderExt.Text = ""
+				w.HeaderExt.Refresh()
+				w.Container.Objects = nil
+				w.Container.Refresh()
+			}
 		}
 	}
 
-	bg := canvas.NewRectangle(bgColor)
-	bg.SetMinSize(fyne.NewSize(0, sizes.HeaderHeight))
+	// Initial Update
+	updateFunc()
 
-	content := container.NewVBox()
+	// Time Header ("Saat")
+	timeHeaderBg := canvas.NewRectangle(ColorPrimary)
+	timeHeaderLabel := canvas.NewText("Saat", color.White)
+	timeHeaderLabel.TextSize = sizes.FontBody
+	timeHeaderLabel.TextStyle = fyne.TextStyle{Bold: true}
+	timeHeaderLabel.Alignment = fyne.TextAlignCenter
+	timeHeaderStack := container.NewStack(timeHeaderBg, container.NewCenter(timeHeaderLabel))
+	// Use FixedHeightLayout same as Room Headers to align!
+	timeHeaderWrapper := container.New(NewFixedHeightLayout(80), timeHeaderStack)
 
-	if line1 != "" {
-		label1 := canvas.NewText(line1, fgColor)
-		label1.TextSize = sizes.FontTiny
-		label1.TextStyle = fyne.TextStyle{Bold: true}
-		label1.Alignment = fyne.TextAlignCenter
-		content.Add(container.NewCenter(label1))
-	}
+	// Wrap TimeHeader + TimeColumn
+	// NewBorder: Top=Header, Center=Column.
+	// REMOVED NewBorder, using NewVerticalFixedHeaderLayout to remove gap
 
-	if line2 != "" {
-		label2 := canvas.NewText(line2, fgColor)
-		label2.TextSize = sizes.FontMicro
-		label2.Alignment = fyne.TextAlignCenter
-		content.Add(container.NewCenter(label2))
-	}
+	timeStack := container.New(NewVerticalFixedHeaderLayout(), timeHeaderWrapper, timeColumnWrapper)
+	// We need to constrain the width of this entire stack.
+	// FixedWidthLayout wrapper around the whole thing?
+	timeStackConstrained := container.New(NewFixedWidthLayout(timeColWidth), timeStack)
 
-	// Highlight current hour
-	now := time.Now()
-	if hour == now.Format("15:00") {
-		border := canvas.NewRectangle(color.Transparent)
-		border.StrokeColor = ColorHighlight
-		border.StrokeWidth = 2
-		return container.NewStack(bg, border, container.NewCenter(content))
-	}
-
-	return container.NewStack(bg, container.NewCenter(content))
+	// Use Center for Room Grid. Borders uses 'Center' to fill.
+	return container.NewBorder(nil, nil, timeStackConstrained, nil, roomGrid), updateFunc
 }
 
 // createBuildingFooter creates the footer with building name using responsive sizing
@@ -318,19 +562,70 @@ func (a *App) createBuildingFooter(state *BuildingState) fyne.CanvasObject {
 }
 
 // runBuildingSlider runs the sliding animation loop
-func (a *App) runBuildingSlider(state *BuildingState, _ *fyne.Container) {
+func (a *App) runBuildingSlider(state *BuildingState, updateGridFunc func()) {
 	ticker := time.NewTicker(8 * time.Second)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ticker.C:
+			// Calculate new index
 			state.mu.Lock()
 			numRooms := len(state.rooms)
-			if numRooms > 4 {
-				state.slideIndex = (state.slideIndex + 4) % numRooms
+			cfg := config.Get()
+			maxVisible := cfg.BuildingMaxVisibleRooms
+			step := cfg.BuildingSlideStep
+			if step <= 0 {
+				step = 1
+			}
+
+			// Compute progress value
+			var progressValue float64 = 0
+
+			// Only slide if we have more rooms than can fit
+			if numRooms > maxVisible {
+				// Calculate next index
+				nextIndex := state.slideIndex + (step * state.slideDirection)
+
+				// Check bounds and reverse direction ("Ping-Pong")
+				if nextIndex+maxVisible > numRooms {
+					state.slideDirection = -1
+					nextIndex = state.slideIndex - step
+				} else if nextIndex < 0 {
+					state.slideDirection = 1
+					nextIndex = state.slideIndex + step
+				}
+
+				// Safety Clamp
+				if nextIndex < 0 {
+					nextIndex = 0
+					state.slideDirection = 1
+				} else if nextIndex > numRooms-maxVisible {
+					nextIndex = numRooms - maxVisible
+					state.slideDirection = -1
+				}
+
+				state.slideIndex = nextIndex
+
+				// Calculate progress
+				maxIndex := float64(numRooms - maxVisible)
+				current := float64(state.slideIndex)
+				if maxIndex > 0 {
+					progressValue = current / maxIndex
+				}
 			}
 			state.mu.Unlock()
+
+			// Update UI
+			// progress bar update is thread-safe for SetValue
+			state.progress.SetValue(progressValue)
+
+			// Execute update function to refresh grid text
+			// Calling it directly from goroutine is technically unsafe for Fyne widget prop updates
+			// But for text/color it often works. If it flakes, we'd need RunOnMain.
+			// Since we cleaned up layout changes, this is MUCH safer than before.
+			updateGridFunc()
+
 		case <-a.stopChan:
 			return
 		}
@@ -338,17 +633,17 @@ func (a *App) runBuildingSlider(state *BuildingState, _ *fyne.Container) {
 }
 
 // updateBuildingData fetches fresh building schedule data
-func (a *App) updateBuildingData(state *BuildingState) {
+func (a *App) updateBuildingData(state *BuildingState, updateGridFunc func()) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
 	// Initial fetch
-	a.fetchBuildingSchedule(state)
+	a.fetchBuildingSchedule(state, updateGridFunc)
 
 	for {
 		select {
 		case <-ticker.C:
-			a.fetchBuildingSchedule(state)
+			a.fetchBuildingSchedule(state, updateGridFunc)
 		case <-a.stopChan:
 			return
 		}
@@ -356,20 +651,22 @@ func (a *App) updateBuildingData(state *BuildingState) {
 }
 
 // fetchBuildingSchedule fetches schedule for all rooms
-func (a *App) fetchBuildingSchedule(state *BuildingState) {
+func (a *App) fetchBuildingSchedule(state *BuildingState, updateGridFunc func()) {
 	schedResp, err := a.apiClient.GetBuildingSchedule()
 	if err != nil {
 		log.Printf("Failed to fetch building schedule: %v", err)
 		return
 	}
 
-	hours := a.timeConfig.GenerateHours()
-
 	state.mu.Lock()
 	state.schedule = TransformBuildingSchedule(
 		&api.BuildingScheduleResponse{Schedule: schedResp.Schedule},
 		state.roomMap,
-		hours,
 	)
 	state.mu.Unlock()
+
+	// Trigger immediate UI refresh
+	if updateGridFunc != nil {
+		updateGridFunc()
+	}
 }

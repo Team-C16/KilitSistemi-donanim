@@ -122,6 +122,14 @@ type RoomInfo struct {
 	RoomID   int    `json:"room_id"`
 	RoomName string `json:"room_name"`
 	RoomDesc string `json:"roomDesc"`
+	// Room-specific index settings (all come as strings from API)
+	StartHour         *string `json:"startHour"`
+	EndHour           *string `json:"endHour"`
+	HourSuffix        *string `json:"hourSuffix"`
+	Interval          *string `json:"interval"`
+	MaxRequestInDay   *string `json:"maxRequestInDay"`
+	MaxRequestInWeek  *string `json:"maxRequestInWeek"`
+	MaxRequestInMonth *string `json:"maxRequestInMonth"`
 }
 
 // BuildingDetailsResponse represents the response from getBuildingDetails
@@ -247,6 +255,25 @@ func (c *Client) GetIndexesRasp() ([]IndexConfig, error) {
 	}
 
 	body, err := c.post("/getIndexesRasp", payload)
+	if err != nil {
+		return nil, err
+	}
+
+	var configs []IndexConfig
+	if err := json.Unmarshal(body, &configs); err != nil {
+		return nil, fmt.Errorf("json unmarshal failed: %w", err)
+	}
+
+	return configs, nil
+}
+
+// GetGlobalIndexes fetches global time configuration for the building grid
+func (c *Client) GetGlobalIndexes() ([]IndexConfig, error) {
+	payload := map[string]interface{}{}
+	if c.mode == config.ModeBuilding && c.buildingID != "" {
+		payload["building_id"] = c.buildingID
+	}
+	body, err := c.post("/getGlobalIndexes", payload)
 	if err != nil {
 		return nil, err
 	}

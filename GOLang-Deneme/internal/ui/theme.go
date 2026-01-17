@@ -37,7 +37,8 @@ var (
 	ColorBuildingBG      = color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0xFF} // #FFFFFF
 
 	// Status colors
-	ColorSuccess = color.NRGBA{R: 0x2E, G: 0xCC, B: 0x71, A: 0xFF} // #2ECC71 Emerald Green
+	ColorSuccess  = color.NRGBA{R: 0x2E, G: 0xCC, B: 0x71, A: 0xFF} // #2ECC71 Emerald Green
+	ColorDisabled = color.NRGBA{R: 0xD0, G: 0xD0, B: 0xD0, A: 0xFF} // #D0D0D0 Light Gray - for disabled/out-of-range cells
 )
 
 // NewKioskTheme creates a new kiosk theme

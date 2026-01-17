@@ -41,6 +41,10 @@ type Config struct {
 	EnableDeviceManager bool
 	EnableUpdateService bool
 
+	// Building Mode Settings
+	BuildingMaxVisibleRooms int
+	BuildingSlideStep       int
+
 	// Service configuration (for device manager and updates)
 	DestinationDir       string
 	BranchName           string
@@ -78,6 +82,10 @@ func Load() *Config {
 		EnableFingerprint:   getEnvBool("ENABLE_FINGERPRINT", false),
 		EnableDeviceManager: getEnvBool("ENABLE_DEVICE_MANAGER", false),
 		EnableUpdateService: getEnvBool("ENABLE_UPDATE_SERVICE", false),
+
+		// Building Mode Settings
+		BuildingMaxVisibleRooms: getEnvInt("BUILDING_MAX_VISIBLE_ROOMS", 4),
+		BuildingSlideStep:       getEnvInt("BUILDING_SLIDE_STEP", 1),
 
 		// Service configuration
 		DestinationDir:       getEnv("DESTINATION_DIR", "/home/pi/kiosk"),

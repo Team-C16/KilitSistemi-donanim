@@ -77,8 +77,10 @@ func (a *App) Run() {
 	// Setup fullscreen kiosk mode
 	a.setupWindow()
 
-	// Fetch initial configuration
-	a.fetchTimeConfig()
+	// Fetch initial configuration (skip for BUILDING mode - it handles its own config)
+	if a.cfg.Mode != config.ModeBuilding {
+		a.fetchTimeConfig()
+	}
 
 	// Build UI based on mode
 	content := a.buildModeUI()

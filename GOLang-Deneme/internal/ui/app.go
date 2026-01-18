@@ -157,15 +157,6 @@ func (a *App) startUpdateLoop() {
 
 // updateData fetches fresh data from the API
 func (a *App) updateData() {
-	// Fetch room name and QR token for STANDARD mode
-	if a.cfg.Mode == config.ModeStandard {
-		qrResp, err := a.apiClient.GetQRCodeToken(true)
-		if err == nil {
-			a.mu.Lock()
-			a.roomName = qrResp.RoomName
-			a.mu.Unlock()
-		}
-	}
 
 	// Fetch room details (owners) for STANDARD and OFFICE modes
 	// Fetch room details (owners) for STANDARD and OFFICE modes
@@ -176,6 +167,7 @@ func (a *App) updateData() {
 		} else {
 			a.mu.Lock()
 			a.roomDetails = details
+			a.roomName = details.RoomName
 			a.mu.Unlock()
 		}
 	}

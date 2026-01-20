@@ -20,6 +20,14 @@ const (
 	ModeBuilding Mode = "BUILDING" // Multi-room sliding display
 )
 
+// EdgePadding holds padding values for all four edges (CSS-like)
+type EdgePadding struct {
+	Top    int
+	Right  int
+	Bottom int
+	Left   int
+}
+
 // Config holds all application configuration
 type Config struct {
 	// Core settings
@@ -44,6 +52,10 @@ type Config struct {
 	// Building Mode Settings
 	BuildingMaxVisibleRooms int
 	BuildingSlideStep       int
+
+	// UI Settings
+	// EdgePadding supports CSS-like syntax: "10" (all), "10 20" (top/bottom, left/right), "10 20 30 40" (top, right, bottom, left)
+	EdgePadding EdgePadding
 
 	// Service configuration (for device manager and updates)
 	DestinationDir       string
@@ -86,6 +98,9 @@ func Load() *Config {
 		// Building Mode Settings
 		BuildingMaxVisibleRooms: getEnvInt("BUILDING_MAX_VISIBLE_ROOMS", 4),
 		BuildingSlideStep:       getEnvInt("BUILDING_SLIDE_STEP", 1),
+
+		// UI Settings
+		EdgePadding: parseEdgePadding(getEnv("EDGE_OFFSET", "0")),
 
 		// Service configuration
 		DestinationDir:       getEnv("DESTINATION_DIR", "/home/pi/kiosk"),
@@ -159,4 +174,43 @@ func (c *Config) GetMQTTID() string {
 		return "b" + c.BuildingID
 	}
 	return c.RoomID
+}
+
+// parseEdgePadding parses CSS-like padding syntax
+// Supports: "10" (all), "10 20" (top/bottom, left/right), "10 20 30 40" (top, right, bottom, left)
+func parseEdgePadding(s string) EdgePadding {
+	parts := strings.Fields(s)
+	if len(parts) == 0 {
+		return EdgePadding{}
+	}
+
+	values := make([]int, len(parts))
+	for i, p := range parts {
+		v, err := strconv.Atoi(p)
+		if err != nil {
+			values[i] = 0
+		} else {
+			values[i] = v
+		}
+	}
+
+	switch len(values) {
+	case 1:
+		// All sides same
+		return EdgePadding{Top: values[0], Right: values[0], Bottom: values[0], Left: values[0]}
+	case 2:
+		// top/bottom, left/right
+		return EdgePadding{Top: values[0], Right: values[1], Bottom: values[0], Left: values[1]}
+	case 4:
+		// top, right, bottom, left
+		return EdgePadding{Top: values[0], Right: values[1], Bottom: values[2], Left: values[3]}
+	default:
+		// If 3 or more than 4, use first 4 or pad with zeros
+		return EdgePadding{Top: values[0], Right: values[0], Bottom: values[0], Left: values[0]}
+	}
+}
+
+// HasPadding returns true if any edge has non-zero padding
+func (e EdgePadding) HasPadding() bool {
+	return e.Top > 0 || e.Right > 0 || e.Bottom > 0 || e.Left > 0
 }

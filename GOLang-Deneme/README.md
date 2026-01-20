@@ -63,6 +63,22 @@ Set these environment variables in `.env`:
 | `API_BASE_URL` | Backend API URL | https://pve.izu.edu.tr/randevu/device |
 | `ENABLE_LOCK_MQTT` | Enable door lock MQTT | false |
 | `ENABLE_DEVICE_MANAGER` | Enable status reporting | false |
+| `EDGE_OFFSET` | CSS-like edge padding (see below) | 0 |
+
+### Edge Offset (EDGE_OFFSET)
+
+CSS-like syntax for padding around the entire application. Useful for TVs with overscan:
+
+```bash
+# All sides same
+EDGE_OFFSET=20
+
+# Top/bottom, left/right
+EDGE_OFFSET=10 20
+
+# Top, right, bottom, left
+EDGE_OFFSET=10 20 30 40
+```
 
 ## Project Structure
 

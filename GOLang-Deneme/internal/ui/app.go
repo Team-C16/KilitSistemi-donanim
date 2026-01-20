@@ -84,6 +84,18 @@ func (a *App) Run() {
 
 	// Build UI based on mode
 	content := a.buildModeUI()
+
+	// Apply edge padding if configured (CSS-like padding around entire app)
+	if a.cfg.EdgePadding.HasPadding() {
+		p := a.cfg.EdgePadding
+		content = container.New(&edgePaddingLayout{
+			top:    float32(p.Top),
+			right:  float32(p.Right),
+			bottom: float32(p.Bottom),
+			left:   float32(p.Left),
+		}, content)
+	}
+
 	a.window.SetContent(content)
 
 	// Start background update loops
@@ -744,4 +756,27 @@ func (a *App) createScheduleCell(day DayInfo, hour string) fyne.CanvasObject {
 	}
 
 	return container.NewStack(bg, container.NewCenter(content))
+}
+
+// edgePaddingLayout applies CSS-like padding around all edges of content
+// Supports different values for top, right, bottom, left
+type edgePaddingLayout struct {
+	top, right, bottom, left float32
+}
+
+func (l *edgePaddingLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	for _, o := range objects {
+		// Position content with left/top padding offset
+		o.Move(fyne.NewPos(l.left, l.top))
+		// Resize to available space minus padding on all sides
+		o.Resize(fyne.NewSize(size.Width-l.left-l.right, size.Height-l.top-l.bottom))
+	}
+}
+
+func (l *edgePaddingLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	if len(objects) == 0 {
+		return fyne.NewSize(l.left+l.right, l.top+l.bottom)
+	}
+	childMin := objects[0].MinSize()
+	return fyne.NewSize(childMin.Width+l.left+l.right, childMin.Height+l.top+l.bottom)
 }

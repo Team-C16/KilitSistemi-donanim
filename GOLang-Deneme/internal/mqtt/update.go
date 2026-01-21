@@ -208,46 +208,51 @@ func (uh *UpdateHandler) downloadBinary(version string) ([]byte, error) {
 	return binaryData, nil
 }
 
-// backupBinary creates a backup of the current binary
+// backupBinary creates a backup of the current binary using sudo
 func (uh *UpdateHandler) backupBinary(srcPath, dstPath string) error {
 	// Remove old backup if exists
-	os.Remove(dstPath)
+	exec.Command("sudo", "rm", "-f", dstPath).Run()
 
-	// Copy current binary to backup
-	src, err := os.Open(srcPath)
-	if err != nil {
-		return fmt.Errorf("failed to open source: %w", err)
-	}
-	defer src.Close()
-
-	dst, err := os.Create(dstPath)
-	if err != nil {
-		return fmt.Errorf("failed to create backup: %w", err)
-	}
-	defer dst.Close()
-
-	if _, err := io.Copy(dst, src); err != nil {
-		return fmt.Errorf("failed to copy to backup: %w", err)
+	// Copy current binary to backup using sudo
+	cmd := exec.Command("sudo", "cp", srcPath, dstPath)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to create backup: %v - %s", err, string(out))
 	}
 
 	return nil
 }
 
-// writeBinary writes the new binary to a temp file
+// writeBinary writes the new binary to a temp file using sudo
 func (uh *UpdateHandler) writeBinary(path string, data []byte) error {
-	// Write with executable permissions
-	if err := os.WriteFile(path, data, 0755); err != nil {
-		return fmt.Errorf("failed to write binary: %w", err)
+	// Write to temp location first (in /tmp which is writable)
+	tempFile := "/tmp/kiosk_update_binary"
+	if err := os.WriteFile(tempFile, data, 0755); err != nil {
+		return fmt.Errorf("failed to write temp binary: %w", err)
 	}
+
+	// Move to target location using sudo
+	cmd := exec.Command("sudo", "mv", tempFile, path)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		os.Remove(tempFile) // Clean up
+		return fmt.Errorf("failed to move binary: %v - %s", err, string(out))
+	}
+
+	// Set executable permission
+	cmd = exec.Command("sudo", "chmod", "755", path)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to set permissions: %v - %s", err, string(out))
+	}
+
 	return nil
 }
 
-// replaceBinary replaces the old binary with the new one
+// replaceBinary replaces the old binary with the new one using sudo
 func (uh *UpdateHandler) replaceBinary(oldPath, newPath string) error {
 	// On Linux, we can replace a running binary
 	// The new binary takes effect after restart
-	if err := os.Rename(newPath, oldPath); err != nil {
-		return fmt.Errorf("failed to rename binary: %w", err)
+	cmd := exec.Command("sudo", "mv", newPath, oldPath)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to rename binary: %v - %s", err, string(out))
 	}
 	return nil
 }

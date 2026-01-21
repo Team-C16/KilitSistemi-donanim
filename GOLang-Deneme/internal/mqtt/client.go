@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,11 +18,13 @@ import (
 
 // Client manages MQTT connections and subscriptions
 type Client struct {
-	cfg        *config.Config
-	client     paho.Client
-	handlers   map[string]MessageHandler
-	handlersMu sync.RWMutex
-	connected  bool
+	cfg          *config.Config
+	client       paho.Client
+	handlers     map[string]MessageHandler
+	handlersMu   sync.RWMutex
+	connected    bool
+	reconnecting bool
+	stateMu      sync.Mutex
 }
 
 // MessageHandler is a callback for MQTT messages
@@ -82,13 +85,22 @@ func (c *Client) Connect() error {
 		return fmt.Errorf("MQTT connection failed: %w", token.Error())
 	}
 
+	c.stateMu.Lock()
 	c.connected = true
+	c.reconnecting = false
+	c.stateMu.Unlock()
+
 	return nil
 }
 
 // onConnect is called when MQTT connection is established
 func (c *Client) onConnect(client paho.Client) {
+	c.stateMu.Lock()
 	c.connected = true
+	c.reconnecting = false
+	c.stateMu.Unlock()
+
+	log.Printf("MQTT: Connected successfully")
 
 	// Resubscribe to all handlers
 	c.handlersMu.RLock()
@@ -101,22 +113,47 @@ func (c *Client) onConnect(client paho.Client) {
 
 // onConnectionLost is called when MQTT connection is lost
 func (c *Client) onConnectionLost(client paho.Client, err error) {
-	log.Printf("MQTT: Connection lost: %v", err) // Log errors
+	log.Printf("MQTT: Connection lost: %v", err)
+
+	c.stateMu.Lock()
 	c.connected = false
+	c.stateMu.Unlock()
 
 	// Attempt reconnection with fresh token
+	c.triggerReconnect()
+}
+
+// triggerReconnect starts a reconnect if not already reconnecting
+func (c *Client) triggerReconnect() {
+	c.stateMu.Lock()
+	if c.reconnecting {
+		c.stateMu.Unlock()
+		return
+	}
+	c.reconnecting = true
+	c.connected = false
+	c.stateMu.Unlock()
+
 	go c.reconnect()
+}
+
+// ConnectWithRetry attempts to connect and retries indefinitely if it fails
+// Used for initial connection from main
+func (c *Client) ConnectWithRetry() {
+	c.triggerReconnect()
 }
 
 // reconnect attempts to reconnect with a fresh JWT token
 // Retries indefinitely with backoff: 5 attempts with 3s delay, then 60s wait before next batch
 func (c *Client) reconnect() {
+	log.Printf("MQTT: Starting reconnection...")
+
 	attempt := 0
 	for {
 		attempt++
 
 		if err := c.Connect(); err != nil {
-			log.Printf("MQTT: Reconnection failed: %v", err) // Log errors
+			log.Printf("MQTT: Reconnection attempt %d failed: %v", attempt, err)
 
 			// After every 5 attempts, wait 60 seconds before next batch
 			if attempt%5 == 0 {
@@ -127,16 +164,26 @@ func (c *Client) reconnect() {
 			continue
 		}
 
+		log.Printf("MQTT: Reconnection successful after %d attempts", attempt)
 		break
 	}
 }
 
 // subscribe subscribes to a topic
-// Retries indefinitely with backoff: 5 attempts with 1s delay, then 30s wait before next batch
+// If subscription fails due to connection issues, triggers reconnect and exits
 func (c *Client) subscribe(topic string) {
 	go func() {
 		attempt := 0
 		for {
+			c.stateMu.Lock()
+			connected := c.connected
+			c.stateMu.Unlock()
+
+			// Stop retrying if not connected - reconnect/onConnect will handle resubscription
+			if !connected {
+				return
+			}
+
 			attempt++
 
 			// Wait before retry (except first attempt)
@@ -146,6 +193,14 @@ func (c *Client) subscribe(topic string) {
 					time.Sleep(30 * time.Second)
 				} else {
 					time.Sleep(1 * time.Second)
+				}
+
+				// Re-check connection after sleep
+				c.stateMu.Lock()
+				connected = c.connected
+				c.stateMu.Unlock()
+				if !connected {
+					return
 				}
 			}
 
@@ -160,9 +215,21 @@ func (c *Client) subscribe(topic string) {
 			})
 
 			if token.Wait() && token.Error() != nil {
-				log.Printf("MQTT: Subscribe to %s failed: %v", topic, token.Error()) // Log errors
-				// Continue retrying indefinitely
+				errStr := token.Error().Error()
+
+				// Check if it's a connection error
+				if strings.Contains(errStr, "not Connected") || strings.Contains(errStr, "connection") {
+					log.Printf("MQTT: Subscribe to %s failed (connection lost): %v - triggering reconnect", topic, token.Error())
+
+					// Trigger reconnect and exit this goroutine
+					c.triggerReconnect()
+					return
+				}
+
+				log.Printf("MQTT: Subscribe to %s failed: %v", topic, token.Error())
+				// Continue retrying for non-connection errors
 			} else {
+				log.Printf("MQTT: Subscribed to %s", topic)
 				return
 			}
 		}
@@ -182,7 +249,11 @@ func (c *Client) Subscribe(topic string, handler MessageHandler) {
 
 // Publish sends a message to a topic
 func (c *Client) Publish(topic string, payload interface{}) error {
-	if !c.connected {
+	c.stateMu.Lock()
+	connected := c.connected
+	c.stateMu.Unlock()
+
+	if !connected {
 		return fmt.Errorf("MQTT: not connected")
 	}
 
@@ -210,6 +281,9 @@ func (c *Client) Publish(topic string, payload interface{}) error {
 
 // Disconnect closes the MQTT connection
 func (c *Client) Disconnect() {
+	c.stateMu.Lock()
+	defer c.stateMu.Unlock()
+
 	if c.client != nil && c.connected {
 		c.client.Disconnect(1000)
 		c.connected = false
@@ -218,6 +292,8 @@ func (c *Client) Disconnect() {
 
 // IsConnected returns the connection status
 func (c *Client) IsConnected() bool {
+	c.stateMu.Lock()
+	defer c.stateMu.Unlock()
 	return c.connected
 }
 

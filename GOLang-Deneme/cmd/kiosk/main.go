@@ -14,7 +14,6 @@
 package main
 
 import (
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -36,11 +35,9 @@ func main() {
 	var mqttClient *mqtt.Client
 	if cfg.EnableLockMQTT || cfg.EnableDeviceManager || cfg.EnableUpdateService {
 		mqttClient = mqtt.NewClient(cfg)
-		if err := mqttClient.Connect(); err != nil {
-			log.Printf("MQTT connection failed: %v", err)
-		} else {
-			defer mqttClient.Disconnect()
-		}
+		// ConnectWithRetry will keep trying until successful
+		go mqttClient.ConnectWithRetry()
+		defer mqttClient.Disconnect()
 	}
 
 	// Initialize GPIO for lock control

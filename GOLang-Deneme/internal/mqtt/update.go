@@ -1,9 +1,7 @@
 // Package mqtt - OTA Update handler
 //
-//
-// Update must be change for the Go deployment
-// the current update is for the Python deployment and a place holder
-//
+// Binary download based update system for Go deployment.
+// Downloads binary from API when version update request is received via MQTT.
 //
 
 package mqtt
@@ -11,10 +9,15 @@ package mqtt
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
-	"path/filepath"
+	"regexp"
 	"strings"
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 
 	"kiosk-go/internal/config"
 )
@@ -24,6 +27,7 @@ type UpdateHandler struct {
 	mqttClient *Client
 	cfg        *config.Config
 	log        *LogBuffer
+	httpClient *http.Client
 }
 
 // NewUpdateHandler creates a new update handler
@@ -32,6 +36,9 @@ func NewUpdateHandler(mqttClient *Client, cfg *config.Config) *UpdateHandler {
 		mqttClient: mqttClient,
 		cfg:        cfg,
 		log:        NewLogBuffer("Update", 50),
+		httpClient: &http.Client{
+			Timeout: 5 * time.Minute, // Long timeout for binary download
+		},
 	}
 }
 
@@ -57,7 +64,7 @@ func (uh *UpdateHandler) restart() error {
 // handleUpdate processes update requests
 func (uh *UpdateHandler) handleUpdate(topic string, payload []byte) {
 	var request struct {
-		CommitID string `json:"commitID"`
+		Version string `json:"version"`
 	}
 
 	if err := json.Unmarshal(payload, &request); err != nil {
@@ -65,53 +72,184 @@ func (uh *UpdateHandler) handleUpdate(topic string, payload []byte) {
 		return
 	}
 
-	if request.CommitID == "" {
-		uh.log.Warn("No commitID provided")
+	if request.Version == "" {
+		uh.log.Warn("No version provided")
 		return
 	}
 
-	uh.log.Info("Starting update to %s", request.CommitID)
-	uh.applyUpdate(request.CommitID)
+	// Validate version format (vX.X.X or X.X.X)
+	version := uh.normalizeVersion(request.Version)
+	if !uh.isValidVersion(version) {
+		uh.log.Error("Invalid version format: %s (expected X.X.X)", request.Version)
+		return
+	}
+
+	uh.log.Info("Starting update to version %s", version)
+	uh.applyUpdate(version)
 }
 
-// applyUpdate performs the git update and service restart
-func (uh *UpdateHandler) applyUpdate(commitID string) {
-	destDir := uh.cfg.DestinationDir
-	branch := uh.cfg.BranchName
+// normalizeVersion removes 'v' prefix if present
+func (uh *UpdateHandler) normalizeVersion(version string) string {
+	return strings.TrimPrefix(version, "v")
+}
 
-	// Step 1: Git fetch
-	uh.log.Info("Fetching from origin %s...", branch)
-	cmd := exec.Command("sudo", "git", "fetch", "origin", branch)
-	cmd.Dir = destDir
-	if out, err := cmd.CombinedOutput(); err != nil {
-		uh.log.Error("Git fetch failed: %v - %s", err, string(out))
+// isValidVersion validates version format (X.X.X)
+func (uh *UpdateHandler) isValidVersion(version string) bool {
+	versionRegex := regexp.MustCompile(`^\d+\.\d+\.\d+$`)
+	return versionRegex.MatchString(version)
+}
+
+// generateToken creates a JWT token for API authentication
+func (uh *UpdateHandler) generateToken() (string, error) {
+	claims := jwt.MapClaims{
+		"exp": time.Now().Add(5 * time.Minute).Unix(), // Longer expiry for download
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(uh.cfg.JWTSecret))
+}
+
+// applyUpdate downloads the binary and applies the update
+func (uh *UpdateHandler) applyUpdate(version string) {
+	// Step 1: Download binary
+	uh.log.Info("Downloading binary for version %s...", version)
+	binaryData, err := uh.downloadBinary(version)
+	if err != nil {
+		uh.log.Error("Binary download failed: %v", err)
+		return
+	}
+	uh.log.Info("Downloaded %d bytes", len(binaryData))
+
+	// Step 2: Get current executable path
+	execPath, err := os.Executable()
+	if err != nil {
+		uh.log.Error("Failed to get executable path: %v", err)
+		return
+	}
+	uh.log.Info("Current executable: %s", execPath)
+
+	// Step 3: Backup current binary
+	backupPath := execPath + ".backup"
+	if err := uh.backupBinary(execPath, backupPath); err != nil {
+		uh.log.Error("Backup failed: %v", err)
+		return
+	}
+	uh.log.Info("Backup created: %s", backupPath)
+
+	// Step 4: Write new binary
+	tempPath := execPath + ".new"
+	if err := uh.writeBinary(tempPath, binaryData); err != nil {
+		uh.log.Error("Failed to write new binary: %v", err)
 		return
 	}
 
-	// Step 2: Git reset
-	uh.log.Info("Resetting to %s...", commitID)
-	cmd = exec.Command("sudo", "git", "reset", "--hard", commitID)
-	cmd.Dir = destDir
-	if out, err := cmd.CombinedOutput(); err != nil {
-		uh.log.Error("Git reset failed: %v - %s", err, string(out))
-		return
-	}
-	uh.log.Info("Files updated successfully")
-
-	// Step 3: Install requirements if exists
-	reqFile := filepath.Join(destDir, "requirements.txt")
-	if _, err := os.Stat(reqFile); err == nil {
-		uh.log.Info("Installing Python requirements...")
-		cmd = exec.Command("pip", "install", "-r", reqFile, "--break-system-packages")
-		cmd.Dir = destDir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			uh.log.Warn("Pip install warning: %v - %s", err, string(out))
-			// Continue even if pip fails
+	// Step 5: Replace old binary with new one
+	if err := uh.replaceBinary(execPath, tempPath); err != nil {
+		uh.log.Error("Failed to replace binary: %v", err)
+		// Try to restore backup
+		if restoreErr := os.Rename(backupPath, execPath); restoreErr != nil {
+			uh.log.Error("Failed to restore backup: %v", restoreErr)
 		}
+		return
+	}
+	uh.log.Info("Binary updated successfully to version %s", version)
+
+	// Step 6: Restart service
+	uh.restartServices()
+}
+
+// downloadBinary fetches the binary from the API
+func (uh *UpdateHandler) downloadBinary(version string) ([]byte, error) {
+	token, err := uh.generateToken()
+	if err != nil {
+		return nil, fmt.Errorf("token generation failed: %w", err)
 	}
 
-	// Step 4: Restart services
-	uh.restartServices()
+	// Prepare request body
+	requestBody := map[string]interface{}{
+		"token":   token,
+		"room_id": uh.cfg.RoomID,
+		"version": version,
+	}
+
+	body, err := json.Marshal(requestBody)
+	if err != nil {
+		return nil, fmt.Errorf("json marshal failed: %w", err)
+	}
+
+	// Make POST request
+	url := uh.cfg.APIBaseURL + "/getRaspBinary"
+	req, err := http.NewRequest("POST", url, strings.NewReader(string(body)))
+	if err != nil {
+		return nil, fmt.Errorf("request creation failed: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := uh.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API error: status %d, body: %s", resp.StatusCode, string(respBody))
+	}
+
+	// Read binary data
+	binaryData, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	if len(binaryData) == 0 {
+		return nil, fmt.Errorf("empty binary received")
+	}
+
+	return binaryData, nil
+}
+
+// backupBinary creates a backup of the current binary
+func (uh *UpdateHandler) backupBinary(srcPath, dstPath string) error {
+	// Remove old backup if exists
+	os.Remove(dstPath)
+
+	// Copy current binary to backup
+	src, err := os.Open(srcPath)
+	if err != nil {
+		return fmt.Errorf("failed to open source: %w", err)
+	}
+	defer src.Close()
+
+	dst, err := os.Create(dstPath)
+	if err != nil {
+		return fmt.Errorf("failed to create backup: %w", err)
+	}
+	defer dst.Close()
+
+	if _, err := io.Copy(dst, src); err != nil {
+		return fmt.Errorf("failed to copy to backup: %w", err)
+	}
+
+	return nil
+}
+
+// writeBinary writes the new binary to a temp file
+func (uh *UpdateHandler) writeBinary(path string, data []byte) error {
+	// Write with executable permissions
+	if err := os.WriteFile(path, data, 0755); err != nil {
+		return fmt.Errorf("failed to write binary: %w", err)
+	}
+	return nil
+}
+
+// replaceBinary replaces the old binary with the new one
+func (uh *UpdateHandler) replaceBinary(oldPath, newPath string) error {
+	// On Linux, we can replace a running binary
+	// The new binary takes effect after restart
+	if err := os.Rename(newPath, oldPath); err != nil {
+		return fmt.Errorf("failed to rename binary: %w", err)
+	}
+	return nil
 }
 
 // restartServices restarts all managed services

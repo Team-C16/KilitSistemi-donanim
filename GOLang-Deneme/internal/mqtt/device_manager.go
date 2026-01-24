@@ -45,11 +45,11 @@ type ServiceInfo struct {
 
 // StatusResponse is the response payload for status requests
 type StatusResponse struct {
-	RoomID        string                 `json:"room_id"`
-	CurrentCommit string                 `json:"current_commit"`
-	Timestamp     float64                `json:"timestamp"`
-	DeviceInfo    DeviceInfo             `json:"device_info"`
-	Services      map[string]ServiceInfo `json:"services"`
+	RoomID         string                 `json:"room_id"`
+	CurrentVersion string                 `json:"current_version"`
+	Timestamp      float64                `json:"timestamp"`
+	DeviceInfo     DeviceInfo             `json:"device_info"`
+	Services       map[string]ServiceInfo `json:"services"`
 }
 
 // RestartResponse is the response payload for restart requests
@@ -96,11 +96,11 @@ func (dm *DeviceManager) restart() error {
 // handleGetStatus processes status query requests
 func (dm *DeviceManager) handleGetStatus(topic string, payload []byte) {
 	response := StatusResponse{
-		RoomID:        dm.cfg.RoomID,
-		CurrentCommit: dm.getGitCommit(),
-		Timestamp:     float64(time.Now().Unix()),
-		DeviceInfo:    dm.getDeviceInfo(),
-		Services:      dm.getServicesStatus(),
+		RoomID:         dm.cfg.RoomID,
+		CurrentVersion: dm.getVersion(),
+		Timestamp:      float64(time.Now().Unix()),
+		DeviceInfo:     dm.getDeviceInfo(),
+		Services:       dm.getServicesStatus(),
 	}
 
 	responseTopic := fmt.Sprintf("v1/%s/getStatus/response", dm.cfg.GetMQTTID())
@@ -237,15 +237,9 @@ func (dm *DeviceManager) getRAMUsage() RAMInfo {
 	}
 }
 
-// getGitCommit retrieves the current git commit hash
-func (dm *DeviceManager) getGitCommit() string {
-	cmd := exec.Command("git", "rev-parse", "--short", "HEAD")
-	cmd.Dir = dm.cfg.DestinationDir
-	out, err := cmd.Output()
-	if err != nil {
-		return "unknown"
-	}
-	return strings.TrimSpace(string(out))
+// getVersion returns the current application version from config
+func (dm *DeviceManager) getVersion() string {
+	return config.Version
 }
 
 // getServicesStatus retrieves status of all managed services

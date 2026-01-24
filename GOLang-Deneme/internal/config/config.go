@@ -11,6 +11,10 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// Version is the application version, set at build time via -ldflags
+// Example: go build -ldflags "-X kiosk-go/internal/config.Version=v1.0.0"
+var Version = "v0.0.0-dev"
+
 // Mode represents the application display mode
 type Mode string
 

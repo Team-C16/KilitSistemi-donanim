@@ -327,8 +327,14 @@ func (c *Client) GetBuildingSchedule() (*BuildingScheduleResponse, error) {
 // SaveIP reports the device IP to the backend
 func (c *Client) SaveIP(ip string) error {
 	payload := map[string]interface{}{
-		"room_id": c.roomID,
-		"ip":      ip,
+		"ip": ip,
+	}
+
+	// Use building_id in BUILDING mode, room_id otherwise
+	if c.mode == config.ModeBuilding && c.buildingID != "" {
+		payload["building_id"] = c.buildingID
+	} else {
+		payload["room_id"] = c.roomID
 	}
 
 	_, err := c.post("/saveIPForRaspberry", payload)

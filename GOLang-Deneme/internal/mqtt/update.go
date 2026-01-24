@@ -167,8 +167,14 @@ func (uh *UpdateHandler) downloadBinary(version string) ([]byte, error) {
 	// Prepare request body
 	requestBody := map[string]interface{}{
 		"token":   token,
-		"room_id": uh.cfg.RoomID,
 		"version": version,
+	}
+
+	// Use building_id in BUILDING mode, room_id otherwise
+	if uh.cfg.Mode == config.ModeBuilding && uh.cfg.BuildingID != "" {
+		requestBody["building_id"] = uh.cfg.BuildingID
+	} else {
+		requestBody["room_id"] = uh.cfg.RoomID
 	}
 
 	body, err := json.Marshal(requestBody)

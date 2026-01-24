@@ -45,7 +45,7 @@ type ServiceInfo struct {
 
 // StatusResponse is the response payload for status requests
 type StatusResponse struct {
-	RoomID         string                 `json:"room_id"`
+	DeviceID       string                 `json:"device_id"` // room_id or "b"+building_id based on mode
 	CurrentVersion string                 `json:"current_version"`
 	Timestamp      float64                `json:"timestamp"`
 	DeviceInfo     DeviceInfo             `json:"device_info"`
@@ -54,7 +54,7 @@ type StatusResponse struct {
 
 // RestartResponse is the response payload for restart requests
 type RestartResponse struct {
-	RoomID           string  `json:"room_id"`
+	DeviceID         string  `json:"device_id"` // room_id or "b"+building_id based on mode
 	RequestedService string  `json:"requested_service"`
 	Status           string  `json:"status"`
 	Message          string  `json:"message"`
@@ -96,7 +96,7 @@ func (dm *DeviceManager) restart() error {
 // handleGetStatus processes status query requests
 func (dm *DeviceManager) handleGetStatus(topic string, payload []byte) {
 	response := StatusResponse{
-		RoomID:         dm.cfg.RoomID,
+		DeviceID:       dm.cfg.GetMQTTID(), // Uses "b"+BuildingID in building mode, RoomID otherwise
 		CurrentVersion: dm.getVersion(),
 		Timestamp:      float64(time.Now().Unix()),
 		DeviceInfo:     dm.getDeviceInfo(),
@@ -120,7 +120,7 @@ func (dm *DeviceManager) handleRestartService(topic string, payload []byte) {
 	}
 
 	response := RestartResponse{
-		RoomID:           dm.cfg.RoomID,
+		DeviceID:         dm.cfg.GetMQTTID(), // Uses "b"+BuildingID in building mode, RoomID otherwise
 		RequestedService: request.Service,
 		Timestamp:        float64(time.Now().Unix()),
 	}

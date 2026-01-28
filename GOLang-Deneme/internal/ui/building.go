@@ -326,7 +326,7 @@ func (a *App) createBuildingGrid(state *BuildingState) (*fyne.Container, func())
 
 				ext := ""
 				if roomIdx < len(roomExts) {
-					ext = "Dahili: " + TruncateString(roomExts[roomIdx], 30)
+					ext = TruncateString(roomExts[roomIdx], 30)
 				}
 				w.HeaderExt.Text = ext
 				w.HeaderExt.Refresh()

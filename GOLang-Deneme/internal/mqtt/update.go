@@ -264,7 +264,14 @@ func (uh *UpdateHandler) replaceBinary(oldPath, newPath string) error {
 }
 
 // restartServices restarts all managed services
+// In fail-safe mode, uses pinctrl to hold GPIO state during restart
 func (uh *UpdateHandler) restartServices() {
+	// For fail-safe mode, hold the GPIO state using pinctrl before restart
+	// This prevents the lock from briefly unlocking during service restart
+	if uh.cfg.LockType == config.LockTypeFailSafe && uh.cfg.EnableLockMQTT {
+		uh.holdGPIOState()
+	}
+
 	services := []string{
 		uh.cfg.ServiceQR,
 		uh.cfg.ServiceLock,
@@ -283,5 +290,33 @@ func (uh *UpdateHandler) restartServices() {
 		} else {
 			uh.log.Info("%s restarted successfully", svc)
 		}
+	}
+}
+
+// holdGPIOState uses pinctrl to set the GPIO pin to locked state
+// This persists even after gpiod releases the pin during service restart
+// Locked state depends on lock type:
+// - Fail-secure (0): locked = LOW  -> pinctrl set <pin> op dl
+// - Fail-safe (1):   locked = HIGH -> pinctrl set <pin> op dh
+func (uh *UpdateHandler) holdGPIOState() {
+	pin := uh.cfg.LockGPIOPin
+
+	// Determine the locked state based on lock type
+	var state string
+	if uh.cfg.LockType == config.LockTypeFailSafe {
+		state = "dh" // HIGH = locked in fail-safe mode
+	} else {
+		state = "dl" // LOW = locked in fail-secure mode
+	}
+
+	uh.log.Info("Holding GPIO %d in locked state (%s) using pinctrl", pin, state)
+
+	// pinctrl set <pin> op <dl|dh>
+	// op = output, dl = drive low, dh = drive high
+	cmd := exec.Command("pinctrl", "set", fmt.Sprintf("%d", pin), "op", state)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		uh.log.Error("Failed to hold GPIO state: %v - %s", err, string(out))
+	} else {
+		uh.log.Info("GPIO %d set to %s via pinctrl", pin, state)
 	}
 }

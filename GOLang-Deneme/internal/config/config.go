@@ -32,6 +32,16 @@ type EdgePadding struct {
 	Left   int
 }
 
+// LockType represents the lock behavior type
+type LockType int
+
+const (
+	// LockTypeFailSecure (0): Pin LOW = locked, Pin HIGH = unlocked. Lock stays locked on power loss.
+	LockTypeFailSecure LockType = 0
+	// LockTypeFailSafe (1): Pin HIGH = locked, Pin LOW = unlocked. Lock opens on power loss.
+	LockTypeFailSafe LockType = 1
+)
+
 // Config holds all application configuration
 type Config struct {
 	// Core settings
@@ -46,6 +56,10 @@ type Config struct {
 	MQTTBrokerPort         int
 	MQTTUseTLS             bool
 	MQTTInsecureSkipVerify bool
+
+	// Lock settings
+	LockType    LockType // 0 = fail-secure (default), 1 = fail-safe
+	LockGPIOPin int      // GPIO pin number for lock control (default: 12)
 
 	// Optional services
 	EnableLockMQTT      bool
@@ -92,6 +106,10 @@ func Load() *Config {
 		MQTTBrokerPort:         getEnvInt("MQTT_BROKER_PORT", getEnvInt("mqttbrokerport", 8883)),
 		MQTTUseTLS:             getEnvBool("MQTT_USE_TLS", true),
 		MQTTInsecureSkipVerify: getEnvBool("MQTT_INSECURE_SKIP_VERIFY", false),
+
+		// Lock settings
+		LockType:    LockType(getEnvInt("LOCK_TYPE", 0)), // 0 = fail-secure, 1 = fail-safe
+		LockGPIOPin: getEnvInt("LOCK_GPIO_PIN", 12),      // Default GPIO pin 12
 
 		// Optional services
 		EnableLockMQTT:      getEnvBool("ENABLE_LOCK_MQTT", false),

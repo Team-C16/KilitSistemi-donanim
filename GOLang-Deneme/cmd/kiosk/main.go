@@ -43,7 +43,7 @@ func main() {
 	// Initialize GPIO for lock control
 	var lockController *gpio.LockController
 	if cfg.EnableLockMQTT {
-		lockController = gpio.NewLockController(12)
+		lockController = gpio.NewLockController(cfg.LockGPIOPin)
 	}
 
 	// Start optional MQTT services

@@ -6,6 +6,8 @@ import (
 	"runtime"
 	"sync"
 	"time"
+
+	"kiosk-go/internal/config"
 )
 
 // LockController manages the door lock GPIO
@@ -14,13 +16,16 @@ type LockController struct {
 	isOpen    bool
 	mu        sync.Mutex
 	available bool
+	lockType  config.LockType
 }
 
 // NewLockController creates a new lock controller on the specified GPIO pin
 func NewLockController(pin int) *LockController {
+	cfg := config.Get()
 	lc := &LockController{
 		pin:       pin,
 		available: false,
+		lockType:  cfg.LockType,
 	}
 
 	// Only initialize GPIO on Linux (Raspberry Pi)
@@ -31,7 +36,16 @@ func NewLockController(pin int) *LockController {
 		}
 	}
 
+	log.Printf("GPIO: Lock controller initialized with LockType=%d (%s)", lc.lockType, lc.lockTypeString())
 	return lc
+}
+
+// lockTypeString returns a human-readable string for the lock type
+func (lc *LockController) lockTypeString() string {
+	if lc.lockType == config.LockTypeFailSafe {
+		return "fail-safe"
+	}
+	return "fail-secure"
 }
 
 // initGPIO initializes the GPIO hardware
@@ -41,7 +55,9 @@ func (lc *LockController) initGPIO() error {
 		if err := initRPIO(); err != nil {
 			return err
 		}
-		if err := setupPin(lc.pin); err != nil {
+		// Setup pin with initial locked state based on lock type
+		initialState := lc.getLockedPinState()
+		if err := setupPinWithState(lc.pin, initialState); err != nil {
 			return err
 		}
 		lc.available = true
@@ -49,6 +65,18 @@ func (lc *LockController) initGPIO() error {
 	}
 
 	return nil
+}
+
+// getLockedPinState returns the pin state for "locked" based on lock type
+// Fail-secure (0): locked = LOW (false), unlocked = HIGH (true)
+// Fail-safe (1): locked = HIGH (true), unlocked = LOW (false)
+func (lc *LockController) getLockedPinState() bool {
+	return lc.lockType == config.LockTypeFailSafe
+}
+
+// getUnlockedPinState returns the pin state for "unlocked" based on lock type
+func (lc *LockController) getUnlockedPinState() bool {
+	return lc.lockType == config.LockTypeFailSecure
 }
 
 // Open activates the lock for the specified duration
@@ -63,7 +91,7 @@ func (lc *LockController) Open(duration time.Duration) {
 	lc.isOpen = true
 
 	if lc.available {
-		lc.setPin(true)
+		lc.setPin(lc.getUnlockedPinState())
 	}
 
 	// Close after duration
@@ -85,7 +113,7 @@ func (lc *LockController) Close() {
 	lc.isOpen = false
 
 	if lc.available {
-		lc.setPin(false)
+		lc.setPin(lc.getLockedPinState())
 	}
 }
 

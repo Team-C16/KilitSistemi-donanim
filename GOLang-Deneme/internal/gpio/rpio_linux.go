@@ -33,16 +33,25 @@ func initRPIO() error {
 	return nil
 }
 
-// setupPin configures a GPIO pin for output (Linux only)
+// setupPin configures a GPIO pin for output (Linux only) - default to LOW
 func setupPin(pin int) error {
+	return setupPinWithState(pin, false)
+}
+
+// setupPinWithState configures a GPIO pin for output with a specific initial state (Linux only)
+func setupPinWithState(pin int, initialHigh bool) error {
 	if gpioChip == nil {
 		return fmt.Errorf("GPIO chip not initialized")
 	}
 
-	// Request the GPIO line as output with initial low state
+	// Request the GPIO line as output with specified initial state
+	initialValue := 0
+	if initialHigh {
+		initialValue = 1
+	}
 	line, err := gpioChip.RequestLine(
 		pin,
-		gpiod.AsOutput(0), // 0 = Low (lock closed by default)
+		gpiod.AsOutput(initialValue),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to request GPIO line %d: %w", pin, err)

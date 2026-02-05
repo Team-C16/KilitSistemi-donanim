@@ -62,19 +62,25 @@ jobs:
         echo "✅ Version set to: ${VERSION}"
         grep "var Version" internal/config/config.go
 
-    - name: Build for Raspberry Pi (arm64)
+    - name: Build for Raspberry Pi (arm64 & armv6)
       run: |
         VERSION="${{ steps.version.outputs.VERSION }}"
-        OUTPUT_NAME="DonanimGO-${VERSION}-arm64"
         
-        ~/go/bin/fyne-cross linux -arch=arm64 -name "$OUTPUT_NAME" ./cmd/kiosk
+        # Build ARM64
+        OUTPUT_64="DonanimGO-${VERSION}-arm64"
+        ~/go/bin/fyne-cross linux -arch=arm64 -name "$OUTPUT_64" ./cmd/kiosk
+        cp ./fyne-cross/bin/linux-arm64/kiosk ./"$OUTPUT_64"
         
-        # Copy the binary with version name
-        cp ./fyne-cross/bin/linux-arm64/kiosk ./DonanimGO-${VERSION}-arm64
+        # Build ARMv6
+        OUTPUT_V6="DonanimGO-${VERSION}-armv6"
+        ~/go/bin/fyne-cross linux -arch=arm -env GOARM=6 -name "$OUTPUT_V6" ./cmd/kiosk
+        cp ./fyne-cross/bin/linux-arm/kiosk ./"$OUTPUT_V6"
 
-    - name: Upload versioned artifact
+    - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: DonanimGO-${{ steps.version.outputs.VERSION }}-arm64
-        path: GOLang-Deneme/DonanimGO-${{ steps.version.outputs.VERSION }}-arm64
+        name: DonanimGO-${{ steps.version.outputs.VERSION }}-binaries
+        path: |
+          GOLang-Deneme/DonanimGO-${{ steps.version.outputs.VERSION }}-arm64
+          GOLang-Deneme/DonanimGO-${{ steps.version.outputs.VERSION }}-armv6
         retention-days: 90

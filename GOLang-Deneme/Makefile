@@ -21,10 +21,20 @@ build:
 build-pi:
 	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o bin/kiosk-pi-nocgo ./cmd/kiosk
 
-# Build using fyne-cross (Docker-based, recommended)
+# Build for Raspberry Pi (ARMv6 Linux - e.g., Pi Zero)
+# Cross-compile for armv6 (GOARM=6). Note: CGO disabled; enable and toolchain needed for CGO.
+build-pi-armv6:
+	GOOS=linux GOARCH=arm GOARM=6 CGO_ENABLED=0 go build -o bin/kiosk-pi-armv6 ./cmd/kiosk
+
+# Build using fyne-cross (Docker-based, recommended for cross-compilation)
 # Install fyne-cross: go install github.com/fyne-io/fyne-cross@latest
-build-pi-docker:
-	fyne-cross linux -arch arm64 -app-id com.izu.kiosk -output kiosk-pi ./cmd/kiosk
+build-pi-v6:
+	fyne-cross linux -arch arm -env GOARM=6 -app-id com.izu.kiosk -output kiosk-pi-armv6 ./cmd/kiosk
+
+build-pi-arm64:
+	fyne-cross linux -arch arm64 -app-id com.izu.kiosk -output kiosk-pi-arm64 ./cmd/kiosk
+
+build-pi-all: build-pi-v6 build-pi-arm64
 
 # Run locally
 run:
@@ -93,6 +103,7 @@ help:
 	@echo "  all            - Install deps and build"
 	@echo "  build          - Build for current platform"
 	@echo "  build-pi       - Build for Raspberry Pi (ARM64, no CGO)"
+	@echo "  build-pi-armv6 - Build for Raspberry Pi (ARMv6, no CGO)"
 	@echo "  build-pi-docker - Build for Pi using fyne-cross Docker"
 	@echo "  run            - Run locally (STANDARD mode)"
 	@echo "  run-office     - Run locally (OFFICE mode)"

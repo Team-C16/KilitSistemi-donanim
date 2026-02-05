@@ -93,7 +93,7 @@ func (c *Client) Connect() error {
 	return nil
 }
 
-// onConnect is called when MQTT connection is established
+//onConnect is called when MQTT connection is established
 func (c *Client) onConnect(client paho.Client) {
 	c.stateMu.Lock()
 	c.connected = true

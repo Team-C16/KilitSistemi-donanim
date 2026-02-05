@@ -71,9 +71,12 @@ jobs:
         ~/go/bin/fyne-cross linux -arch=arm64 -name "$OUTPUT_64" ./cmd/kiosk
         cp ./fyne-cross/bin/linux-arm64/kiosk ./"$OUTPUT_64"
         
-        # Build ARMv6
+        # Build ARMv6 (Raspberry Pi Zero W / 1 için DÜZELTİLMİŞ HALİ)
         OUTPUT_V6="DonanimGO-${VERSION}-armv6"
-        ~/go/bin/fyne-cross linux -arch=arm -env GOARM=6 -name "$OUTPUT_V6" ./cmd/kiosk
+        
+        # DİKKAT: CGO_CFLAGS ekliyoruz. Bu, C derleyicisine Pi Zero işlemcisini (arm1176jzf-s) tanıtır.
+        ~/go/bin/fyne-cross linux -arch=arm -env "GOARM=6" -env CGO_CFLAGS="-mcpu=arm1176jzf_s -mfpu=vfp -mfloat-abi=hard" -name "$OUTPUT_V6" ./cmd/kiosk
+        
         cp ./fyne-cross/bin/linux-arm/kiosk ./"$OUTPUT_V6"
 
     - name: Upload artifacts

@@ -82,7 +82,7 @@ func (a *App) Run() {
 		a.fetchTimeConfig()
 	}
 
-	// Build UI based on mode
+	//Build UI based on mode
 	content := a.buildModeUI()
 
 	// Apply edge padding if configured (CSS-like padding around entire app)

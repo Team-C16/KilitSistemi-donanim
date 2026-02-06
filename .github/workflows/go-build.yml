@@ -75,7 +75,14 @@ jobs:
         OUTPUT_V6="DonanimGO-${VERSION}-armv6"
         
         # DİKKAT: CGO_CFLAGS ekliyoruz. Listedeki tam ismi (arm1176jzf_s) boşluksuz kullanıyoruz.
-        ~/go/bin/fyne-cross linux -arch arm -env GOARM=6 -env CGO_CFLAGS="-mcpu=arm1176jzf_s" -name "$OUTPUT_V6" ./cmd/kiosk
+        ~/go/bin/fyne-cross linux \
+          -arch arm \
+          -env GOARM=6 \
+          -env CGO_ENABLED=1 \
+          -env CGO_CFLAGS="-march=armv6 -mfloat-abi=hard -mfpu=vfp" \
+          -env CGO_LDFLAGS="-march=armv6 -mfloat-abi=hard -mfpu=vfp" \
+          -name "$OUTPUT_V6" \
+          ./cmd/kiosk
         
         cp ./fyne-cross/bin/linux-arm/kiosk ./"$OUTPUT_V6"
 

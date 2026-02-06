@@ -55,7 +55,7 @@ func (c *Client) post(endpoint string, payload interface{}) ([]byte, error) {
 		return nil, fmt.Errorf("token generation failed: %w", err)
 	}
 
-	// Add token to payload if it's a map
+	//Add token to payload if it's a map
 	if m, ok := payload.(map[string]interface{}); ok {
 		m["token"] = token
 	}

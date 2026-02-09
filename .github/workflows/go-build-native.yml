@@ -51,27 +51,36 @@ jobs:
         sed -i "s/var Version = \"v0.0.0-dev\"/var Version = \"${VERSION}\"/" GOLang-Deneme/internal/config/config.go
         echo "✅ Version set to: ${VERSION}"
 
-    - name: Build in ARM32v6 container
+    - name: Build in Raspberry Pi container
       run: |
         VERSION="${{ steps.version.outputs.VERSION }}"
         OUTPUT="DonanimGO-${VERSION}-armv6"
         
-        # Create a Dockerfile for building
-        cat > Dockerfile.armv6 << 'EOF'
-        FROM arm32v6/golang:1.21-alpine
-        
-        # Install build dependencies for Fyne (CGO)
-        RUN apk add --no-cache git build-base pkgconfig \
-            libx11-dev libxcursor-dev libxrandr-dev libxinerama-dev libxi-dev \
-            mesa-dev libxxf86vm-dev
-        
+        # Use balenalib which is specifically made for Raspberry Pi
+        cat > Dockerfile.armv6 << 'DOCKERFILE'
+        FROM balenalib/raspberry-pi-debian:bullseye-build
+
+        # Install Go and Fyne dependencies
+        RUN apt-get update && apt-get install -y --no-install-recommends \
+            wget ca-certificates git pkg-config \
+            libgl1-mesa-dev libx11-dev libxcursor-dev libxrandr-dev \
+            libxinerama-dev libxi-dev libxxf86vm-dev \
+            && rm -rf /var/lib/apt/lists/*
+
+        # Install Go 1.21 for ARMv6
+        RUN wget -q https://go.dev/dl/go1.21.13.linux-armv6l.tar.gz \
+            && tar -C /usr/local -xzf go1.21.13.linux-armv6l.tar.gz \
+            && rm go1.21.13.linux-armv6l.tar.gz
+
+        ENV PATH="/usr/local/go/bin:${PATH}"
+        ENV CGO_ENABLED=1
+
         WORKDIR /app
         COPY GOLang-Deneme/ .
-        
-        ENV CGO_ENABLED=1
+
         RUN go mod download
         RUN mkdir -p /output && go build -ldflags="-s -w" -o /output/kiosk ./cmd/kiosk
-        EOF
+        DOCKERFILE
         
         # Build using Docker with QEMU emulation
         docker buildx build \
@@ -82,12 +91,12 @@ jobs:
           .
         
         # Extract the binary
-        mkdir -p output
         docker create --name extract kiosk-armv6-builder
         docker cp extract:/output/kiosk "./GOLang-Deneme/$OUTPUT"
         docker rm extract
         
         echo "✅ Build complete!"
+        file "./GOLang-Deneme/$OUTPUT" || true
         ls -la "./GOLang-Deneme/$OUTPUT"
 
     - name: Upload ARMv6 artifact

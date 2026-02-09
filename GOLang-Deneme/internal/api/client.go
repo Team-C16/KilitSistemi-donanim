@@ -34,7 +34,7 @@ func NewClient(cfg *config.Config) *Client {
 		buildingID: cfg.BuildingID,
 		mode:       cfg.Mode,
 		httpClient: &http.Client{
-			Timeout: 10 * time.Second,
+			Timeout: cfg.APITimeout,
 		},
 	}
 }

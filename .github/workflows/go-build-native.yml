@@ -1,0 +1,37 @@
+name: Go Build - Native (QEMU)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-native:
+    runs-on: ubuntu-latest
+    name: Build on ARMv6 (QEMU)
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build on Raspberry Pi Zero W (Emulated)
+        uses: uraimo/run-on-arch-action@v2
+        with:
+          arch: armv6
+          distro: bullseye
+          githubToken: ${{ github.token }}
+          install: |
+            apt-get update
+            apt-get install -y wget git build-essential
+          run: |
+            # The build_on_pi.sh script installs Go and dependencies
+            # We just need to make sure it's executable
+            chmod +x GOLang-Deneme/build_on_pi.sh
+            
+            # Run the script
+            # We might need to adjust paths since the script expects to be run from its dir
+            cd GOLang-Deneme
+            ./build_on_pi.sh
+            
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: DonanimGO-Native-armv6
+          path: GOLang-Deneme/bin/kiosk

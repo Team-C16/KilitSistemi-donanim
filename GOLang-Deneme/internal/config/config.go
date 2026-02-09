@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -49,6 +50,7 @@ type Config struct {
 	JWTSecret  string
 	RoomID     string
 	APIBaseURL string
+	APITimeout time.Duration // HTTP request timeout (default: 30s)
 	BuildingID string
 
 	// MQTT settings
@@ -99,6 +101,7 @@ func Load() *Config {
 		JWTSecret:  getEnv("JWT_SECRET", ""),
 		RoomID:     getEnv("ROOM_ID", "1"),
 		APIBaseURL: getEnv("API_BASE_URL", getEnv("nodeip", "https://pve.izu.edu.tr/randevu/device")),
+		APITimeout: time.Duration(getEnvInt("API_TIMEOUT", 30)) * time.Second,
 		BuildingID: getEnv("BUILDING_ID", "1"),
 
 		// MQTT settings

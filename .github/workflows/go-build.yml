@@ -45,7 +45,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.23'
+        go-version: '1.23.4'
         cache-dependency-path: GOLang-Deneme/go.sum
 
     - name: Download Go modules
@@ -62,7 +62,7 @@ jobs:
         echo "✅ Version set to: ${VERSION}"
         grep "var Version" internal/config/config.go
 
-    - name: Build for Raspberry Pi (arm64 & armv6)
+    - name: Build for Raspberry Pi (arm64)
       run: |
         VERSION="${{ steps.version.outputs.VERSION }}"
         
@@ -70,21 +70,6 @@ jobs:
         OUTPUT_64="DonanimGO-${VERSION}-arm64"
         ~/go/bin/fyne-cross linux -arch=arm64 -name "$OUTPUT_64" ./cmd/kiosk
         cp ./fyne-cross/bin/linux-arm64/kiosk ./"$OUTPUT_64"
-        
-        # Build ARMv6 (Raspberry Pi Zero W / 1 için DÜZELTİLMİŞ HALİ)
-        OUTPUT_V6="DonanimGO-${VERSION}-armv6"
-        
-        # DİKKAT: CGO_CFLAGS ekliyoruz. Listedeki tam ismi (arm1176jzf_s) boşluksuz kullanıyoruz.
-        ~/go/bin/fyne-cross linux \
-          -arch arm \
-          -env GOARM=6 \
-          -env CGO_ENABLED=1 \
-          -env CGO_CFLAGS="-march=armv6 -mfloat-abi=hard -mfpu=vfp" \
-          -env CGO_LDFLAGS="-march=armv6 -mfloat-abi=hard -mfpu=vfp" \
-          -name "$OUTPUT_V6" \
-          ./cmd/kiosk
-        
-        cp ./fyne-cross/bin/linux-arm/kiosk ./"$OUTPUT_V6"
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
@@ -92,5 +77,4 @@ jobs:
         name: DonanimGO-${{ steps.version.outputs.VERSION }}-binaries
         path: |
           GOLang-Deneme/DonanimGO-${{ steps.version.outputs.VERSION }}-arm64
-          GOLang-Deneme/DonanimGO-${{ steps.version.outputs.VERSION }}-armv6
         retention-days: 90

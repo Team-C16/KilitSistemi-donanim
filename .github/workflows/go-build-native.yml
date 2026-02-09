@@ -60,13 +60,17 @@ jobs:
         cat > Dockerfile.armv6 << 'EOF'
         FROM arm32v6/golang:1.21-alpine
         
-        RUN apk add --no-cache git build-base
+        # Install build dependencies for Fyne (CGO)
+        RUN apk add --no-cache git build-base pkgconfig \
+            libx11-dev libxcursor-dev libxrandr-dev libxinerama-dev libxi-dev \
+            mesa-dev libxxf86vm-dev
         
         WORKDIR /app
         COPY GOLang-Deneme/ .
         
+        ENV CGO_ENABLED=1
         RUN go mod download
-        RUN go build -ldflags="-s -w" -o /output/kiosk ./cmd/kiosk
+        RUN mkdir -p /output && go build -ldflags="-s -w" -o /output/kiosk ./cmd/kiosk
         EOF
         
         # Build using Docker with QEMU emulation

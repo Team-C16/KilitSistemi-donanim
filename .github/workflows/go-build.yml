@@ -1,10 +1,11 @@
-name: Go Build - Raspberry Pi
+name: Go Build - Cross Compile
 
 on:
   push:
     branches: [ main, master ]
     paths:
       - 'GOLang-Deneme/**'
+      - '.github/workflows/go-build.yml'
   pull_request:
     branches: [ main, master ]
     paths:
@@ -25,18 +26,17 @@ jobs:
       with:
         fetch-depth: 0
 
-    - name: Get version from commit message
+    - name: Get version
       id: version
       run: |
-        # Commit mesajından versiyon çıkar (örnek: "v1.2.3" veya "release v1.0.0")
+        # Try to get version from commit message
         COMMIT_MSG="${{ github.event.head_commit.message }}"
         VERSION=$(echo "$COMMIT_MSG" | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "")
         
         if [ -z "$VERSION" ]; then
-          echo "❌ ERROR: Commit mesajında versiyon bulunamadı!"
-          echo "Commit mesajında vX.X.X formatında versiyon belirtmelisiniz."
-          echo "Örnek: 'v1.0.0 - Initial release' veya 'Feature update v1.2.3'"
-          exit 1
+          # Fallback: use short commit hash
+          VERSION="v0.0.0-$(git rev-parse --short HEAD)"
+          echo "⚠️ No version in commit message, using: $VERSION"
         fi
         
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
@@ -45,7 +45,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.23.4'
+        go-version: '1.23'
         cache-dependency-path: GOLang-Deneme/go.sum
 
     - name: Download Go modules
@@ -57,24 +57,19 @@ jobs:
     - name: Set version in config
       run: |
         VERSION="${{ steps.version.outputs.VERSION }}"
-        # Update the Version variable in config.go
         sed -i "s/var Version = \"v0.0.0-dev\"/var Version = \"${VERSION}\"/" internal/config/config.go
         echo "✅ Version set to: ${VERSION}"
-        grep "var Version" internal/config/config.go
 
-    - name: Build for Raspberry Pi (arm64)
+    - name: Build for Raspberry Pi Zero 2 W (arm64)
       run: |
         VERSION="${{ steps.version.outputs.VERSION }}"
-        
-        # Build ARM64
-        OUTPUT_64="DonanimGO-${VERSION}-arm64"
-        ~/go/bin/fyne-cross linux -arch=arm64 -name "$OUTPUT_64" ./cmd/kiosk
-        cp ./fyne-cross/bin/linux-arm64/kiosk ./"$OUTPUT_64"
+        OUTPUT="DonanimGO-${VERSION}-arm64"
+        ~/go/bin/fyne-cross linux -arch=arm64 -name "$OUTPUT" ./cmd/kiosk
+        cp ./fyne-cross/bin/linux-arm64/kiosk ./"$OUTPUT"
 
-    - name: Upload artifacts
+    - name: Upload arm64 artifact
       uses: actions/upload-artifact@v4
       with:
-        name: DonanimGO-${{ steps.version.outputs.VERSION }}-binaries
-        path: |
-          GOLang-Deneme/DonanimGO-${{ steps.version.outputs.VERSION }}-arm64
+        name: DonanimGO-${{ steps.version.outputs.VERSION }}-arm64
+        path: GOLang-Deneme/DonanimGO-${{ steps.version.outputs.VERSION }}-arm64
         retention-days: 90

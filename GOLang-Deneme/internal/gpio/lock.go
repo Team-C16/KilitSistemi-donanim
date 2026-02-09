@@ -19,7 +19,7 @@ type LockController struct {
 	lockType  config.LockType
 }
 
-// NewLockController creates a new lock controller on the specified GPIO pin
+//NewLockController creates a new lock controller on the specified GPIO pin
 func NewLockController(pin int) *LockController {
 	cfg := config.Get()
 	lc := &LockController{

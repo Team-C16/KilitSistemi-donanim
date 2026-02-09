@@ -1,37 +1,100 @@
-name: Go Build - Native (QEMU)
+name: Go Build - ARMv6 (Pi Zero W)
 
 on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'GOLang-Deneme/**'
+      - '.github/workflows/go-build-native.yml'
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'GOLang-Deneme/**'
   workflow_dispatch:
 
 jobs:
-  build-native:
+  build-armv6:
     runs-on: ubuntu-latest
-    name: Build on ARMv6 (QEMU)
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    name: Build for ARMv6 (QEMU + Docker)
 
-      - name: Build on Raspberry Pi Zero W (Emulated)
-        uses: uraimo/run-on-arch-action@v2
-        with:
-          arch: armv6
-          distro: bullseye
-          githubToken: ${{ github.token }}
-          install: |
-            apt-get update
-            apt-get install -y wget git build-essential
-          run: |
-            # The build_on_pi.sh script installs Go and dependencies
-            # We just need to make sure it's executable
-            chmod +x GOLang-Deneme/build_on_pi.sh
-            
-            # Run the script
-            # We might need to adjust paths since the script expects to be run from its dir
-            cd GOLang-Deneme
-            ./build_on_pi.sh
-            
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: DonanimGO-Native-armv6
-          path: GOLang-Deneme/bin/kiosk
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Get version
+      id: version
+      run: |
+        COMMIT_MSG="${{ github.event.head_commit.message }}"
+        VERSION=$(echo "$COMMIT_MSG" | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "")
+        
+        if [ -z "$VERSION" ]; then
+          VERSION="v0.0.0-$(git rev-parse --short HEAD)"
+          echo "⚠️ No version in commit message, using: $VERSION"
+        fi
+        
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        echo "✅ Building version: $VERSION"
+
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+      with:
+        platforms: linux/arm/v6
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Set version in config
+      run: |
+        VERSION="${{ steps.version.outputs.VERSION }}"
+        sed -i "s/var Version = \"v0.0.0-dev\"/var Version = \"${VERSION}\"/" GOLang-Deneme/internal/config/config.go
+        echo "✅ Version set to: ${VERSION}"
+
+    - name: Build in ARM32v6 container
+      run: |
+        VERSION="${{ steps.version.outputs.VERSION }}"
+        OUTPUT="DonanimGO-${VERSION}-armv6"
+        
+        # Create a Dockerfile for building
+        cat > Dockerfile.armv6 << 'EOF'
+        FROM arm32v6/golang:1.21-alpine
+        
+        RUN apk add --no-cache git build-base
+        
+        WORKDIR /app
+        COPY GOLang-Deneme/ .
+        
+        RUN go mod download
+        RUN go build -ldflags="-s -w" -o /output/kiosk ./cmd/kiosk
+        EOF
+        
+        # Build using Docker with QEMU emulation
+        docker buildx build \
+          --platform linux/arm/v6 \
+          --load \
+          -t kiosk-armv6-builder \
+          -f Dockerfile.armv6 \
+          .
+        
+        # Extract the binary
+        mkdir -p output
+        docker create --name extract kiosk-armv6-builder
+        docker cp extract:/output/kiosk "./GOLang-Deneme/$OUTPUT"
+        docker rm extract
+        
+        echo "✅ Build complete!"
+        ls -la "./GOLang-Deneme/$OUTPUT"
+
+    - name: Upload ARMv6 artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: DonanimGO-${{ steps.version.outputs.VERSION }}-armv6
+        path: GOLang-Deneme/DonanimGO-${{ steps.version.outputs.VERSION }}-armv6
+        retention-days: 90
+
+    - name: Cleanup
+      if: always()
+      run: |
+        rm -f Dockerfile.armv6
+        docker rmi kiosk-armv6-builder 2>/dev/null || true

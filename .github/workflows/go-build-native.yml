@@ -60,10 +60,11 @@ jobs:
         cat > Dockerfile.armv6 << 'DOCKERFILE'
         FROM balenalib/raspberry-pi-debian:bullseye-build
 
-        # Install Go and Fyne dependencies
+        # Install Go and Fyne dependencies (GLES for Pi Zero W)
         RUN apt-get update && apt-get install -y --no-install-recommends \
             wget ca-certificates git pkg-config \
-            libgl1-mesa-dev libx11-dev libxcursor-dev libxrandr-dev \
+            libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev \
+            libx11-dev libxcursor-dev libxrandr-dev \
             libxinerama-dev libxi-dev libxxf86vm-dev \
             && rm -rf /var/lib/apt/lists/*
 
@@ -79,7 +80,7 @@ jobs:
         COPY GOLang-Deneme/ .
 
         RUN go mod download
-        RUN mkdir -p /output && go build -ldflags="-s -w" -o /output/kiosk ./cmd/kiosk
+        RUN mkdir -p /output && go build -tags gles -ldflags="-s -w" -o /output/kiosk ./cmd/kiosk
         DOCKERFILE
         
         # Build using Docker with QEMU emulation

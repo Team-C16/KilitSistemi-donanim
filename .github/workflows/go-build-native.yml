@@ -1,15 +1,53 @@
-name: Build & Release (ARMv6 + ARM64)
+name: Build & Release (Commit Msg)
 
 on:
   push:
-    tags:
-      - 'v*' # Sadece v1.0.0, v2.3.5 gibi tag atıldığında çalışır
+    branches: [ main, master ]
+    paths:
+      - 'GOLang-Deneme/**'
+      - '.github/workflows/**'
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'GOLang-Deneme/**'
 
 permissions:
   contents: write # Release oluşturmak için şart
 
 jobs:
+  # 1. VERSİYON BELİRLEME (SENİN MANTIĞIN)
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      VERSION: ${{ steps.version.outputs.VERSION }}
+      SHOULD_RELEASE: ${{ steps.version.outputs.SHOULD_RELEASE }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Parse Commit Message
+        id: version
+        run: |
+          # Senin grep mantığın:
+          COMMIT_MSG="${{ github.event.head_commit.message }}"
+          VERSION=$(echo "$COMMIT_MSG" | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "")
+          
+          if [ -n "$VERSION" ]; then
+            echo "🎉 Version found in commit: $VERSION"
+            echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+            echo "SHOULD_RELEASE=true" >> $GITHUB_OUTPUT
+          else
+            DEV_VERSION="v0.0.0-$(git rev-parse --short HEAD)"
+            echo "⚠️ No version in commit, using dev: $DEV_VERSION"
+            echo "VERSION=$DEV_VERSION" >> $GITHUB_OUTPUT
+            echo "SHOULD_RELEASE=false" >> $GITHUB_OUTPUT
+          fi
+
+  # 2. BUILD İŞLEMİ (ARMv6 ve ARM64)
   build-matrix:
+    needs: setup
     name: Build ${{ matrix.arch_name }}
     runs-on: ubuntu-latest
     strategy:
@@ -29,20 +67,13 @@ jobs:
             docker_platform: "linux/arm64"
             base_image: "balenalib/aarch64-debian:bullseye-build"
             go_arch: "arm64"
-            go_arm: "" # 64-bit için boş bırakılır
+            go_arm: "" # 64-bit için boş
             go_dl_arch: "arm64"
             suffix: "arm64"
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Determine Version
-        id: version
-        run: |
-          VERSION=${GITHUB_REF#refs/tags/}
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-          echo "🔨 Building version: $VERSION for ${{ matrix.arch_name }}"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -54,10 +85,13 @@ jobs:
 
       - name: Build inside Docker (CGO Support)
         run: |
-          VERSION="${{ steps.version.outputs.VERSION }}"
+          # Setup job'ından gelen versiyonu alıyoruz
+          VERSION="${{ needs.setup.outputs.VERSION }}"
           BINARY_NAME="DonanimGO-${VERSION}-${{ matrix.suffix }}"
           
-          # Dockerfile'ı dinamik oluşturuyoruz (Her mimari için uygun base image ile)
+          echo "🔨 Building $BINARY_NAME inside Docker..."
+
+          # Dockerfile'ı dinamik oluşturuyoruz
           cat > Dockerfile <<EOF
           FROM ${{ matrix.base_image }}
           
@@ -69,7 +103,7 @@ jobs:
               libxinerama-dev libxi-dev libxxf86vm-dev \\
               && rm -rf /var/lib/apt/lists/*
 
-          # Go Kurulumu (Mimariye özel)
+          # Go Kurulumu
           RUN wget -q https://go.dev/dl/go1.21.13.linux-${{ matrix.go_dl_arch }}.tar.gz \\
               && tar -C /usr/local -xzf go1.21.13.linux-${{ matrix.go_dl_arch }}.tar.gz \\
               && rm go1.21.13.linux-${{ matrix.go_dl_arch }}.tar.gz
@@ -83,7 +117,7 @@ jobs:
           WORKDIR /app
           COPY GOLang-Deneme/ .
 
-          # Config içindeki versiyonu güncelle (Opsiyonel)
+          # Config içindeki versiyonu güncelle (Senin sed komutun)
           RUN sed -i "s/var Version = \"v0.0.0-dev\"/var Version = \"${VERSION}\"/" internal/config/config.go || true
           
           # Build komutu
@@ -102,21 +136,26 @@ jobs:
           docker cp extract:/output/${BINARY_NAME} ./${BINARY_NAME}
           docker rm extract
           
-          # Checksum oluştur (Manuel kontrol için dursun)
+          # Checksum oluştur
           sha256sum ${BINARY_NAME} > ${BINARY_NAME}.sha256
+          
+          # Bilgi ver
+          ls -lh ${BINARY_NAME}
+          file ${BINARY_NAME}
 
-      - name: Upload Artifact (Temporary)
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: binary-${{ matrix.suffix }}
           path: |
             DonanimGO-*
             *.sha256
-          retention-days: 1
+          retention-days: 5
 
-  # --- RELEASE JOB ---
+  # 3. RELEASE OLUŞTURMA (SADECE COMMIT MESAJINDA VERSİYON VARSA)
   create-release:
-    needs: build-matrix
+    needs: [setup, build-matrix]
+    if: needs.setup.outputs.SHOULD_RELEASE == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Download All Artifacts
@@ -124,7 +163,6 @@ jobs:
         with:
           path: artifacts
 
-      # Artifacts klasör yapısını düzeltip tek bir yere topluyoruz
       - name: Prepare Release Files
         run: |
           mkdir release_files
@@ -135,6 +173,10 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
+          tag_name: ${{ needs.setup.outputs.VERSION }} # Commit mesajındaki versiyonu tag olarak kullanır
+          name: Release ${{ needs.setup.outputs.VERSION }}
+          draft: false
+          prerelease: false
           files: release_files/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

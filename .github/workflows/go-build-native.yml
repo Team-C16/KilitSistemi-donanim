@@ -1,114 +1,140 @@
-name: Go Build - ARMv6 (Pi Zero W)
+name: Build & Release (ARMv6 + ARM64)
 
 on:
   push:
-    branches: [ main, master ]
-    paths:
-      - 'GOLang-Deneme/**'
-      - '.github/workflows/go-build-native.yml'
-  pull_request:
-    branches: [ main, master ]
-    paths:
-      - 'GOLang-Deneme/**'
-  workflow_dispatch:
+    tags:
+      - 'v*' # Sadece v1.0.0, v2.3.5 gibi tag atıldığında çalışır
+
+permissions:
+  contents: write # Release oluşturmak için şart
 
 jobs:
-  build-armv6:
+  build-matrix:
+    name: Build ${{ matrix.arch_name }}
     runs-on: ubuntu-latest
-    name: Build for ARMv6 (QEMU + Docker)
+    strategy:
+      matrix:
+        include:
+          # --- Raspberry Pi Zero / 1 (32-bit) ---
+          - arch_name: "ARMv6"
+            docker_platform: "linux/arm/v6"
+            base_image: "balenalib/raspberry-pi-debian:bullseye-build"
+            go_arch: "arm"
+            go_arm: "6"
+            go_dl_arch: "armv6l"
+            suffix: "armv6"
+            
+          # --- Raspberry Pi 3 / 4 / 5 / Zero 2 (64-bit) ---
+          - arch_name: "ARM64"
+            docker_platform: "linux/arm64"
+            base_image: "balenalib/aarch64-debian:bullseye-build"
+            go_arch: "arm64"
+            go_arm: "" # 64-bit için boş bırakılır
+            go_dl_arch: "arm64"
+            suffix: "arm64"
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Get version
-      id: version
-      run: |
-        COMMIT_MSG="${{ github.event.head_commit.message }}"
-        VERSION=$(echo "$COMMIT_MSG" | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "")
-        
-        if [ -z "$VERSION" ]; then
-          VERSION="v0.0.0-$(git rev-parse --short HEAD)"
-          echo "⚠️ No version in commit message, using: $VERSION"
-        fi
-        
-        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-        echo "✅ Building version: $VERSION"
+      - name: Determine Version
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "🔨 Building version: $VERSION for ${{ matrix.arch_name }}"
 
-    - name: Set up QEMU
-      uses: docker/setup-qemu-action@v3
-      with:
-        platforms: linux/arm/v6
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: ${{ matrix.docker_platform }}
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-    - name: Set version in config
-      run: |
-        VERSION="${{ steps.version.outputs.VERSION }}"
-        sed -i "s/var Version = \"v0.0.0-dev\"/var Version = \"${VERSION}\"/" GOLang-Deneme/internal/config/config.go
-        echo "✅ Version set to: ${VERSION}"
+      - name: Build inside Docker (CGO Support)
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          BINARY_NAME="DonanimGO-${VERSION}-${{ matrix.suffix }}"
+          
+          # Dockerfile'ı dinamik oluşturuyoruz (Her mimari için uygun base image ile)
+          cat > Dockerfile <<EOF
+          FROM ${{ matrix.base_image }}
+          
+          # Gerekli kütüphaneler (Fyne/GLES vb.)
+          RUN apt-get update && apt-get install -y --no-install-recommends \\
+              wget ca-certificates git pkg-config \\
+              libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev \\
+              libx11-dev libxcursor-dev libxrandr-dev \\
+              libxinerama-dev libxi-dev libxxf86vm-dev \\
+              && rm -rf /var/lib/apt/lists/*
 
-    - name: Build in Raspberry Pi container
-      run: |
-        VERSION="${{ steps.version.outputs.VERSION }}"
-        OUTPUT="DonanimGO-${VERSION}-armv6"
-        
-        # Use balenalib which is specifically made for Raspberry Pi
-        cat > Dockerfile.armv6 << 'DOCKERFILE'
-        FROM balenalib/raspberry-pi-debian:bullseye-build
+          # Go Kurulumu (Mimariye özel)
+          RUN wget -q https://go.dev/dl/go1.21.13.linux-${{ matrix.go_dl_arch }}.tar.gz \\
+              && tar -C /usr/local -xzf go1.21.13.linux-${{ matrix.go_dl_arch }}.tar.gz \\
+              && rm go1.21.13.linux-${{ matrix.go_dl_arch }}.tar.gz
 
-        # Install Go and Fyne dependencies (GLES for Pi Zero W)
-        RUN apt-get update && apt-get install -y --no-install-recommends \
-            wget ca-certificates git pkg-config \
-            libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev \
-            libx11-dev libxcursor-dev libxrandr-dev \
-            libxinerama-dev libxi-dev libxxf86vm-dev \
-            && rm -rf /var/lib/apt/lists/*
+          ENV PATH="/usr/local/go/bin:\${PATH}"
+          ENV CGO_ENABLED=1
+          ENV GOOS=linux
+          ENV GOARCH=${{ matrix.go_arch }}
+          ENV GOARM=${{ matrix.go_arm }}
 
-        # Install Go 1.21 for ARMv6
-        RUN wget -q https://go.dev/dl/go1.21.13.linux-armv6l.tar.gz \
-            && tar -C /usr/local -xzf go1.21.13.linux-armv6l.tar.gz \
-            && rm go1.21.13.linux-armv6l.tar.gz
+          WORKDIR /app
+          COPY GOLang-Deneme/ .
 
-        ENV PATH="/usr/local/go/bin:${PATH}"
-        ENV CGO_ENABLED=1
+          # Config içindeki versiyonu güncelle (Opsiyonel)
+          RUN sed -i "s/var Version = \"v0.0.0-dev\"/var Version = \"${VERSION}\"/" internal/config/config.go || true
+          
+          # Build komutu
+          RUN mkdir -p /output && go build -tags gles -ldflags="-s -w" -o /output/${BINARY_NAME} ./cmd/kiosk
+          EOF
 
-        WORKDIR /app
-        COPY GOLang-Deneme/ .
+          # Build Başlat
+          docker buildx build \
+            --platform ${{ matrix.docker_platform }} \
+            --load \
+            -t builder-img \
+            -f Dockerfile .
 
-        RUN go mod download
-        RUN mkdir -p /output && go build -tags gles -ldflags="-s -w" -o /output/kiosk ./cmd/kiosk
-        DOCKERFILE
-        
-        # Build using Docker with QEMU emulation
-        docker buildx build \
-          --platform linux/arm/v6 \
-          --load \
-          -t kiosk-armv6-builder \
-          -f Dockerfile.armv6 \
-          .
-        
-        # Extract the binary
-        docker create --name extract kiosk-armv6-builder
-        docker cp extract:/output/kiosk "./GOLang-Deneme/$OUTPUT"
-        docker rm extract
-        
-        echo "✅ Build complete!"
-        file "./GOLang-Deneme/$OUTPUT" || true
-        ls -la "./GOLang-Deneme/$OUTPUT"
+          # Binary dosyasını dışarı al
+          docker create --name extract builder-img
+          docker cp extract:/output/${BINARY_NAME} ./${BINARY_NAME}
+          docker rm extract
+          
+          # Checksum oluştur (Manuel kontrol için dursun)
+          sha256sum ${BINARY_NAME} > ${BINARY_NAME}.sha256
 
-    - name: Upload ARMv6 artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: DonanimGO-${{ steps.version.outputs.VERSION }}-armv6
-        path: GOLang-Deneme/DonanimGO-${{ steps.version.outputs.VERSION }}-armv6
-        retention-days: 90
+      - name: Upload Artifact (Temporary)
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.suffix }}
+          path: |
+            DonanimGO-*
+            *.sha256
+          retention-days: 1
 
-    - name: Cleanup
-      if: always()
-      run: |
-        rm -f Dockerfile.armv6
-        docker rmi kiosk-armv6-builder 2>/dev/null || true
+  # --- RELEASE JOB ---
+  create-release:
+    needs: build-matrix
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      # Artifacts klasör yapısını düzeltip tek bir yere topluyoruz
+      - name: Prepare Release Files
+        run: |
+          mkdir release_files
+          find artifacts -name "DonanimGO-*" -exec cp {} release_files/ \;
+          find artifacts -name "*.sha256" -exec cp {} release_files/ \;
+          ls -R release_files/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: release_files/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

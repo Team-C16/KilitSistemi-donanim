@@ -11,7 +11,7 @@ import socket
 import requests
 import threading
 # GPIO Pin 12'yi LED olarak tanımlıyoruz
-led = LED(12)  # GPIO Pin 12
+led = LED(12)  # GPIO Pin 12 tamam
 
 # Tkinter importları
 import tkinter as tk

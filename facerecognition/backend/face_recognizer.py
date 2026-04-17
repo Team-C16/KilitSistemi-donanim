@@ -11,7 +11,10 @@ Model: buffalo_l (ArcFace-based)
 import cv2
 import numpy as np
 from insightface.app import FaceAnalysis
-from config import INSIGHTFACE_MODEL, GPU_DEVICE_ID, DETECTION_SIZE
+try:
+    from config import INSIGHTFACE_MODEL, GPU_DEVICE_ID, DETECTION_SIZE
+except ImportError:
+    from .config import INSIGHTFACE_MODEL, GPU_DEVICE_ID, DETECTION_SIZE
 
 
 class FaceRecognizer:

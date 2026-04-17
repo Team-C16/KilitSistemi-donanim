@@ -13,7 +13,7 @@ PORT = 8000
 INSIGHTFACE_MODEL = "buffalo_l"
 
 # GPU device ID (0 = first GPU, -1 = CPU)
-GPU_DEVICE_ID = 0
+GPU_DEVICE_ID = -1  # -1 = CPU (for laptop testing), 0 = first GPU
 
 # Detection size for InsightFace (used during enrollment)
 DETECTION_SIZE = (640, 640)

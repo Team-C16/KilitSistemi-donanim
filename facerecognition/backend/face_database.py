@@ -19,7 +19,10 @@ import os
 import json
 import numpy as np
 from datetime import datetime
-from config import FACE_DB_PATH, ENROLLED_FACES_DIR, RECOGNITION_THRESHOLD
+try:
+    from config import FACE_DB_PATH, ENROLLED_FACES_DIR, RECOGNITION_THRESHOLD
+except ImportError:
+    from .config import FACE_DB_PATH, ENROLLED_FACES_DIR, RECOGNITION_THRESHOLD
 
 
 class FaceDatabase:

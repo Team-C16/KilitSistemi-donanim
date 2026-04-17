@@ -11,6 +11,9 @@ Usage:
 import os
 import sys
 
+# Bugfix for Windows OpenMP conflict
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+
 
 def download_models():
     """Download InsightFace models."""

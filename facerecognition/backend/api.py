@@ -14,6 +14,10 @@ Usage:
 
 import io
 import cv2
+import os
+
+# Bugfix for Windows OpenMP conflict
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 import json
 import base64
 import numpy as np

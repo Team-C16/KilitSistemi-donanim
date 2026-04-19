@@ -12,6 +12,8 @@ from uniface.spoofing import MiniFASNet
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from backend.face_recognizer import FaceRecognizer
+from backend.face_database import FaceDatabase
+from backend.audit_logger import AuditLogger
 
 def test_recognition():
     print("="*50)
@@ -21,16 +23,23 @@ def test_recognition():
     print("Initializing heavy InsightFace AI... (Takes ~10 seconds)")
     recognizer = FaceRecognizer()
     
+    print("Initializing Database...")
+    face_db = FaceDatabase()
+    
+    print("Initializing Audit Logger...")
+    audit_log = AuditLogger()
+    
     print("Initializing Anti-Spoofing Liveness AI (MiniFASNet)...")
     spoofer = MiniFASNet()
     
     cap = cv2.VideoCapture(0)
     
     print("\nStarting webcam...")
-    print(" -> Press 's' to take a SCREENSHOT and use it to test Recognition!")
+    print(" -> Real-time recognition using vectors in backend/data/face_db.json.")
+    print(" -> Press 'e' to ENROLL current face to database (Fake/Test User).")
+    print(" -> Press 'c' to CLEAR the entire database.")
     print(" -> Press 'q' to quit.")
     
-    reference_embedding = None
     consecutive_real_frames = 0
     
     while True:
@@ -99,31 +108,50 @@ def test_recognition():
                 
             is_fully_validated = consecutive_real_frames >= 5
             
-            # If S is pressed, take a screenshot and save the embedding!
-            if key == ord('s') or key == ord('S'):
+            # --- HOTKEY ACTIONS ---
+            if key == ord('e') or key == ord('E'):
                 if is_multi_face_lockdown:
-                    print("❌ FAILED: Multiple faces detected! Only one person allowed at a time.")
+                    print("❌ Cannot enroll: Multiple faces detected!")
                 elif is_fully_validated:
-                    cv2.imwrite("reference_screenshot.jpg", frame)
-                    reference_embedding = emb
-                    print(f"✅ Screenshot taken and saved as 'reference_screenshot.jpg'!")
-                    print("Now checking if current face matches the screenshot...")
+                    # Check if person already exists to prevent duplicate enrollment
+                    match = face_db.recognize(emb)
+                    if match["matched"]:
+                        print(f"❌ Cannot enroll: Person already exists as '{match['name']}' (Sim: {match['score']:.2f})!")
+                    else:
+                        user_name = f"TestUser_{int(time.time())}"
+                        face_db.enroll(user_name, [emb])
+                        print(f"✅ Enrolled {user_name} into database!")
                 else:
-                    print("❌ FAILED: Face must be fully validated (hold still) before enrolling!")
+                    print("❌ Face must be fully validated (hold still) before enrolling!")
 
+            if key == ord('c') or key == ord('C'):
+                face_db.clear()
+                print("✅ Database cleared!")
+            
             # Default Box Color
             box_color = (255, 0, 0)
             
-            # 1. First line: Label Identity
-            label_identity = f"Extracted: {rec_time:.1f}ms"
-            if reference_embedding is not None:
-                similarity = recognizer.compute_similarity(reference_embedding, emb)
-                if similarity >= 0.4:
-                    box_color = (0, 255, 0)
-                    label_identity = f"RECOGNIZED! ({similarity:.2f})"
-                else:
-                    box_color = (0, 0, 255)
-                    label_identity = f"UNKNOWN ({similarity:.2f})"
+            # Use FaceDatabase vector search!
+            match_result = face_db.recognize(emb)
+            if match_result["matched"]:
+                box_color = (0, 255, 0)
+                label_identity = f"{match_result['name']} ({match_result['score']:.2f})"
+                
+                # --- AUDIT LOGGING (SUCCESS) ---
+                # Only log exactly on the 5th verified frame to prevent spamming the database 30 times a second
+                if consecutive_real_frames == 5:
+                    audit_log.log_event("DOOR_UNLOCK_SUCCESS", match_result['name'], match_result['score'], "Person passed liveness and matched")
+                     # Print to terminal using cyan color
+                    print(f"\033[96m📄 AUDIT LOG:\033[0m Door unlocked for '{match_result['name']}' at {time.strftime('%H:%M:%S')}")
+                    
+            else:
+                box_color = (0, 0, 255)
+                label_identity = f"UNKNOWN ({match_result['score']:.2f})"
+                
+                # --- AUDIT LOGGING (FAILED) ---
+                if consecutive_real_frames == 5:
+                    audit_log.log_event("DOOR_UNLOCK_FAILED", "UNKNOWN", match_result['score'], "Person passed liveness but no database match")
+                    print(f"\033[91m📄 AUDIT LOG:\033[0m Unknown person attempted unlock at {time.strftime('%H:%M:%S')}")
                     
             if not is_fully_validated:
                 label_identity = "LIVENESS FAILED"
@@ -166,9 +194,8 @@ def test_recognition():
             cv2.putText(display, label_liveness, (x1, y1-5), 
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, box_color, 2)
         
-        if reference_embedding is not None:
-            cv2.putText(display, "Recognition & Liveness Active! (Press 'S' to retake)", (10, 30), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+        cv2.putText(display, f"DB Loaded: {len(face_db.db.get('people', {}))} people vectors", (10, 30), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
             
         cv2.imshow("Recognition Extractor Test", display)
             

@@ -9,12 +9,20 @@ Best for: Frontal face detection (person looking at camera)
 """
 
 import cv2
-from config import (
-    DETECTION_SCALE_FACTOR,
-    DETECTION_MIN_NEIGHBORS,
-    FACE_PADDING,
-    MIN_FACE_SIZE,
-)
+try:
+    from config import (
+        DETECTION_SCALE_FACTOR,
+        DETECTION_MIN_NEIGHBORS,
+        FACE_PADDING,
+        MIN_FACE_SIZE,
+    )
+except ImportError:
+    from .config import (
+        DETECTION_SCALE_FACTOR,
+        DETECTION_MIN_NEIGHBORS,
+        FACE_PADDING,
+        MIN_FACE_SIZE,
+    )
 
 
 class FaceDetector:

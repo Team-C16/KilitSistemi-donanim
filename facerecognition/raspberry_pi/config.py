@@ -3,7 +3,7 @@ Raspberry Pi Configuration
 """
 
 # ---- Backend Server ----
-BACKEND_HOST = "192.168.1.100"  # Change to your backend server IP
+BACKEND_HOST = "127.0.0.1"  # Local system for testing
 BACKEND_PORT = 8000
 BACKEND_WS_URL = f"ws://{BACKEND_HOST}:{BACKEND_PORT}/ws"
 BACKEND_HTTP_URL = f"http://{BACKEND_HOST}:{BACKEND_PORT}"

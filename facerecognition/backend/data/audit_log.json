@@ -1,0 +1,233 @@
+[
+  {
+    "timestamp": "2026-04-19T16:28:05.014173",
+    "event_type": "DOOR_UNLOCK_SUCCESS",
+    "person": "TestUser_1776597078",
+    "score": 0.9055,
+    "details": "Person passed liveness and matched"
+  },
+  {
+    "timestamp": "2026-04-19T16:28:12.404479",
+    "event_type": "DOOR_UNLOCK_SUCCESS",
+    "person": "TestUser_1776597078",
+    "score": 0.8529,
+    "details": "Person passed liveness and matched"
+  },
+  {
+    "timestamp": "2026-04-19T16:28:54.411533",
+    "event_type": "DOOR_UNLOCK_SUCCESS",
+    "person": "TestUser_1776597078",
+    "score": 0.7258,
+    "details": "Person passed liveness and matched"
+  },
+  {
+    "timestamp": "2026-04-19T16:29:03.903556",
+    "event_type": "DOOR_UNLOCK_SUCCESS",
+    "person": "TestUser_1776597078",
+    "score": 0.8559,
+    "details": "Person passed liveness and matched"
+  },
+  {
+    "timestamp": "2026-04-19T16:29:40.128393",
+    "event_type": "DOOR_UNLOCK_SUCCESS",
+    "person": "TestUser_1776597078",
+    "score": 0.6368,
+    "details": "Person passed liveness and matched"
+  },
+  {
+    "timestamp": "2026-04-20T11:00:08.209127",
+    "event_type": "DOOR_UNLOCK_SUCCESS",
+    "person": "TestUser_1776597078",
+    "score": 0.7514,
+    "details": "Person passed liveness and matched"
+  },
+  {
+    "timestamp": "2026-04-20T11:00:19.004339",
+    "event_type": "DOOR_UNLOCK_SUCCESS",
+    "person": "TestUser_1776597078",
+    "score": 0.7316,
+    "details": "Person passed liveness and matched"
+  },
+  {
+    "timestamp": "2026-04-20T11:00:41.781000",
+    "event_type": "DOOR_UNLOCK_SUCCESS",
+    "person": "TestUser_1776597078",
+    "score": 0.7096,
+    "details": "Person passed liveness and matched"
+  },
+  {
+    "timestamp": "2026-04-20T11:00:52.655698",
+    "event_type": "DOOR_UNLOCK_SUCCESS",
+    "person": "TestUser_1776597078",
+    "score": 0.7183,
+    "details": "Person passed liveness and matched"
+  },
+  {
+    "timestamp": "2026-04-20T11:00:58.922977",
+    "event_type": "DOOR_UNLOCK_SUCCESS",
+    "person": "TestUser_1776597078",
+    "score": 0.7134,
+    "details": "Person passed liveness and matched"
+  },
+  {
+    "timestamp": "2026-04-20T11:01:10.333964",
+    "event_type": "DOOR_UNLOCK_SUCCESS",
+    "person": "TestUser_1776597078",
+    "score": 0.6489,
+    "details": "Person passed liveness and matched"
+  },
+  {
+    "timestamp": "2026-04-20T11:01:13.183972",
+    "event_type": "DOOR_UNLOCK_SUCCESS",
+    "person": "TestUser_1776597078",
+    "score": 0.613,
+    "details": "Person passed liveness and matched"
+  },
+  {
+    "timestamp": "2026-04-20T11:01:14.779621",
+    "event_type": "DOOR_UNLOCK_SUCCESS",
+    "person": "TestUser_1776597078",
+    "score": 0.7332,
+    "details": "Person passed liveness and matched"
+  },
+  {
+    "timestamp": "2026-04-20T11:01:17.698251",
+    "event_type": "DOOR_UNLOCK_SUCCESS",
+    "person": "TestUser_1776597078",
+    "score": 0.7734,
+    "details": "Person passed liveness and matched"
+  },
+  {
+    "timestamp": "2026-04-20T11:01:21.682038",
+    "event_type": "DOOR_UNLOCK_FAILED",
+    "person": "UNKNOWN",
+    "score": 0.0283,
+    "details": "Person passed liveness but no database match"
+  },
+  {
+    "timestamp": "2026-04-20T11:01:30.460753",
+    "event_type": "DOOR_UNLOCK_FAILED",
+    "person": "UNKNOWN",
+    "score": 0.0429,
+    "details": "Person passed liveness but no database match"
+  },
+  {
+    "timestamp": "2026-04-20T11:01:39.901081",
+    "event_type": "DOOR_UNLOCK_FAILED",
+    "person": "UNKNOWN",
+    "score": 0.0689,
+    "details": "Person passed liveness but no database match"
+  },
+  {
+    "timestamp": "2026-04-20T11:01:50.057843",
+    "event_type": "DOOR_UNLOCK_SUCCESS",
+    "person": "TestUser_1776597078",
+    "score": 0.7306,
+    "details": "Person passed liveness and matched"
+  },
+  {
+    "timestamp": "2026-04-20T11:01:52.626399",
+    "event_type": "DOOR_UNLOCK_SUCCESS",
+    "person": "TestUser_1776597078",
+    "score": 0.6469,
+    "details": "Person passed liveness and matched"
+  },
+  {
+    "timestamp": "2026-04-20T11:01:55.216668",
+    "event_type": "DOOR_UNLOCK_SUCCESS",
+    "person": "TestUser_1776597078",
+    "score": 0.6835,
+    "details": "Person passed liveness and matched"
+  },
+  {
+    "timestamp": "2026-04-20T11:02:00.010170",
+    "event_type": "DOOR_UNLOCK_SUCCESS",
+    "person": "TestUser_1776597078",
+    "score": 0.6954,
+    "details": "Person passed liveness and matched"
+  },
+  {
+    "timestamp": "2026-04-20T12:09:20.477073",
+    "event_type": "DOOR_UNLOCK_SUCCESS",
+    "person": "TestUser_1776597078",
+    "score": 0.6219,
+    "details": "Person passed liveness and matched"
+  },
+  {
+    "timestamp": "2026-04-20T12:09:39.513290",
+    "event_type": "DOOR_UNLOCK_SUCCESS",
+    "person": "TestUser_1776597078",
+    "score": 0.7144,
+    "details": "Person passed liveness and matched"
+  },
+  {
+    "timestamp": "2026-04-20T12:09:55.233908",
+    "event_type": "DOOR_UNLOCK_SUCCESS",
+    "person": "TestUser_1776597078",
+    "score": 0.6443,
+    "details": "Person passed liveness and matched"
+  },
+  {
+    "timestamp": "2026-04-20T12:10:05.188694",
+    "event_type": "DOOR_UNLOCK_FAILED",
+    "person": "UNKNOWN",
+    "score": 0.0,
+    "details": "Person passed liveness but no database match"
+  },
+  {
+    "timestamp": "2026-04-20T12:10:10.436380",
+    "event_type": "DOOR_UNLOCK_FAILED",
+    "person": "UNKNOWN",
+    "score": 0.0,
+    "details": "Person passed liveness but no database match"
+  },
+  {
+    "timestamp": "2026-04-20T12:10:15.425916",
+    "event_type": "DOOR_UNLOCK_FAILED",
+    "person": "UNKNOWN",
+    "score": 0.0,
+    "details": "Person passed liveness but no database match"
+  },
+  {
+    "timestamp": "2026-04-20T12:10:31.460165",
+    "event_type": "DOOR_UNLOCK_FAILED",
+    "person": "UNKNOWN",
+    "score": 0.0,
+    "details": "Person passed liveness but no database match"
+  },
+  {
+    "timestamp": "2026-04-20T12:10:55.655896",
+    "event_type": "DOOR_UNLOCK_FAILED",
+    "person": "UNKNOWN",
+    "score": 0.0092,
+    "details": "Person passed liveness but no database match"
+  },
+  {
+    "timestamp": "2026-04-20T12:11:03.994552",
+    "event_type": "DOOR_UNLOCK_FAILED",
+    "person": "UNKNOWN",
+    "score": 0.0,
+    "details": "Person passed liveness but no database match"
+  },
+  {
+    "timestamp": "2026-04-20T12:11:07.570399",
+    "event_type": "DOOR_UNLOCK_SUCCESS",
+    "person": "TestUser_1776597078",
+    "score": 0.6827,
+    "details": "Person passed liveness and matched"
+  },
+  {
+    "timestamp": "2026-04-20T12:11:15.384842",
+    "event_type": "DOOR_UNLOCK_SUCCESS",
+    "person": "TestUser_1776597078",
+    "score": 0.7488,
+    "details": "Person passed liveness and matched"
+  },
+  {
+    "timestamp": "2026-04-20T12:11:31.443545",
+    "event_type": "DOOR_UNLOCK_SUCCESS",
+    "person": "TestUser_1776597078",
+    "score": 0.7598,
+    "details": "Person passed liveness and matched"
+  }
+]

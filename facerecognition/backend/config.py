@@ -32,3 +32,8 @@ ENROLLED_FACES_DIR = os.path.join(os.path.dirname(__file__), "data", "enrolled_f
 # ---- Enrollment ----
 MIN_ENROLLMENT_IMAGES = 3      # Minimum images needed to enroll a person
 MAX_ENROLLMENT_IMAGES = 15     # Maximum images per enrollment
+
+# ---- Liveness / Security ----
+LIVENESS_STRICT_THRESHOLD   = 0.90   # MiniFASNet confidence cutoff (must be >= this to be "real")
+PROXIMITY_RATIO_LIMIT       = 0.45   # Max face_height / frame_height before proximity block
+TEMPORAL_CONSISTENCY_FRAMES = 5      # Consecutive real frames required before door unlocks

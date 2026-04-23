@@ -30,6 +30,8 @@ from typing import List
 from config import HOST, PORT, MIN_ENROLLMENT_IMAGES, MAX_ENROLLMENT_IMAGES
 from face_recognizer import FaceRecognizer
 from face_database import FaceDatabase
+from audit_logger import AuditLogger
+from liveness_checker import LivenessChecker
 
 # ── Initialize ──────────────────────────────────────────────
 app = FastAPI(
@@ -46,9 +48,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize face recognizer (GPU) and database
+# Initialize face recognizer (GPU), database, and audit logger
 recognizer = FaceRecognizer()
 face_db = FaceDatabase()
+audit_log = AuditLogger()
+
+print("[API] Security pipeline: LivenessChecker (MiniFASNet) will be initialized per WebSocket connection.")
 
 
 # ── Helper Functions ────────────────────────────────────────
@@ -190,67 +195,149 @@ async def delete_person(name: str):
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
     """
-    Real-time face recognition via WebSocket.
+    Real-time face recognition via WebSocket — with full security pipeline.
 
-    Expects JSON messages:
-    {
-        "type": "recognize",
-        "face": "<base64 JPEG>",
-        "box": [x1, y1, x2, y2],
-        "confidence": 0.95,
-        "timestamp": 1234567890.0
-    }
+    Security rules enforced (per connection, stateful):
+      1. Proximity Block         — face_height_ratio > 0.45 → reject
+      2. Temporal Consistency    — must pass 5 consecutive real frames
+      3. Strict Liveness         — MiniFASNet confidence >= 0.90
+      4. Ghost Blink Fix         — counter resets on type=no_face
+      5. Anti-Tailgating Lockdown — face_count > 1 → lockdown
 
-    Returns JSON:
-    {
-        "name": "Ali Yilmaz",
-        "score": 0.82,
-        "matched": true,
-        "timestamp": 1234567890.0
-    }
+    Pi sends one of two message types:
+
+      Face detected:
+        {
+          "type": "recognize",
+          "face": "<base64 JPEG cropped face>",
+          "box": [x1, y1, x2, y2],
+          "face_height_ratio": 0.35,
+          "face_count": 1,
+          "timestamp": 1234567890.0
+        }
+
+      No face in frame (triggers ghost blink reset):
+        { "type": "no_face", "timestamp": 1234567890.0 }
+
+    Backend responds:
+        {
+          "name": "Ali Yilmaz",
+          "score": 0.87,
+          "matched": true,
+          "is_validated": true,
+          "liveness_conf": 0.95,
+          "consecutive_frames": 5,
+          "lockdown": false,
+          "too_close": false,
+          "label": "REAL (0.95)",
+          "timestamp": 1234567890.0
+        }
     """
     await ws.accept()
     client_host = ws.client.host if ws.client else "unknown"
     print(f"[WebSocket] Client connected: {client_host}")
 
+    # Each connection gets its own independent liveness state
+    liveness = LivenessChecker()
+
     try:
         while True:
             data = await ws.receive_text()
             message = json.loads(data)
+            msg_type = message.get("type", "")
+            timestamp = message.get("timestamp", 0)
 
-            if message.get("type") == "recognize":
-                # Decode face image
-                face_img = decode_base64_image(message["face"])
+            # ── RULE 4: Ghost Blink Fix ───────────────────────────────────────
+            # Pi reports no face → wipe the frame counter completely.
+            if msg_type == "no_face":
+                liveness.reset()
+                await ws.send_json({
+                    "label": "NO_FACE",
+                    "is_validated": False,
+                    "matched": False,
+                    "timestamp": timestamp,
+                })
+                continue
 
-                if face_img is None:
-                    await ws.send_json({
-                        "name": "error",
-                        "score": 0.0,
-                        "matched": False,
-                        "error": "Failed to decode image",
-                    })
-                    continue
+            if msg_type != "recognize":
+                continue  # Ignore unknown message types
 
-                # Get embedding and recognize
-                embedding = recognizer.get_embedding(face_img)
+            # ── Decode cropped face ───────────────────────────────────────────
+            face_img = decode_base64_image(message.get("face", ""))
+            if face_img is None:
+                await ws.send_json({
+                    "error": "Failed to decode face image",
+                    "is_validated": False,
+                    "matched": False,
+                    "timestamp": timestamp,
+                })
+                continue
 
-                if embedding is None:
-                    await ws.send_json({
-                        "name": "no_face_detected",
-                        "score": 0.0,
-                        "matched": False,
-                    })
-                    continue
+            face_height_ratio = float(message.get("face_height_ratio", 0.0))
+            face_count        = int(message.get("face_count", 1))
 
-                result = face_db.recognize(embedding)
-                result["timestamp"] = message.get("timestamp", 0)
+            # ── Run all 5 security rules ──────────────────────────────────────
+            result = liveness.check(face_img, face_height_ratio, face_count)
 
-                await ws.send_json(result)
+            # Build base response (always sent, even before validation)
+            response = {
+                "is_validated": result.is_fully_validated,
+                "liveness_conf": round(result.liveness_conf, 4),
+                "consecutive_frames": result.consecutive_frames,
+                "lockdown": result.is_multi_face_lockdown,
+                "too_close": result.too_close,
+                "label": result.label,
+                "timestamp": timestamp,
+            }
+
+            # ── Recognition only fires after full validation ───────────────────
+            if not result.is_fully_validated:
+                response["matched"] = False
+                response["name"] = "unknown"
+                response["score"] = 0.0
+                await ws.send_json(response)
+                continue
+
+            # ── Extract embedding and match against database ───────────────────
+            embedding = recognizer.get_embedding(face_img)
+            if embedding is None:
+                response["matched"] = False
+                response["name"] = "no_face_detected"
+                response["score"] = 0.0
+                await ws.send_json(response)
+                continue
+
+            match = face_db.recognize(embedding)
+            response["name"]    = match["name"]
+            response["score"]   = match["score"]
+            response["matched"] = match["matched"]
+
+            # ── Audit log — only on the exact 5th frame (no spam) ─────────────
+            if result.consecutive_frames == 5:
+                if match["matched"]:
+                    audit_log.log_event(
+                        "DOOR_UNLOCK_SUCCESS",
+                        match["name"],
+                        match["score"],
+                        f"Person passed liveness and matched (via WebSocket from {client_host})",
+                    )
+                    print(f"\033[96m[AUDIT]\033[0m Door unlocked for '{match['name']}' | score={match['score']:.2f}")
+                else:
+                    audit_log.log_event(
+                        "DOOR_UNLOCK_FAILED",
+                        "UNKNOWN",
+                        match["score"],
+                        f"Person passed liveness but no database match (via WebSocket from {client_host})",
+                    )
+                    print(f"\033[91m[AUDIT]\033[0m Unknown person attempted unlock | score={match['score']:.2f}")
+
+            await ws.send_json(response)
 
     except WebSocketDisconnect:
         print(f"[WebSocket] Client disconnected: {client_host}")
     except Exception as e:
         print(f"[WebSocket] Error: {e}")
+
 
 
 # ── Main ────────────────────────────────────────────────────

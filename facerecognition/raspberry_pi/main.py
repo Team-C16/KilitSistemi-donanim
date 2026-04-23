@@ -62,6 +62,7 @@ async def run_websocket_mode(display=False):
             # Detect faces
             faces = detector.detect(frame)
             frame_count += 1
+            frame_h = frame.shape[0]  # Frame height for proximity rule
 
             # Calculate FPS every 30 frames
             if frame_count % 30 == 0:
@@ -71,19 +72,30 @@ async def run_websocket_mode(display=False):
 
             current_time = time.time()
 
+            # ── RULE 4: Ghost Blink Fix ─────────────────────────────────────
+            # When no face is in frame, notify backend to reset its counter.
+            if not faces and (current_time - last_send_time) >= SEND_INTERVAL:
+                await sender.send_no_face()
+                last_send_time = current_time
+
             # Send faces to backend (rate-limited)
-            if faces and (current_time - last_send_time) >= SEND_INTERVAL:
+            elif faces and (current_time - last_send_time) >= SEND_INTERVAL:
+                face_count = len(faces)  # Total faces for anti-tailgating rule
                 for face_data in faces:
                     result = await sender.send_face(
                         face_data["face"],
                         face_data["box"],
                         face_data["confidence"],
+                        frame_h,
+                        face_count,
                     )
 
                     if result:
-                        name = result.get("name", "unknown")
+                        name  = result.get("name", "unknown")
                         score = result.get("score", 0)
-                        print(f"  → Recognized: {name} (score: {score:.3f})")
+                        label = result.get("label", "")
+                        validated = result.get("is_validated", False)
+                        print(f"  → {label} | {name} (score: {score:.3f}) | validated: {validated}")
 
                 last_send_time = current_time
 

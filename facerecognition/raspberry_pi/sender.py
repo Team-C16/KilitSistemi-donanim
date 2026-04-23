@@ -52,14 +52,16 @@ class WebSocketSender:
             self.connected = False
             print(f"[WebSocket] Connection failed: {e}")
 
-    async def send_face(self, face_img, box, confidence):
+    async def send_face(self, face_img, box, confidence, frame_height, face_count):
         """
         Send a detected face to the backend for recognition.
 
         Args:
-            face_img: Cropped face image (numpy array)
-            box: (x1, y1, x2, y2) bounding box
-            confidence: Detection confidence
+            face_img:      Cropped face image (numpy array)
+            box:           (x1, y1, x2, y2) bounding box
+            confidence:    Detection confidence
+            frame_height:  Full frame height in pixels (for proximity rule)
+            face_count:    Total faces detected this frame (for anti-tailgating rule)
 
         Returns:
             dict with recognition result, or None on failure
@@ -70,14 +72,48 @@ class WebSocketSender:
                 return None
 
         try:
+            x1, y1, x2, y2 = box
+            face_height = y2 - y1
+            face_height_ratio = face_height / frame_height if frame_height > 0 else 0.0
+
             payload = json.dumps({
                 "type": "recognize",
                 "face": encode_face(face_img),
                 "box": list(box),
                 "confidence": confidence,
+                "face_height_ratio": round(face_height_ratio, 4),
+                "face_count": face_count,
                 "timestamp": time.time(),
             })
 
+            await self.ws.send(payload)
+            response = await asyncio.wait_for(self.ws.recv(), timeout=5.0)
+            return json.loads(response)
+
+        except (websockets.exceptions.ConnectionClosed, asyncio.TimeoutError) as e:
+            print(f"[WebSocket] Error: {e}, reconnecting...")
+            self.connected = False
+            return None
+
+    async def send_no_face(self):
+        """
+        Notify backend that no face is currently in the frame.
+        This triggers the Ghost Blink Fix (Security Rule 4) on the backend,
+        resetting the consecutive real-frames counter.
+
+        Returns:
+            dict with backend acknowledgement, or None on failure
+        """
+        if not self.connected:
+            await self.connect()
+            if not self.connected:
+                return None
+
+        try:
+            payload = json.dumps({
+                "type": "no_face",
+                "timestamp": time.time(),
+            })
             await self.ws.send(payload)
             response = await asyncio.wait_for(self.ws.recv(), timeout=5.0)
             return json.loads(response)
